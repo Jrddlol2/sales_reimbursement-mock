@@ -1,0 +1,8 @@
+{
+  "name": "Sales Reimbursement System",
+  "description": "Internal web app for managing sales reimbursements and meeting minutes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,1 @@
+sed -i "s/if (!user || !user.reports_to) return res.status(403).json({ error: 'Forbidden: You must have a designated manager (reports_to) to submit.' });/if (!user) return res.status(401).json({ error: 'Unauthorized' });/g" server.ts

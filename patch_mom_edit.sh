@@ -1,0 +1,1 @@
+sed -i 's/{user?.role === UserRole.APPROVER && !editingMom && (/{user?.role === UserRole.APPROVER \&\& claim.status === ClaimStatus.PENDING_APPROVAL \&\& !editingMom \&\& (/' src/pages/ClaimDetail.tsx

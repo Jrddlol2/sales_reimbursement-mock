@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Sofia+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #0063A9;
+  --color-brand-hover: #004F87;
+  --color-brand-active: #EFF6FF;
+  
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sofia Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Global Corporate Styling Reset & Overrides */
+body {
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  color: #1e293b; /* Slate 800 */
+  background-color: #f8fafc; /* Slate 50 */
+}
+
+/* Institutional Headings - Sofia Sans weight 800, uppercase or bold, tracking tight */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Sofia Sans", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+
+/* Solid Corporate Card Class */
+.corp-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0; /* slate-200 */
+  border-radius: 4px; /* ISO-formal tight corners */
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Solid Corporate Input/Select Class */
+.corp-input {
+  border: 1px solid #cbd5e1; /* slate-300 */
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background-color: #ffffff;
+  color: #1e293b;
+  transition: all 150ms ease-in-out;
+}
+.corp-input:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #0063A9;
+  box-shadow: 0 0 0 3px rgba(0, 99, 169, 0.15);
+}
+
+/* Solid Corporate Button Class */
+.corp-btn-primary {
+  background-color: #0063A9;
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  transition: all 150ms ease-in-out;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.corp-btn-primary:hover {
+  background-color: #004F87;
+}
+
+.corp-btn-secondary {
+  background-color: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  transition: all 150ms ease-in-out;
+}
+.corp-btn-secondary:hover {
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+/* Dense Tables styling */
+.corp-table th {
+  font-family: "Sofia Sans", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #f1f5f9; /* Slate 100 */
+  color: #475569; /* Slate 600 */
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.corp-table td {
+  border-bottom: 1px solid #f1f5f9;
+}

@@ -1,0 +1,1117 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { apiFetch } from '../lib/api';
+import { useAuth } from '../components/AuthContext';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmModal';
+import { 
+  CashAdvance, CashAdvanceStatus, 
+  Liquidation, LiquidationStatus, LiquidationVarianceType, 
+  LiquidationLineItem, Mom, MomStatus, User, UserRole,
+  Claim, ClaimStatus
+} from '../types';
+import { ClaimLineItems } from './ClaimLineItems';
+import { ExpenseLineItemEditor } from './ExpenseLineItemEditor';
+import { ClaimActivityTimeline } from './ClaimActivityTimeline';
+import { formatPHP, getStatusColor, getClaimNumber } from '../utils';
+import { 
+  Plus, Trash2, UploadCloud, X, AlertCircle, FileText, Check, ArrowLeft, Send, Sparkles, Search
+} from 'lucide-react';
+
+interface LocalLineItem {
+  id: string;
+  expense_date: string;
+  vendor: string;
+  category: string;
+  amount: string; // string state to avoid currency display bug!
+  payment_method: string;
+  business_purpose: string;
+  receiptName: string;
+  attachment_type: string;
+  isDragOver?: boolean;
+}
+
+const LIQUIDATION_CATEGORIES = [
+  { value: 'Client Meals', label: 'Client Meals' },
+  { value: 'Travel / Flights', label: 'Travel / Flights' },
+  { value: 'Transportation / Taxi', label: 'Transportation / Taxi' },
+  { value: 'Accommodation', label: 'Accommodation' },
+  { value: 'Entertainment', label: 'Entertainment' },
+  { value: 'Supplies / Materials', label: 'Supplies / Materials' },
+  { value: 'Other Sales Expenses', label: 'Other Sales Expenses' }
+];
+
+export const CashAdvanceLiquidationSection: React.FC = () => {
+  const { user } = useAuth();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState('All');
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState<'All' | 'Reimbursement' | 'Cash Advance'>('All');
+
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [cashAdvances, setCashAdvances] = useState<CashAdvance[]>([]);
+  const [liquidations, setLiquidations] = useState<Liquidation[]>([]);
+  const [moms, setMoms] = useState<Mom[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [allLineItems, setAllLineItems] = useState<LiquidationLineItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Ready for Claim state inside the unified ledger
+  const [activeClaimPrompt, setActiveClaimPrompt] = useState<string | null>(null);
+  const [claimCodeInput, setClaimCodeInput] = useState("");
+
+  // Form states - Request Cash Advance
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [advancePurpose, setAdvancePurpose] = useState('');
+  const [advanceMomId, setAdvanceMomId] = useState('');
+  const [advanceApproverId, setAdvanceApproverId] = useState('');
+  const [submittingAdvance, setSubmittingAdvance] = useState(false);
+
+  // Form states - Liquidation Report
+  const [activeLiquidationCa, setActiveLiquidationCa] = useState<CashAdvance | null>(null);
+  const [activeLiquidation, setActiveLiquidation] = useState<Liquidation | null>(null);
+  const [liqLineItems, setLiqLineItems] = useState<LocalLineItem[]>([]);
+  const [submittingLiquidation, setSubmittingLiquidation] = useState(false);
+
+  // Detailed Modal states
+  const [selectedCaId, setSelectedCaId] = useState<string | null>(null);
+  const [selectedLiqId, setSelectedLiqId] = useState<string | null>(null);
+  const [caDetails, setCaDetails] = useState<any | null>(null);
+  const [liqDetails, setLiqDetails] = useState<any | null>(null);
+  const [loadingModal, setLoadingModal] = useState(false);
+
+  const handleOpenCaDetails = (id: string) => {
+    navigate(`/cash-advances/${id}`);
+  };
+
+  const handleOpenLiqDetails = (id: string) => {
+    navigate(`/liquidations/${id}`);
+  };
+
+  const handleClaimPayment = async (claimId: string, claimNumber: string) => {
+    if (!claimCodeInput.trim()) {
+      return toast.error('Please enter the Claim Code');
+    }
+
+    try {
+      await apiFetch(`/api/claims/${claimId}/claim`, { 
+        method: 'POST',
+        body: JSON.stringify({ code: claimCodeInput })
+      });
+      setActiveClaimPrompt(null);
+      setClaimCodeInput('');
+      toast.success(`Claim ${claimNumber} is now marked as Completed! Thank you.`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to claim payment');
+    }
+  };
+
+  // Fetch all necessary data
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [caData, liqData, momData, userData, claimsData] = await Promise.all([
+        apiFetch('/api/cash-advances'),
+        apiFetch('/api/liquidations'),
+        apiFetch('/api/moms'),
+        apiFetch('/api/users'),
+        apiFetch('/api/claims')
+      ]);
+
+      setCashAdvances(caData);
+      setLiquidations(liqData);
+      setMoms(momData);
+      setUsers(userData);
+      setClaims(claimsData);
+
+      // Automatically set supervisor as default approver if user is Requestor
+      if (user?.reports_to) {
+        setAdvanceApproverId(user.reports_to);
+      } else {
+        const approvers = userData.filter((u: User) => u.role === UserRole.APPROVER);
+        if (approvers.length > 0) {
+          setAdvanceApproverId(approvers[0].id);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Failed to load request records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleRequestAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = parseFloat(advanceAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return toast.error('Amount must be a valid number greater than zero.');
+    }
+    if (!advancePurpose.trim()) {
+      return toast.error('Purpose is required.');
+    }
+    if (!advanceApproverId) {
+      return toast.error('An approver must be selected.');
+    }
+
+    setSubmittingAdvance(true);
+    try {
+      await apiFetch('/api/cash-advances', {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: amountNum,
+          purpose: advancePurpose,
+          momId: advanceMomId || undefined,
+          approverId: advanceApproverId
+        })
+      });
+      toast.success('Cash Advance requested successfully! Saved in Draft status.');
+      setShowRequestForm(false);
+      setAdvanceAmount('');
+      setAdvancePurpose('');
+      setAdvanceMomId('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit Cash Advance request.');
+    } finally {
+      setSubmittingAdvance(false);
+    }
+  };
+
+  const handleStartLiquidation = async (ca: CashAdvance) => {
+    try {
+      // Find or create liquidation
+      let liq = liquidations.find(l => l.cashAdvanceId === ca.id);
+      if (!liq) {
+        liq = await apiFetch('/api/liquidations', {
+          method: 'POST',
+          body: JSON.stringify({ cashAdvanceId: ca.id })
+        });
+      }
+
+      // Fetch line items of this liquidation to populate form
+      const items = await apiFetch(`/api/liquidations/${liq.id}`);
+      setActiveLiquidationCa(ca);
+      setActiveLiquidation(liq);
+
+      if (items.lineItems && items.lineItems.length > 0) {
+        setLiqLineItems(items.lineItems.map((item: LiquidationLineItem) => ({
+          id: item.id,
+          expense_date: item.expense_date,
+          vendor: item.vendor,
+          category: item.category,
+          amount: String(item.amount),
+          payment_method: item.payment_method,
+          business_purpose: item.business_purpose,
+          receiptName: item.receipt_url && item.receipt_url !== 'No Official Receipt' ? item.receipt_url.split('/').pop() || '' : '',
+          attachment_type: item.attachment_type || (item.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'Official Receipt')
+        })));
+      } else {
+        setLiqLineItems([
+          {
+            id: Math.random().toString(),
+            expense_date: new Date().toISOString().split('T')[0],
+            vendor: '',
+            category: '',
+            amount: '',
+            payment_method: 'Cash',
+            business_purpose: '',
+            receiptName: '',
+            attachment_type: 'Official Receipt'
+          }
+        ]);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to initialize Liquidation report.');
+    }
+  };
+
+  const handleAddLiqLine = () => {
+    setLiqLineItems([
+      ...liqLineItems,
+      {
+        id: Math.random().toString(),
+        expense_date: new Date().toISOString().split('T')[0],
+        vendor: '',
+        category: '',
+        amount: '',
+        payment_method: 'Cash',
+        business_purpose: '',
+        receiptName: '',
+        attachment_type: 'Official Receipt'
+      }
+    ]);
+  };
+
+  const handleRemoveLiqLine = (id: string) => {
+    if (liqLineItems.length > 1) {
+      setLiqLineItems(liqLineItems.filter(item => item.id !== id));
+    }
+  };
+
+  const handleUpdateLiqLine = (id: string, field: keyof LocalLineItem, value: any) => {
+    setLiqLineItems(items => items.map(item => {
+      if (item.id === id) {
+        const updated = { ...item, [field]: value };
+        if (field === 'attachment_type' && value === 'No Official Receipt') {
+          updated.receiptName = '';
+        }
+        return updated;
+      }
+      return item;
+    }));
+  };
+
+  const handleFileDrop = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    handleUpdateLiqLine(id, 'isDragOver', false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleUpdateLiqLine(id, 'receiptName', e.dataTransfer.files[0].name);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleUpdateLiqLine(id, 'receiptName', e.target.files[0].name);
+    }
+  };
+
+  const handleSaveOrSubmitLiquidation = async (submit: boolean) => {
+    if (!activeLiquidation || !activeLiquidationCa) return;
+
+    // Validation
+    for (const item of liqLineItems) {
+      if (!item.vendor.trim()) return toast.error('Vendor is required for all line items.');
+      if (!item.category) return toast.error('Category is required for all line items.');
+      if (!item.business_purpose.trim()) return toast.error('Business purpose is required for all line items.');
+      const parsedAmount = parseFloat(item.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return toast.error('Amount must be a valid number greater than zero for all line items.');
+      }
+      if (item.attachment_type !== 'No Official Receipt' && !item.receiptName) {
+        return toast.error(`An attachment file is required for ${item.vendor} unless 'No Official Receipt' is selected.`);
+      }
+    }
+
+    setSubmittingLiquidation(true);
+    try {
+      // 1. Fetch current server-side line items to wipe them
+      const fullLiq = await apiFetch(`/api/liquidations/${activeLiquidation.id}`);
+      const serverItems = fullLiq.lineItems || [];
+
+      // 2. Wipe existing items on server sequentially to avoid race conditions
+      for (const sItem of serverItems) {
+        await apiFetch(`/api/liquidations/${activeLiquidation.id}/line-items/${sItem.id}`, {
+          method: 'DELETE'
+        });
+      }
+
+      // 3. Create new items from scratch
+      for (const item of liqLineItems) {
+        await apiFetch(`/api/liquidations/${activeLiquidation.id}/line-items`, {
+          method: 'POST',
+          body: JSON.stringify({
+            expense_date: item.expense_date,
+            vendor: item.vendor,
+            category: item.category,
+            amount: parseFloat(item.amount),
+            payment_method: item.payment_method,
+            business_purpose: item.business_purpose,
+            receipt_url: item.attachment_type === 'No Official Receipt' ? 'No Official Receipt' : `/uploads/${item.receiptName}`,
+            attachment_type: item.attachment_type
+          })
+        });
+      }
+
+      // 4. Submit if requested
+      if (submit) {
+        await apiFetch(`/api/liquidations/${activeLiquidation.id}/submit`, {
+          method: 'POST'
+        });
+        toast.success('Liquidation report submitted successfully for review.');
+      } else {
+        toast.success('Liquidation report draft saved successfully.');
+      }
+
+      // Cleanup
+      setActiveLiquidationCa(null);
+      setActiveLiquidation(null);
+      setLiqLineItems([]);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save Liquidation.');
+    } finally {
+      setSubmittingLiquidation(false);
+    }
+  };
+
+  const handleQuickFillLiquidation = () => {
+    if (!activeLiquidationCa) return;
+    setLiqLineItems([
+      {
+        id: Math.random().toString(),
+        expense_date: new Date().toISOString().split('T')[0],
+        vendor: 'Paseo de Roxas Restaurant',
+        category: 'Client Meals',
+        amount: String(Math.min(activeLiquidationCa.amount - 500, 3000)),
+        payment_method: 'Cash',
+        business_purpose: 'Sales dinner with Microgenesis directors.',
+        receiptName: 'Lunch_Receipt.pdf',
+        attachment_type: 'Official Receipt'
+      },
+      {
+        id: Math.random().toString(),
+        expense_date: new Date().toISOString().split('T')[0],
+        vendor: 'Grab Taxi Inc.',
+        category: 'Transportation / Taxi',
+        amount: '450.00',
+        payment_method: 'Cash',
+        business_purpose: 'Grab ride home after the late meeting.',
+        receiptName: 'Grab_Booking.png',
+        attachment_type: 'Acknowledgement Receipt'
+      }
+    ]);
+  };
+
+  const handleActionOnAdvance = async (id: string, action: 'submit' | 'cancel') => {
+    try {
+      if (action === 'submit') {
+        await apiFetch(`/api/cash-advances/${id}/submit`, { method: 'POST' });
+        toast.success('Cash Advance submitted to your supervisor successfully.');
+      }
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update Cash Advance');
+    }
+  };
+
+  // Calculations for active form
+  const totalSpent = liqLineItems.reduce((sum, item) => {
+    const parsed = parseFloat(item.amount);
+    return sum + (isNaN(parsed) ? 0 : parsed);
+  }, 0);
+
+  const variance = activeLiquidationCa ? totalSpent - activeLiquidationCa.amount : 0;
+  const varianceText = () => {
+    if (variance === 0) return 'Settled (discrepancy: ₱0.00)';
+    if (variance < 0) return `Refund Due to Company: ${formatPHP(Math.abs(variance))}`;
+    return `Reimbursement Due to Requestor: ${formatPHP(variance)}`;
+  };
+
+  // Filter lists for Requestor
+  const userClaims = claims.filter(c => c.requestor_id === user?.id);
+  const userAdvances = cashAdvances.filter(ca => ca.requestorId === user?.id);
+
+  // Stats Calculations
+  const pendingRequestsCount = 
+    userClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length + 
+    userAdvances.filter(ca => ca.status === CashAdvanceStatus.SUBMITTED).length;
+
+  const unliquidatedFloat = userAdvances
+    .filter(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)
+    .reduce((sum, ca) => sum + ca.amount, 0);
+
+  const totalClaimsReimbursed = userClaims
+    .filter(c => c.status === ClaimStatus.COMPLETED)
+    .reduce((sum, c) => sum + c.total_amount, 0);
+
+  const totalLiquidatedSpent = userAdvances
+    .filter(ca => ca.status === CashAdvanceStatus.LIQUIDATED)
+    .reduce((sum, ca) => {
+      const liq = liquidations.find(l => l.cashAdvanceId === ca.id);
+      return sum + (liq ? liq.totalSpent : ca.amount);
+    }, 0);
+
+  const totalReimbursedOrSpent = totalClaimsReimbursed + totalLiquidatedSpent;
+
+  // Prepare unified list of ALL requests
+  const unifiedList = [
+    ...userClaims.map(c => ({
+      uniqueId: `claim-${c.id}`,
+      id: c.id,
+      date: c.created_at,
+      type: 'Reimbursement' as const,
+      purpose: c.expense_category ? `${c.expense_category}: ${c.remarks || 'Sales Reimbursement'}` : (c.remarks || 'Sales Reimbursement'),
+      amount: c.total_amount,
+      status: c.status,
+      rawItem: c
+    })),
+    ...userAdvances.map(ca => ({
+      uniqueId: `ca-${ca.id}`,
+      id: ca.id,
+      date: ca.releaseDate || ca.created_at, // Sort by release date if released, else creation date
+      type: 'Cash Advance' as const,
+      purpose: ca.purpose,
+      amount: ca.amount,
+      status: ca.status,
+      rawItem: ca
+    }))
+  ];
+
+  // Sort chronologically descending
+  const sortedUnifiedList = unifiedList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Filter unified list
+  const filteredUnifiedList = sortedUnifiedList.filter(item => {
+    // 1. Type Filter
+    if (ledgerTypeFilter !== 'All' && item.type !== ledgerTypeFilter) {
+      return false;
+    }
+
+    // 2. Status Filter
+    if (ledgerStatusFilter !== 'All') {
+      if (item.type === 'Reimbursement') {
+        const claim = item.rawItem;
+        switch (ledgerStatusFilter) {
+          case 'Pending':
+            return claim.status === ClaimStatus.PENDING_APPROVAL;
+          case 'Approved':
+            return [ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM].includes(claim.status);
+          case 'Completed':
+            return claim.status === ClaimStatus.COMPLETED;
+          case 'Draft':
+            return [ClaimStatus.DRAFT, ClaimStatus.RETURNED].includes(claim.status);
+          case 'Rejected':
+            return claim.status === ClaimStatus.REJECTED;
+          default:
+            return true;
+        }
+      } else {
+        const ca = item.rawItem;
+        switch (ledgerStatusFilter) {
+          case 'Pending':
+            return ca.status === CashAdvanceStatus.SUBMITTED;
+          case 'Approved':
+            return [CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED].includes(ca.status);
+          case 'Completed':
+            return ca.status === CashAdvanceStatus.LIQUIDATED;
+          case 'Draft':
+            return ca.status === CashAdvanceStatus.DRAFT;
+          case 'Rejected':
+            return ca.status === CashAdvanceStatus.REJECTED;
+          default:
+            return true;
+        }
+      }
+    }
+
+    // 3. Search Query
+    if (ledgerSearch.trim()) {
+      const q = ledgerSearch.toLowerCase();
+      const idStr = item.type === 'Reimbursement' 
+        ? getClaimNumber(item.rawItem).toLowerCase() 
+        : `CADV-${item.id.substring(0, 6)}`.toLowerCase();
+      const purpose = item.purpose.toLowerCase();
+      const amount = String(item.amount);
+      
+      let momClient = '';
+      if (item.type === 'Reimbursement' && item.rawItem.mom_id) {
+        momClient = (moms.find(m => m.id === item.rawItem.mom_id)?.client || '').toLowerCase();
+      } else if (item.type === 'Cash Advance' && item.rawItem.momId) {
+        momClient = (moms.find(m => m.id === item.rawItem.momId)?.client || '').toLowerCase();
+      }
+
+      return idStr.includes(q) || purpose.includes(q) || amount.includes(q) || momClient.includes(q);
+    }
+
+    return true;
+  });
+
+  if (loading) {
+    return <div className="text-sm text-gray-500 italic">Synchronizing ledger records...</div>;
+  }
+
+  // Active Liquidation form view
+  if (activeLiquidationCa && activeLiquidation) {
+    return (
+      <div className="bg-white rounded border border-slate-200 p-6 shadow-sm space-y-6" id="liquidation_form_container">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div>
+            <button 
+              onClick={() => { setActiveLiquidationCa(null); setActiveLiquidation(null); }}
+              className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 uppercase tracking-wider mb-2"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back
+            </button>
+            <h3 className="text-lg font-extrabold text-slate-900 font-display">
+              File Liquidation: CADV-{activeLiquidationCa.id.substring(0,6)}
+            </h3>
+            <p className="text-xs text-slate-500">
+              Document your actual expenses to liquidate the cash advance of {formatPHP(activeLiquidationCa.amount)}.
+            </p>
+          </div>
+          <button
+            onClick={handleQuickFillLiquidation}
+            className="inline-flex items-center text-xs font-bold text-brand bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 uppercase font-display tracking-wider"
+          >
+            <Sparkles className="w-3.5 h-3.5 mr-1" /> Quick Fill Draft
+          </button>
+        </div>
+
+        <div className="bg-slate-50 rounded border border-slate-100 p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold">
+          <div>
+            <span className="text-slate-400 block">Cash Advance Amount</span>
+            <span className="text-slate-800 text-sm font-bold">{formatPHP(activeLiquidationCa.amount)}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block">Total Spent Listed</span>
+            <span className="text-slate-800 text-sm font-bold">{formatPHP(totalSpent)}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block">Liquidation Variance</span>
+            <span className={`text-sm font-bold block ${variance === 0 ? 'text-green-600' : variance < 0 ? 'text-amber-600' : 'text-indigo-600'}`}>
+              {varianceText()}
+            </span>
+          </div>
+        </div>
+
+        {/* Form Line Items */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            <h4 className="text-xs font-extrabold uppercase text-slate-700 tracking-wider font-display">Expense Receipts Rows</h4>
+            <button
+              onClick={handleAddLiqLine}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-brand hover:text-brand-hover"
+            >
+              <Plus className="w-4 h-4" /> Add Item Row
+            </button>
+          </div>
+
+          {liqLineItems.map((item, index) => (
+            <ExpenseLineItemEditor
+              key={item.id}
+              item={item}
+              index={index}
+              mode="liquidation"
+              categories={LIQUIDATION_CATEGORIES}
+              showRemove={liqLineItems.length > 1}
+              onRemove={() => handleRemoveLiqLine(item.id)}
+              onChange={(field, value) => handleUpdateLiqLine(item.id, field as any, value)}
+            />
+          ))}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+          <button
+            onClick={() => { setActiveLiquidationCa(null); setActiveLiquidation(null); }}
+            className="bg-white border border-slate-300 text-slate-700 text-xs px-4 py-2 rounded font-bold hover:bg-slate-50 uppercase tracking-wider font-display"
+          >
+            Cancel
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSaveOrSubmitLiquidation(false)}
+              disabled={submittingLiquidation}
+              className="bg-slate-100 text-slate-700 text-xs px-4 py-2 rounded font-bold hover:bg-slate-200 uppercase tracking-wider font-display"
+            >
+              Save Draft
+            </button>
+            <button
+              onClick={() => handleSaveOrSubmitLiquidation(true)}
+              disabled={submittingLiquidation}
+              className="bg-brand text-white text-xs px-5 py-2 rounded font-bold hover:bg-brand-hover shadow-sm transition-colors uppercase tracking-wider font-display inline-flex items-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" /> Submit Liquidation
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* KPI Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display">Pending requests</span>
+          <div className="text-2xl font-extrabold text-slate-900 font-display">
+            {pendingRequestsCount}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Unliquidated Float</span>
+          <div className="text-2xl font-extrabold text-brand font-display">
+            {formatPHP(unliquidatedFloat)}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Total Reimbursed & Spent</span>
+          <div className="text-2xl font-extrabold text-slate-900 font-display">
+            {formatPHP(totalReimbursedOrSpent)}
+          </div>
+        </div>
+      </div>
+
+      {/* Warning/Banner if have open cash advance */}
+      {(() => {
+        const activeAdv = userAdvances.find(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED);
+        const isOverdue = activeAdv && activeAdv.status === CashAdvanceStatus.RELEASED && activeAdv.releaseDate && (() => {
+          const releasedAt = new Date(activeAdv.releaseDate).getTime();
+          const deadlineMs = 7 * 24 * 60 * 60 * 1000;
+          return Date.now() > (releasedAt + deadlineMs);
+        })();
+
+        if (!activeAdv) return null;
+
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded p-4 flex gap-2.5 items-start animate-fade-in shadow-sm">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800 leading-normal font-semibold">
+              <span className="block font-bold uppercase tracking-wider text-[10px] text-amber-900 mb-0.5">Active Cash Advance Notice</span>
+              You already have an active Cash Advance that has not been liquidated (CADV-{activeAdv.id.substring(0,6).toUpperCase()}).
+              {isOverdue && (
+                <span className="block mt-1 text-red-600 font-bold">
+                  Your liquidation is overdue — please complete it before requesting another Cash Advance.
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Ready for Claim Attention Items Banner */}
+      {userClaims.some(c => c.status === ClaimStatus.READY_FOR_CLAIM) && (
+        <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3 shadow-sm animate-fade-in">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider mb-0.5">Action Required: Ready for Claim</h3>
+              <p className="text-xs text-slate-700 leading-normal font-semibold">
+                You have approved reimbursement claims that are Ready for Claim! Coordinate with the Custodian, present your Claim Code, and complete redemption below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Request Form Toggle */}
+      {showRequestForm ? (
+        <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-5 animate-fade-in">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+            <h3 className="font-extrabold text-slate-950 font-display uppercase tracking-wider text-xs">Request Sales Cash Advance</h3>
+            <button onClick={() => setShowRequestForm(false)} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {(() => {
+            const activeAdv = userAdvances.find(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED);
+            const isOverdue = activeAdv && activeAdv.status === CashAdvanceStatus.RELEASED && activeAdv.releaseDate && (() => {
+              const releasedAt = new Date(activeAdv.releaseDate).getTime();
+              const deadlineMs = 7 * 24 * 60 * 60 * 1000;
+              return Date.now() > (releasedAt + deadlineMs);
+            })();
+
+            if (!activeAdv) return null;
+
+            return (
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-700 font-semibold space-y-1">
+                <span className="block font-bold">Request Disabled:</span>
+                <span>You already have an active Cash Advance (CADV-{activeAdv.id.substring(0,6).toUpperCase()}) that is unliquidated.</span>
+                {isOverdue && (
+                  <span className="block text-red-800 font-bold">
+                    Your liquidation is overdue! Please file and resolve your current liquidation before filing a new advance request.
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          <form onSubmit={handleRequestAdvance} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                  Requested Amount (PHP ₱) *
+                </label>
+                <div className="relative rounded shadow-sm">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <span className="text-gray-500 text-sm">₱</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    disabled={userAdvances.some(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)}
+                    placeholder="0.00"
+                    value={advanceAmount}
+                    onChange={e => setAdvanceAmount(e.target.value)}
+                    className="block w-full border border-gray-300 rounded pl-7 pr-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                  Link completed Meeting (MOM)
+                </label>
+                <select
+                  value={advanceMomId}
+                  disabled={userAdvances.some(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)}
+                  onChange={e => setAdvanceMomId(e.target.value)}
+                  className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
+                >
+                  <option value="">-- No linked meeting (Optional) --</option>
+                  {moms.filter(m => m.status === MomStatus.COMPLETED).map(mom => (
+                    <option key={mom.id} value={mom.id}>
+                      {mom.client} - {mom.purpose} ({mom.meeting_date})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                Business Purpose *
+              </label>
+              <textarea
+                required
+                rows={3}
+                disabled={userAdvances.some(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)}
+                placeholder="Detail the sales activity, travel plans, client target, or specific commercial scope..."
+                value={advancePurpose}
+                onChange={e => setAdvancePurpose(e.target.value)}
+                className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 font-semibold"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowRequestForm(false)}
+                className="bg-white border border-slate-300 text-slate-700 text-xs px-4 py-2 rounded font-bold hover:bg-slate-50 uppercase tracking-wider font-display"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingAdvance || userAdvances.some(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)}
+                className="bg-brand text-white text-xs px-5 py-2 rounded font-bold hover:bg-brand-hover shadow-sm uppercase tracking-wider font-display disabled:bg-slate-300 disabled:cursor-not-allowed"
+              >
+                Submit Request
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="flex justify-end gap-3">
+          <Link 
+            to="/claims/new"
+            className="bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded text-xs font-bold shadow-sm transition-all uppercase tracking-wider font-display flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Reimbursement
+          </Link>
+          <button
+            onClick={() => setShowRequestForm(true)}
+            className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded text-xs font-bold shadow-sm transition-all uppercase tracking-wider font-display flex items-center gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" /> Request Cash Advance
+          </button>
+        </div>
+      )}
+
+      {/* Unified request history ledger table */}
+      <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Your Requests & History Ledger</h3>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-grow max-w-xl justify-end">
+            <div className="relative flex-grow">
+              <input
+                type="text"
+                placeholder="Search requests..."
+                value={ledgerSearch}
+                onChange={e => setLedgerSearch(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 pl-8 focus:border-brand focus:outline-none"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            </div>
+
+            <select
+              value={ledgerTypeFilter}
+              onChange={e => setLedgerTypeFilter(e.target.value as any)}
+              className="bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:border-brand focus:outline-none font-semibold text-slate-700"
+            >
+              <option value="All">All Types</option>
+              <option value="Reimbursement">Reimbursements</option>
+              <option value="Cash Advance">Cash Advances</option>
+            </select>
+
+            <select
+              value={ledgerStatusFilter}
+              onChange={e => setLedgerStatusFilter(e.target.value)}
+              className="bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 focus:border-brand focus:outline-none font-semibold text-slate-700"
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">Pending Review</option>
+              <option value="Approved">Approved / Released</option>
+              <option value="Completed">Completed / Liquidated</option>
+              <option value="Draft">Drafts & Returned</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">ID / Date</th>
+                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Type</th>
+                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Purpose / Details</th>
+                <th className="px-4 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                <th className="px-4 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Liquidation</th>
+                <th className="px-4 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Status</th>
+                <th className="px-4 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {filteredUnifiedList.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center">
+                    {unifiedList.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center space-y-3 py-6 max-w-md mx-auto">
+                        <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                          <FileText className="w-6 h-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-extrabold text-slate-800 font-display">No requests filed yet</p>
+                        <p className="text-xs text-slate-400 font-semibold leading-normal">
+                          You haven't submitted any reimbursement claims or cash advances. Click one of the buttons above to create your very first request!
+                        </p>
+                        <div className="flex gap-2 pt-2">
+                          <Link
+                            to="/claims/new"
+                            className="bg-brand text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase font-display"
+                          >
+                            Submit Claim
+                          </Link>
+                          <button
+                            onClick={() => setShowRequestForm(true)}
+                            className="bg-slate-800 text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase font-display"
+                          >
+                            Request Advance
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-6 text-slate-400 italic font-semibold">
+                        No requests in history match your search or filter selections.
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                filteredUnifiedList.map(item => {
+                  const isClaim = item.type === 'Reimbursement';
+                  const claim = isClaim ? (item.rawItem as Claim) : null;
+                  const ca = !isClaim ? (item.rawItem as CashAdvance) : null;
+                  const liq = ca ? liquidations.find(l => l.cashAdvanceId === ca.id) : null;
+
+                  return (
+                    <tr key={item.uniqueId} className="hover:bg-slate-50/50 transition-colors">
+                      {/* ID / Date */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isClaim && claim ? (
+                          <Link 
+                            to={`/claims/${claim.id}`}
+                            className="font-mono text-xs font-bold text-brand hover:underline block"
+                          >
+                            {getClaimNumber(claim)}
+                          </Link>
+                        ) : ca ? (
+                          <Link 
+                            to={`/cash-advances/${ca.id}`}
+                            className="font-mono text-xs font-bold text-indigo-700 hover:underline block"
+                          >
+                            CADV-{ca.id.substring(0, 6).toUpperCase()}
+                          </Link>
+                        ) : null}
+                        <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                          {new Date(item.date).toLocaleDateString()}
+                        </div>
+                      </td>
+
+                      {/* Type Badge */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          isClaim 
+                            ? 'bg-blue-50 text-blue-700 border-blue-150' 
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-150'
+                        }`}>
+                          {item.type}
+                        </span>
+                      </td>
+
+                      {/* Purpose / Details */}
+                      <td className="px-4 py-3.5 max-w-xs md:max-w-md">
+                        <div className="font-semibold text-slate-700 truncate" title={item.purpose}>
+                          {item.purpose}
+                        </div>
+                        {isClaim && claim?.mom_id && (
+                          <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                            Meeting: <strong className="text-slate-600">{moms.find(m => m.id === claim.mom_id)?.client || 'Linked MOM'}</strong>
+                          </div>
+                        )}
+                        {!isClaim && ca?.momId && (
+                          <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                            Meeting: <strong className="text-slate-600">{moms.find(m => m.id === ca.momId)?.client || 'Linked MOM'}</strong>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Request Amount */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-right font-bold text-slate-900">
+                        {formatPHP(item.amount)}
+                      </td>
+
+                      {/* Liquidation Column */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        {isClaim && claim?.sourceLiquidationId ? (
+                          <Link 
+                            to={`/liquidations/${claim.sourceLiquidationId}`}
+                            className="inline-flex items-center gap-1 text-[10px] text-indigo-700 hover:underline font-bold"
+                          >
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-150">
+                              Shortfall Claim
+                            </span>
+                          </Link>
+                        ) : !isClaim && ca ? (
+                          liq ? (
+                            <Link
+                              to={`/liquidations/${liq.id}`}
+                              className="flex flex-col gap-0.5 items-center hover:opacity-85"
+                            >
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                liq.status === LiquidationStatus.DRAFT ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                liq.status === LiquidationStatus.SUBMITTED ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                'bg-green-50 text-green-700 border border-green-200'
+                              }`}>
+                                {liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : liq.status}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold hover:underline">
+                                {formatPHP(liq.totalSpent)} spent
+                              </span>
+                            </Link>
+                          ) : (
+                            <span className="text-slate-400 italic font-semibold">
+                              Not Liquidated
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-slate-300 font-bold">—</span>
+                        )}
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full ${
+                          isClaim && claim ? getStatusColor(claim.status) :
+                          ca ? (
+                            ca.status === CashAdvanceStatus.DRAFT ? 'bg-gray-100 text-gray-700 border border-gray-200' :
+                            ca.status === CashAdvanceStatus.SUBMITTED ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                            ca.status === CashAdvanceStatus.APPROVED ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                            ca.status === CashAdvanceStatus.REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                            ca.status === CashAdvanceStatus.RELEASED ? 'bg-green-100 text-green-700 border border-green-200' :
+                            'bg-slate-100 text-slate-500 border border-slate-200'
+                          ) : ''
+                        }`}>
+                          {item.status === ClaimStatus.PROCESSING ? 'Processing' : item.status}
+                        </span>
+                      </td>
+
+                      {/* Row Action Actions */}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-right font-bold space-x-2">
+                        {isClaim && claim && claim.status === ClaimStatus.READY_FOR_CLAIM && (
+                          activeClaimPrompt === claim.id ? (
+                            <div className="inline-flex flex-col items-end gap-1">
+                              <input 
+                                type="text" 
+                                placeholder="Claim Code" 
+                                value={claimCodeInput}
+                                onChange={(e) => setClaimCodeInput(e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 text-[10px] w-24 focus:border-brand focus:outline-none uppercase font-semibold text-slate-800"
+                              />
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => { setActiveClaimPrompt(null); setClaimCodeInput(''); }}
+                                  className="bg-white border border-gray-300 text-gray-700 px-2 py-0.5 rounded text-[10px] font-bold font-display"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleClaimPayment(claim.id, getClaimNumber(claim))}
+                                  className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-bold font-display"
+                                >
+                                  Submit
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveClaimPrompt(claim.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-2.5 py-1 rounded shadow-sm transition-all uppercase font-display"
+                            >
+                              Collect Fund
+                            </button>
+                          )
+                        )}
+
+                        {isClaim && claim && claim.status === ClaimStatus.RETURNED && (
+                          <Link
+                            to={`/claims/${claim.id}/resubmit`}
+                            className="inline-block bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2.5 py-1 rounded shadow-sm transition-all uppercase font-display"
+                          >
+                            Revise
+                          </Link>
+                        )}
+
+                        {!isClaim && ca && ca.status === CashAdvanceStatus.DRAFT && (
+                          <button
+                            onClick={() => handleActionOnAdvance(ca.id, 'submit')}
+                            className="bg-brand text-white px-2.5 py-1 rounded text-[10px] hover:bg-brand-hover uppercase font-display shadow-sm"
+                          >
+                            Submit
+                          </button>
+                        )}
+
+                        {!isClaim && ca && ca.status === CashAdvanceStatus.RELEASED && (!liq || liq.status === LiquidationStatus.DRAFT || liq.status === LiquidationStatus.RETURNED_FOR_REVISION) && (
+                          <button
+                            onClick={() => handleStartLiquidation(ca)}
+                            className="bg-amber-500 text-white px-2.5 py-1 rounded text-[10px] hover:bg-amber-600 uppercase font-display shadow-sm"
+                          >
+                            {liq ? 'Resume' : 'File'} Liquidation
+                          </button>
+                        )}
+
+                        <Link
+                          to={isClaim ? `/claims/${item.id}` : `/cash-advances/${item.id}`}
+                          className="text-slate-500 hover:text-slate-800 text-[10px] uppercase font-display hover:underline"
+                        >
+                          View Details
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};

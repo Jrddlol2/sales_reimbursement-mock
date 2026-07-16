@@ -204,15 +204,13 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             <KPICard title="System Audit (Today)" value={todayHistory.length} icon={ShieldCheck} colorClass="text-indigo-600 bg-white" />
             <KPICard title="System Health" value="100%" icon={Heartbeat} colorClass="text-emerald-600 bg-white" />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div className="lg:col-span-2">
-              <AnalyticsCard title="System Data Distribution">
-                <DonutChart data={adminStatusDistribution} />
-              </AnalyticsCard>
-            </div>
-            <div>
-              <QuickActionsCard actions={quickActions} />
-            </div>
+
+          <QuickActionsCard actions={quickActions} layout="horizontal" />
+
+          <div className="mb-8">
+            <AnalyticsCard title="System Data Distribution">
+              <DonutChart data={adminStatusDistribution} />
+            </AnalyticsCard>
           </div>
         </>
       )}

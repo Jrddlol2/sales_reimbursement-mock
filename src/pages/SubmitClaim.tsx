@@ -199,7 +199,7 @@ export const SubmitClaim: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMomId) {
-      return toast.error('A Completed Minutes of Meeting (MOM) must be attached to file a reimbursement claim.');
+      return toast.error('A Completed Minutes of Meeting must be attached to file a reimbursement claim.');
     }
     
     for (const item of lineItems) {
@@ -298,8 +298,8 @@ export const SubmitClaim: React.FC = () => {
             {isResubmit
               ? 'This claim was returned for revision. Update the details below and resubmit it for your supervisor\'s review.'
               : requestType === 'cash_advance'
-                ? 'Request an advance in Philippine Pesos (₱) for upcoming sales activity, optionally linked to a completed Minutes of Meeting (MOM).'
-                : 'Submit expense details in Philippine Pesos (₱) by attaching a completed Minutes of Meeting (MOM).'}
+                ? 'Request an advance in Philippine Pesos (₱) for upcoming sales activity, optionally linked to a completed Minutes of Meeting.'
+                : 'Submit expense details in Philippine Pesos (₱) by attaching a completed Minutes of Meeting.'}
           </p>
         </div>
         {!isResubmit && moms.length > 0 && (
@@ -425,7 +425,7 @@ export const SubmitClaim: React.FC = () => {
 
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Link completed Meeting (MOM)
+                    Link completed Meeting
                   </label>
                   <select
                     value={advanceMomId}
@@ -518,7 +518,7 @@ export const SubmitClaim: React.FC = () => {
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-gray-900">Minutes of Meeting Required</h3>
                 <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
-                  Under enterprise compliance policy, an approved <strong>Minutes of Meeting (MOM)</strong> must be finalized and sent to the client before any sales expense reimbursement can be submitted.
+                  Under enterprise compliance policy, an approved <strong>Minutes of Meeting</strong> must be finalized and sent to the client before any sales expense reimbursement can be submitted.
                 </p>
               </div>
               <div className="pt-2">
@@ -541,7 +541,7 @@ export const SubmitClaim: React.FC = () => {
                   {/* MOM Picker */}
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                      1. Link Completed Meeting (MOM) *
+                      1. Link Completed Meeting *
                     </label>
                     <select
                       required

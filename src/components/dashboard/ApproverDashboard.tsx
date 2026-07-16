@@ -171,17 +171,15 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
       </div>
 
       <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={pendingTotal} />
+      
+      <QuickActionsCard actions={quickActions} layout="horizontal" />
+
       <MyRecentSubmissionsTable user={user} claims={claims} cadvs={cadvs} liqs={liqs} />
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <AnalyticsCard title="Current Workload Breakdown">
-            <SimpleBarChart data={workloadData} dataKey="count" color="#2563eb" name="Pending Items" />
-          </AnalyticsCard>
-        </div>
-        <div>
-          <QuickActionsCard actions={quickActions} />
-        </div>
+      <div className="mb-8">
+        <AnalyticsCard title="Current Workload Breakdown">
+          <SimpleBarChart data={workloadData} dataKey="count" color="#2563eb" name="Pending Items" />
+        </AnalyticsCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">

@@ -758,7 +758,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
 
               <div>
                 <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Link completed Meeting (MOM)
+                  Link completed Meeting
                 </label>
                 <select
                   value={advanceMomId}

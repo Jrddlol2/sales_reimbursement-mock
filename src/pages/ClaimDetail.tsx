@@ -228,7 +228,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                     className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors ${previewFile?.type === 'mom' ? 'bg-brand text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   >
                     <FileText className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
-                    Minutes (MOM)
+                    Minutes
                   </button>
                 )}
               </>
@@ -354,7 +354,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                 )}
               </SummaryCard>
 
-              {/* LINKED MINUTES OF MEETING (MOM) */}
+              {/* LINKED MINUTES OF MEETING */}
               {claim.mom && (
                 <SummaryCard
                   title="Linked Minutes of Meeting"

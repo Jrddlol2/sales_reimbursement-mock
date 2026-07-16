@@ -148,22 +148,18 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
       <DashboardHeader user={user} summaryText={`You currently have ${activeClaims.length} active claims and ${activeCadvs.length} pending cash advances.`} />
       <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={claims.filter(c => c.status === ClaimStatus.RETURNED && c.requestor_id === user.id).length} />
       
+      <QuickActionsCard actions={quickActions} layout="horizontal" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <RecentActivityTable 
-            title="Recent Requests" 
-            items={recentItems} 
-            action={
-              <Link to="/history" className="text-xs font-bold text-brand hover:underline transition-all">
-                View All
-              </Link>
-            }
-          />
-        </div>
-        <div>
-          <QuickActionsCard actions={quickActions} />
-        </div>
+      <div className="mb-8">
+        <RecentActivityTable 
+          title="Recent Requests" 
+          items={recentItems} 
+          action={
+            <Link to="/history" className="text-xs font-bold text-brand hover:underline transition-all">
+              View All
+            </Link>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

@@ -98,24 +98,24 @@ export const SystemEmails: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6 px-1 sm:px-4">
+      <div className="flex flex-col flex-1 h-full min-h-0 w-full space-y-6 px-1 sm:px-4">
         {/* Skeleton Header */}
-        <div className="animate-pulse">
+        <div className="animate-pulse shrink-0">
           <div className="h-7 w-48 bg-slate-200 rounded-md mb-2"></div>
           <div className="h-4 w-96 bg-slate-100 rounded-md"></div>
         </div>
 
         {/* Skeleton Split Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-180px)] min-h-[500px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-0">
           {/* Email List Left Panel */}
-          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden animate-pulse">
-            <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden animate-pulse h-full">
+            <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div className="h-4 w-24 bg-slate-200 rounded"></div>
               <div className="h-4 w-12 bg-slate-200 rounded"></div>
             </div>
-            <div className="divide-y divide-slate-100 overflow-y-auto p-3 space-y-3">
+            <div className="divide-y divide-slate-100 overflow-y-auto p-3 space-y-3 flex-1 min-h-0">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="p-3 bg-slate-50 rounded-lg space-y-2">
+                <div key={i} className="p-3 bg-slate-50 rounded-lg space-y-2 shrink-0">
                   <div className="flex justify-between">
                     <div className="h-3 w-32 bg-slate-200 rounded"></div>
                     <div className="h-3 w-12 bg-slate-200 rounded"></div>
@@ -128,15 +128,15 @@ export const SystemEmails: React.FC = () => {
           </div>
 
           {/* Email Detail Right Panel */}
-          <div className="hidden lg:flex lg:col-span-7 bg-white border border-slate-200 rounded-xl flex-col overflow-hidden animate-pulse p-6 space-y-4">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+          <div className="hidden lg:flex lg:col-span-7 bg-white border border-slate-200 rounded-xl flex-col overflow-hidden animate-pulse p-6 space-y-4 h-full">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-4 shrink-0">
               <div className="space-y-2">
                 <div className="h-5 w-48 bg-slate-200 rounded"></div>
                 <div className="h-3.5 w-32 bg-slate-100 rounded"></div>
               </div>
               <div className="h-4 w-20 bg-slate-100 rounded"></div>
             </div>
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-2 flex-1 min-h-0">
               <div className="h-4 w-full bg-slate-100 rounded"></div>
               <div className="h-4 w-full bg-slate-100 rounded"></div>
               <div className="h-4 w-3/4 bg-slate-100 rounded"></div>
@@ -149,10 +149,10 @@ export const SystemEmails: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 px-1 sm:px-4">
+    <div className="flex flex-col flex-1 h-full min-h-0 w-full space-y-6 px-1 sm:px-4">
       {/* Header (Always show on Desktop, and on Mobile list view) */}
       {(!mobileEmail) && (
-        <div>
+        <div className="shrink-0">
           <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
             <Envelope className="w-6 h-6 text-brand" />
             {user?.role === UserRole.ADMIN ? 'System Emails (All)' : 'Email Inbox'}
@@ -164,14 +164,14 @@ export const SystemEmails: React.FC = () => {
       )}
 
       {emails.length === 0 ? (
-        <div className="bg-white p-8 text-center border border-slate-200 rounded-xl text-sm text-slate-500 shadow-sm">
+        <div className="bg-white p-8 text-center border border-slate-200 rounded-xl text-sm text-slate-500 shadow-sm shrink-0">
           No emails found.
         </div>
       ) : (
-        <div className="grid grid-cols-12 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[550px] h-[calc(100vh-220px)]">
+        <div className="grid grid-cols-12 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1 min-h-0">
           {/* List Pane */}
-          <div className={`col-span-12 md:col-span-5 lg:col-span-4 border-r border-slate-200 flex flex-col h-full bg-white ${mobileEmail ? 'hidden md:flex' : 'flex'}`}>
-            <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+          <div className={`col-span-12 md:col-span-5 lg:col-span-4 border-r border-slate-200 flex flex-col h-full min-h-0 bg-white ${mobileEmail ? 'hidden md:flex' : 'flex'}`}>
+            <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between shrink-0">
               <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider font-display">
                 All Messages ({emails.length})
               </span>
@@ -179,7 +179,7 @@ export const SystemEmails: React.FC = () => {
                 {emails.filter(e => !e.read).length} Unread
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 min-h-0">
               {emails.map((email) => {
                 const isSelected = selectedEmail?.id === email.id;
                 const bodyPreview = cleanEmailPreview(email.body);
@@ -220,7 +220,7 @@ export const SystemEmails: React.FC = () => {
           </div>
 
           {/* Detail Pane */}
-          <div className={`col-span-12 md:col-span-7 lg:col-span-8 flex flex-col h-full bg-slate-50/40 ${mobileEmail ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`col-span-12 md:col-span-7 lg:col-span-8 flex flex-col h-full bg-slate-50/40 min-h-0 ${mobileEmail ? 'flex' : 'hidden md:flex'}`}>
             {/* Mobile Header / Back bar */}
             {mobileEmail && (
               <div className="md:hidden bg-white border-b border-slate-200 p-3 flex items-center gap-3 shrink-0">
@@ -235,9 +235,9 @@ export const SystemEmails: React.FC = () => {
             )}
 
             {selectedEmail ? (
-              <div className="flex-1 flex flex-col min-w-0 bg-white">
+              <div className="flex-1 flex flex-col min-w-0 bg-white min-h-0">
                 {/* Header */}
-                <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/30">
+                <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/30 shrink-0">
                   <h3 className="text-base font-bold text-slate-900 leading-snug">
                     {selectedEmail.subject}
                   </h3>
@@ -265,7 +265,7 @@ export const SystemEmails: React.FC = () => {
                 </div>
 
                 {/* Body Content */}
-                <div className="flex-1 p-5 sm:p-6 overflow-y-auto text-sm text-slate-800 whitespace-pre-wrap leading-relaxed bg-white">
+                <div className="flex-1 min-h-0 p-5 sm:p-6 overflow-y-auto text-sm text-slate-800 whitespace-pre-wrap leading-relaxed bg-white">
                   {selectedEmail.body}
                 </div>
               </div>

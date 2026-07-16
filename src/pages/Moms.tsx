@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, UserRole } from '../types';
@@ -7,7 +7,7 @@ import { getStatusColor } from '../utils';
 import { 
   FileText, Plus, PaperPlaneRight, CheckCircle, Calendar, Clock, MapPin, 
   User, Envelope, ArrowRight, BookOpen, CheckSquare, Pencil, Eye, 
-  CloudArrowUp, X, ArrowLeft, Download
+  CloudArrowUp, X, ArrowLeft, Download, CaretDown, CaretRight, MagnifyingGlass
 } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../components/Toast';
@@ -352,37 +352,195 @@ export const Moms: React.FC = () => {
     }
   };
 
-  // Filter and search computation (AND logic)
-  const filteredMoms = moms.filter(mom => {
-    // 1. Search by client / contact person
-    const matchesSearch = searchTerm === '' || 
-      (mom.client && mom.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (mom.contact_person && mom.contact_person.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Master-detail Layout selection state
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
-    // 2. Filter by status
-    const matchesStatus = statusFilter === 'All' || mom.status === statusFilter;
+  // Filter meetings matching status/source/date filters (company list search is handled on the company list itself)
+  const filteredMoms = useMemo(() => {
+    return moms.filter(mom => {
+      // 1. Filter by status
+      const matchesStatus = statusFilter === 'All' || mom.status === statusFilter;
 
-    // 3. Filter by source
-    const matchesSource = sourceFilter === 'All' || mom.minutes_source === sourceFilter;
+      // 2. Filter by source
+      const matchesSource = sourceFilter === 'All' || mom.minutes_source === sourceFilter;
 
-    // 4. Filter by date range
-    let matchesDate = true;
-    if (startDate) {
-      matchesDate = matchesDate && mom.meeting_date >= startDate;
+      // 3. Filter by date range
+      let matchesDate = true;
+      if (startDate) {
+        matchesDate = matchesDate && mom.meeting_date >= startDate;
+      }
+      if (endDate) {
+        matchesDate = matchesDate && mom.meeting_date <= endDate;
+      }
+
+      return matchesStatus && matchesSource && matchesDate;
+    });
+  }, [moms, statusFilter, sourceFilter, startDate, endDate]);
+
+  // Companies list computation
+  const companiesList = useMemo(() => {
+    const companyGroups: Record<string, { company: string; latestDate: string; totalCount: number; filteredCount: number; months: Record<string, Mom[]> }> = {};
+
+    // Group all MOMs (unfiltered) to determine the full list of distinct companies and their latest activity dates
+    moms.forEach(mom => {
+      const comp = mom.client || 'Untitled Client';
+      const dateStr = mom.meeting_date || '';
+
+      if (!companyGroups[comp]) {
+        companyGroups[comp] = { company: comp, latestDate: dateStr, totalCount: 0, filteredCount: 0, months: {} };
+      }
+
+      if (dateStr > companyGroups[comp].latestDate) {
+        companyGroups[comp].latestDate = dateStr;
+      }
+
+      companyGroups[comp].totalCount++;
+    });
+
+    // Count and group filtered MOMs under each company
+    filteredMoms.forEach(mom => {
+      const comp = mom.client || 'Untitled Client';
+      if (companyGroups[comp]) {
+        companyGroups[comp].filteredCount++;
+        
+        const dateStr = mom.meeting_date || '';
+        const month = dateStr ? dateStr.substring(0, 7) : 'Unknown Month';
+        if (!companyGroups[comp].months[month]) {
+          companyGroups[comp].months[month] = [];
+        }
+        companyGroups[comp].months[month].push(mom);
+      }
+    });
+
+    // Convert to array and sort by latest date (most recent first)
+    const sorted = Object.values(companyGroups).sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+
+    // Filter companies list based on left pane search term (matches company name or any of its meetings' contact person)
+    const filtered = sorted.filter(c => {
+      if (!searchTerm) return true;
+      const matchesCompany = c.company.toLowerCase().includes(searchTerm.toLowerCase());
+      const companyMoms = moms.filter(m => (m.client || 'Untitled Client') === c.company);
+      const matchesContact = companyMoms.some(m => m.contact_person && m.contact_person.toLowerCase().includes(searchTerm.toLowerCase()));
+      return matchesCompany || matchesContact;
+    });
+
+    // Sort meetings within months most-recent first
+    filtered.forEach(comp => {
+      Object.values(comp.months).forEach(monthList => {
+        monthList.sort((a, b) => (b.meeting_date || '').localeCompare(a.meeting_date || ''));
+      });
+    });
+
+    return filtered;
+  }, [moms, filteredMoms, searchTerm]);
+
+  // Synchronize selectedCompany with companiesList updates
+  useEffect(() => {
+    if (companiesList.length > 0) {
+      const isSelectedInList = companiesList.some(c => c.company === selectedCompany);
+      if (!selectedCompany || selectedCompany === 'All' || !isSelectedInList) {
+        setSelectedCompany(companiesList[0].company);
+      }
+    } else {
+      setSelectedCompany('');
     }
-    if (endDate) {
-      matchesDate = matchesDate && mom.meeting_date <= endDate;
-    }
+  }, [companiesList, selectedCompany]);
 
-    return matchesSearch && matchesStatus && matchesSource && matchesDate;
-  });
+  const formatMonth = (monthString: string) => {
+    if (monthString === 'Unknown Month') return monthString;
+    const date = new Date(monthString + '-01');
+    if (isNaN(date.getTime())) return monthString;
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const renderMomCard = (mom: Mom) => (
+    <div key={mom.id} className="bg-white border border-gray-200 rounded p-5 flex flex-col justify-between hover:border-gray-300 shadow-sm transition-all space-y-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${
+              mom.status === MomStatus.COMPLETED
+                ? 'bg-green-50 text-green-700 border-green-200'
+                : 'bg-gray-100 text-gray-700 border-gray-200'
+            }`}>
+              {mom.status}
+            </span>
+            {mom.minutes_source === MinutesSource.UPLOADED && (
+              <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 flex items-center gap-1">
+                <CloudArrowUp className="w-3 h-3" /> Uploaded
+              </span>
+            )}
+          </div>
+          {mom.claim_id && (
+            <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+              <CheckSquare className="w-3 h-3" /> Linked to Claim
+            </span>
+          )}
+        </div>
+
+        <div>
+          <h3 className="font-bold text-gray-900 text-base leading-snug">{mom.client || 'Untitled Client'}</h3>
+          <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{mom.purpose || 'No purpose listed'}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-xs text-gray-600">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <span>{mom.meeting_date}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-gray-400" />
+            <span className="truncate">{mom.contact_person || 'No Contact'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPreviewMom(mom)}
+            className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+            title="Preview Transcript"
+          >
+            <Eye className="w-3.5 h-3.5" /> Preview
+          </button>
+          <Link
+            to={`/moms/${mom.id}`}
+            className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+            title="View Full Details"
+          >
+            <ArrowRight className="w-3.5 h-3.5" /> Details
+          </Link>
+          {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && mom.minutes_source !== MinutesSource.UPLOADED && (
+            <button
+              onClick={() => handleEdit(mom)}
+              className="p-1.5 text-gray-500 hover:text-brand rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+              title="Edit"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+        </div>
+
+        {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && (
+          <button
+            onClick={() => handleSendAndComplete(mom.id)}
+            className="corp-btn-primary text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1 shadow-sm"
+          >
+            <PaperPlaneRight className="w-3 h-3" /> Send MOM
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8" id="moms_root_container">
+    <div className="flex flex-col flex-1 h-full min-h-0 w-full px-4 py-6 space-y-6" id="moms_root_container">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-5 shrink-0">
         <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-950 font-display">Minutes of Meeting (MOM) Manager</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-950 font-display">Minutes of Meeting Manager</h1>
           <p className="text-xs text-slate-500">
             Document client meetings to satisfy regulatory reimbursement policies. Draft, preview, send, and complete meetings.
           </p>
@@ -924,7 +1082,7 @@ export const Moms: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="space-y-6"
+            className="flex flex-col flex-1 min-h-0 space-y-6"
           >
             {loading ? (
               <div className="text-center py-12 text-gray-500 italic">Loading meeting documents...</div>
@@ -933,7 +1091,7 @@ export const Moms: React.FC = () => {
             ) : moms.length === 0 ? (
               <div className="bg-white border border-gray-200 p-12 text-center rounded">
                 <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">No Minutes of Meeting (MOM) Created</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">No Minutes of Meeting Created</h3>
                 <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
                   Reimbursements require a Completed MOM to be attached. Document your client meeting now to begin.
                 </p>
@@ -947,25 +1105,13 @@ export const Moms: React.FC = () => {
               <div className="space-y-6">
                 {/* Filter controls */}
                 <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-4">
-                  {/* Search input */}
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Search</label>
-                    <input
-                      type="text"
-                      placeholder="Search company or contact..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      className="corp-input w-full text-xs"
-                    />
-                  </div>
-
                   {/* Status Select */}
-                  <div className="w-full md:w-40">
+                  <div className="w-full md:w-44">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Status</label>
                     <select
                       value={statusFilter}
                       onChange={e => setStatusFilter(e.target.value as any)}
-                      className="corp-input w-full text-xs"
+                      className="corp-input w-full text-xs font-medium"
                     >
                       <option value="All">All Statuses</option>
                       <option value={MomStatus.DRAFT}>{MomStatus.DRAFT}</option>
@@ -974,12 +1120,12 @@ export const Moms: React.FC = () => {
                   </div>
 
                   {/* Source Select */}
-                  <div className="w-full md:w-40">
+                  <div className="w-full md:w-44">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Source</label>
                     <select
                       value={sourceFilter}
                       onChange={e => setSourceFilter(e.target.value as any)}
-                      className="corp-input w-full text-xs"
+                      className="corp-input w-full text-xs font-medium"
                     >
                       <option value="All">All Sources</option>
                       <option value={MinutesSource.TEMPLATE}>Template</option>
@@ -988,24 +1134,24 @@ export const Moms: React.FC = () => {
                   </div>
 
                   {/* From Date */}
-                  <div className="w-full md:w-44">
+                  <div className="w-full md:w-48">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">From Date</label>
                     <input
                       type="date"
                       value={startDate}
                       onChange={e => setStartDate(e.target.value)}
-                      className="corp-input w-full text-xs"
+                      className="corp-input w-full text-xs font-medium"
                     />
                   </div>
 
                   {/* To Date */}
-                  <div className="w-full md:w-44">
+                  <div className="w-full md:w-48">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">To Date</label>
                     <input
                       type="date"
                       value={endDate}
                       onChange={e => setEndDate(e.target.value)}
-                      className="corp-input w-full text-xs"
+                      className="corp-input w-full text-xs font-medium"
                     />
                   </div>
 
@@ -1020,7 +1166,7 @@ export const Moms: React.FC = () => {
                           setStartDate('');
                           setEndDate('');
                         }}
-                        className="text-xs font-semibold text-brand hover:underline"
+                        className="text-xs font-semibold text-brand hover:underline cursor-pointer"
                       >
                         Clear Filters
                       </button>
@@ -1028,98 +1174,156 @@ export const Moms: React.FC = () => {
                   )}
                 </div>
 
-                {filteredMoms.length === 0 ? (
-                  <div className="bg-white border border-gray-200 p-12 text-center rounded">
-                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">No Matching Meeting Minutes Found</h3>
-                    <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
-                      No documents match your active search terms, status, source, or date range filters. Try clearing some filters.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="moms_grid">
-                    {filteredMoms.map(mom => (
-                      <div key={mom.id} className="bg-white border border-gray-200 rounded p-5 flex flex-col justify-between hover:border-gray-300 shadow-sm transition-all space-y-4">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${
-                                mom.status === MomStatus.COMPLETED
-                                  ? 'bg-green-50 text-green-700 border-green-200'
-                                  : 'bg-gray-100 text-gray-700 border-gray-200'
-                              }`}>
-                                {mom.status}
-                              </span>
-                              {mom.minutes_source === MinutesSource.UPLOADED && (
-                                <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 flex items-center gap-1">
-                                  <CloudArrowUp className="w-3 h-3" /> Uploaded
+                {/* Two-Pane Master-Detail Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-0" id="moms_master_detail">
+                  {/* Left pane: Company list with search */}
+                  <div className={`md:col-span-4 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col h-full min-h-0 shadow-sm ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
+                    {/* Left Pane Header / Company Search */}
+                    <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Companies List</span>
+                        <span className="text-[10px] font-bold bg-slate-200/60 text-slate-600 px-2 py-0.5 rounded-full shrink-0">
+                          {companiesList.length}
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search company or contact..."
+                          value={searchTerm}
+                          onChange={e => setSearchTerm(e.target.value)}
+                          className="corp-input w-full text-xs pl-8 pr-8 py-1.5"
+                        />
+                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
+                          <MagnifyingGlass className="w-4 h-4" />
+                        </div>
+                        {searchTerm && (
+                          <button 
+                            onClick={() => setSearchTerm('')} 
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Scrollable Companies List */}
+                    <div className="flex-1 overflow-y-auto divide-y divide-gray-100 min-h-0">
+                      {companiesList.length === 0 ? (
+                        <div className="p-8 text-center text-gray-400 text-xs italic">
+                          No matching companies
+                        </div>
+                      ) : (
+                        companiesList.map((c) => {
+                          const isSelected = selectedCompany === c.company;
+                          return (
+                            <button
+                              key={c.company}
+                              onClick={() => {
+                                setSelectedCompany(c.company);
+                                setMobileShowDetail(true);
+                              }}
+                              className={`w-full text-left p-4 transition-all flex flex-col gap-1 focus:outline-none cursor-pointer border-l-4 ${
+                                isSelected 
+                                  ? 'bg-blue-50/40 border-brand font-medium text-brand' 
+                                  : 'hover:bg-slate-50/50 border-transparent text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className={`text-sm font-bold truncate ${isSelected ? 'text-brand' : 'text-slate-800'}`}>
+                                  {c.company}
                                 </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                  isSelected ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {c.filteredCount}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Last Active: {c.latestDate || 'N/A'}</span>
+                                {c.filteredCount !== c.totalCount && (
+                                  <span className="text-[10px] italic">({c.totalCount} total)</span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right pane: Detail View */}
+                  <div className={`md:col-span-8 bg-slate-50 md:bg-transparent rounded-xl flex flex-col h-full min-h-0 ${mobileShowDetail ? 'flex' : 'hidden md:flex'}`}>
+                    {/* Mobile Back Button */}
+                    {mobileShowDetail && (
+                      <button
+                        onClick={() => setMobileShowDetail(false)}
+                        className="md:hidden mb-3 flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline p-1 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Back to Companies
+                      </button>
+                    )}
+
+                    {(() => {
+                      const currentCompanyData = companiesList.find(c => c.company === selectedCompany);
+                      if (currentCompanyData) {
+                        return (
+                          <div className="flex flex-col h-full overflow-hidden">
+                            {/* Selected Company Header */}
+                            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                  <h2 className="text-base font-extrabold text-slate-950">{currentCompanyData.company}</h2>
+                                  <p className="text-[11px] text-slate-500 mt-0.5">
+                                    Showing {currentCompanyData.filteredCount} of {currentCompanyData.totalCount} meeting document{currentCompanyData.totalCount === 1 ? '' : 's'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Scrollable detail list */}
+                            <div className="flex-1 overflow-y-auto space-y-6 pr-1 pb-4 min-h-0">
+                              {currentCompanyData.filteredCount === 0 ? (
+                                <div className="bg-white border border-gray-200 p-12 text-center rounded-xl shadow-sm">
+                                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                  <h3 className="text-sm font-semibold text-gray-900 mb-1">No Matching Meetings</h3>
+                                  <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                                    No meetings match your current filters (status, source, or date range) for this company.
+                                  </p>
+                                </div>
+                              ) : (
+                                Object.entries(currentCompanyData.months)
+                                  .sort((a, b) => b[0].localeCompare(a[0]))
+                                  .map(([monthStr, monthMoms]) => (
+                                    <div key={monthStr} className="space-y-3">
+                                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 px-1">
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        {formatMonth(monthStr)}
+                                      </h4>
+                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        {(monthMoms as Mom[]).map(mom => renderMomCard(mom))}
+                                      </div>
+                                    </div>
+                                  ))
                               )}
                             </div>
-                            {mom.claim_id && (
-                              <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1">
-                                <CheckSquare className="w-3 h-3" /> Linked to Claim
-                              </span>
-                            )}
                           </div>
-
-                          <div>
-                            <h3 className="font-bold text-gray-900 text-base leading-snug">{mom.client || 'Untitled Client'}</h3>
-                            <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{mom.purpose || 'No purpose listed'}</p>
+                        );
+                      } else {
+                        return (
+                          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center h-full">
+                            <FileText className="w-12 h-12 text-gray-300 mb-4" />
+                            <h3 className="text-sm font-semibold text-gray-900 mb-1">Select a Company</h3>
+                            <p className="text-xs text-gray-500 max-w-xs">
+                              Choose a client company from the list on the left to browse and manage its meeting minutes.
+                            </p>
                           </div>
-
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-xs text-gray-600">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                              <span>{mom.meeting_date}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <User className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="truncate">{mom.contact_person || 'No Contact'}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setPreviewMom(mom)}
-                              className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
-                              title="Preview Transcript"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> Preview
-                            </button>
-                            <Link
-                              to={`/moms/${mom.id}`}
-                              className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
-                              title="View Full Details"
-                            >
-                              <ArrowRight className="w-3.5 h-3.5" /> Details
-                            </Link>
-                            {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && mom.minutes_source !== MinutesSource.UPLOADED && (
-                              <button
-                                onClick={() => handleEdit(mom)}
-                                className="p-1.5 text-gray-500 hover:text-brand rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
-                                title="Edit"
-                              >
-                                <Pencil className="w-3.5 h-3.5" /> Edit
-                              </button>
-                            )}
-                          </div>
-
-                          {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && (
-                            <button
-                              onClick={() => handleSendAndComplete(mom.id)}
-                              className="corp-btn-primary text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1 shadow-sm"
-                            >
-                              <PaperPlaneRight className="w-3 h-3" /> Send MOM
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      }
+                    })()}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </motion.div>

@@ -4,11 +4,7 @@
       "Bash(npm --version)",
       "Bash(npm install *)",
       "Bash(npm run *)",
-      "Bash(git push:*)",
-      "Bash(git init *)",
-      "Bash(git remote *)",
-      "Bash(git fetch *)",
-      "Bash(git switch *)"
+      "Bash(git push:*)"
     ]
   }
 }

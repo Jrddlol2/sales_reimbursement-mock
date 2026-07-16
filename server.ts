@@ -210,8 +210,14 @@ async function startServer() {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
     
-    let relevantMoms = [];
-    if (user.role === UserRole.REQUESTOR) {
+    let relevantMoms: Mom[] = [];
+    if (user.role === UserRole.ADMIN) {
+      relevantMoms = moms; // Admin sees all MOMs
+    } else if (user.role === UserRole.CUSTODIAN) {
+      // Custodians only need the claim/receipt to verify and release payment;
+      // MOM client-meeting content is out of scope for that role.
+      relevantMoms = [];
+    } else if (user.role === UserRole.REQUESTOR) {
       relevantMoms = moms.filter(m => m.requestor_id === user.id);
     } else if (user.role === UserRole.APPROVER) {
       const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
@@ -237,8 +243,26 @@ async function startServer() {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
+    if (user.role === UserRole.CUSTODIAN) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const mom = moms.find(m => m.id === req.params.id);
     if (!mom) return res.status(404).json({ error: 'Minutes of Meeting not found' });
+
+    let hasAccess = false;
+    if (user.role === UserRole.ADMIN) {
+      hasAccess = true;
+    } else if (user.role === UserRole.REQUESTOR) {
+      hasAccess = mom.requestor_id === user.id;
+    } else if (user.role === UserRole.APPROVER) {
+      const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
+      hasAccess = mom.requestor_id === user.id || (mom.requestor_id && reporteeIds.includes(mom.requestor_id));
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const requestor = users.find(u => u.id === mom.requestor_id);
     const linkedClaim = mom.claim_id ? claims.find(c => c.id === mom.claim_id) : undefined;
@@ -251,6 +275,67 @@ async function startServer() {
       prepared_by_job_title: requestor ? requestor.job_title : undefined,
       linkedClaim,
     });
+  });
+
+  app.get('/api/receipts', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    const flatReceipts = [];
+
+    // 1. Flatten claim expenses
+    for (const exp of expenses) {
+      const claim = claims.find(c => c.id === exp.claim_id);
+      const reqUser = claim ? users.find(u => u.id === claim.requestor_id) : undefined;
+      const claimNo = claim ? (claim.claim_number || `REIM-${claim.id.substring(0, 6)}`) : 'Unknown';
+      
+      flatReceipts.push({
+        id: `exp-${exp.id}`,
+        sourceId: exp.id,
+        parentId: claim?.id || '',
+        parentType: 'Claim',
+        parentNumber: claimNo,
+        receipt_url: exp.receipt_url || '',
+        or_number: exp.or_number || '',
+        vendor: exp.vendor || 'Unknown Vendor',
+        amount: exp.amount,
+        expense_date: exp.expense_date,
+        category: exp.category,
+        business_purpose: exp.business_purpose || '',
+        requestor_name: reqUser ? reqUser.name : 'Unknown',
+        requestor_department: reqUser ? reqUser.department : 'Unknown',
+      });
+    }
+
+    // 2. Flatten liquidation expenses
+    for (const item of liquidationLineItems) {
+      const liq = liquidations.find(l => l.id === item.liquidationId);
+      const reqUser = liq ? users.find(u => u.id === liq.requestorId) : undefined;
+      const liqNo = liq ? `LIQ-${liq.id.substring(0, 6)}` : 'Unknown';
+
+      flatReceipts.push({
+        id: `liq-${item.id}`,
+        sourceId: item.id,
+        parentId: liq?.id || '',
+        parentType: 'Liquidation',
+        parentNumber: liqNo,
+        receipt_url: item.receipt_url || '',
+        or_number: item.or_number || '',
+        vendor: item.vendor || 'Unknown Vendor',
+        amount: item.amount,
+        expense_date: item.expense_date,
+        category: item.category,
+        business_purpose: item.business_purpose || '',
+        requestor_name: reqUser ? reqUser.name : 'Unknown',
+        requestor_department: reqUser ? reqUser.department : 'Unknown',
+      });
+    }
+
+    // Sort by expense date descending
+    flatReceipts.sort((a, b) => new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime());
+
+    res.json(flatReceipts);
   });
 
   app.post('/api/moms', (req, res) => {
@@ -1924,6 +2009,7 @@ BSM Assistant | BSD - IT Security Business`;
     const mkMom = (requestorId: string, client: string, status: MomStatus, daysAgo: number): Mom => {
       const idx = momCursor % 5;
       momCursor++;
+      const actualClient = client && client.trim() !== '' ? client : 'SM Prime Holdings';
       const reqUser = users.find(u => u.id === requestorId);
       const contact = CONTACTS[idx];
       const [first, ...rest] = contact.split(' ');
@@ -1932,14 +2018,14 @@ BSM Assistant | BSD - IT Security Business`;
       const mom: Mom = {
         id: uuidv4(),
         requestor_id: requestorId,
-        client,
+        client: actualClient,
         contact_person: contact,
-        contact_person_email: `${first.toLowerCase()}.${last.toLowerCase()}@${client.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`,
+        contact_person_email: `${first.toLowerCase()}.${last.toLowerCase()}@${actualClient.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`,
         meeting_date: momDate.split('T')[0],
         meeting_time: TIMES[idx],
         location: LOCATIONS[idx],
         purpose: PURPOSES[idx],
-        discussion: DISCUSSIONS[idx](client),
+        discussion: DISCUSSIONS[idx](actualClient),
         agreements: AGREEMENTS[idx],
         action_items: ACTION_ITEMS[idx],
         prepared_by: reqUser?.name || 'Requestor',
@@ -3030,6 +3116,7 @@ BSM Assistant | BSD - IT Security Business`;
       const mom = {
         id: momId,
         requestor_id: reqId,
+        client: 'Internal / Partner',
         client_name: 'Internal / Partner',
         contact_person: 'Partner Contact',
         meeting_date: rDate(daysAgo),
@@ -3136,11 +3223,7 @@ BSM Assistant | BSD - IT Security Business`;
     res.json({ success: true });
   });
 
-  // Admin: Seed 1 Year of History
-  app.post('/api/admin/seed-year', (req, res) => {
-    const user = getUser(req);
-    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
-
+  function seedYearOfData() {
     moms = [];
     claims = [];
     expenses = [];
@@ -3207,6 +3290,7 @@ BSM Assistant | BSD - IT Security Business`;
     const mkMom = (requestorId: string, client: string, status: MomStatus, daysAgo: number): Mom => {
       const idx = momCursor % 5;
       momCursor++;
+      const actualClient = client && client.trim() !== '' ? client : 'SM Prime Holdings';
       const reqUser = users.find(u => u.id === requestorId);
       const contact = CONTACTS[idx];
       const [first, ...rest] = contact.split(' ');
@@ -3215,14 +3299,14 @@ BSM Assistant | BSD - IT Security Business`;
       const mom: Mom = {
         id: uuidv4(),
         requestor_id: requestorId,
-        client,
+        client: actualClient,
         contact_person: contact,
-        contact_person_email: `${first.toLowerCase()}.${last.toLowerCase()}@${client.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`,
+        contact_person_email: `${first.toLowerCase()}.${last.toLowerCase()}@${actualClient.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`,
         meeting_date: momDate.split('T')[0],
         meeting_time: TIMES[idx],
         location: LOCATIONS[idx],
         purpose: PURPOSES[idx],
-        discussion: DISCUSSIONS[idx](client),
+        discussion: DISCUSSIONS[idx](actualClient),
         agreements: AGREEMENTS[idx],
         action_items: ACTION_ITEMS[idx],
         prepared_by: reqUser?.name || 'Requestor',
@@ -3917,6 +4001,7 @@ BSM Assistant | BSD - IT Security Business`;
       const mom = {
         id: momId,
         requestor_id: reqId,
+        client: 'Internal / Partner',
         client_name: 'Internal / Partner',
         contact_person: 'Partner Contact',
         meeting_date: rDate(daysAgo),
@@ -4273,8 +4358,20 @@ BSM Assistant | BSD - IT Security Business`;
     }
 
     claimCounter = seedCounter;
+  }
 
-    res.json({ success: true });
+  // Admin: Seed 1 Year of History
+  app.post('/api/admin/seed-year', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    try {
+      seedYearOfData();
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('Failed to manually seed:', err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Admin: Reset Simulation - wipes every claim/MOM/history/email/notification
@@ -4318,6 +4415,17 @@ BSM Assistant | BSD - IT Security Business`;
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  }
+
+  // Auto-seed on startup if not in production and not disabled
+  if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED !== 'false') {
+    try {
+      console.log('Detected development/demo environment. Auto-seeding 1 year of historical mock data...');
+      seedYearOfData();
+      console.log('Successfully auto-seeded 1 year of mock data on startup.');
+    } catch (err: any) {
+      console.error('Failed to auto-seed mock data on startup:', err);
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {

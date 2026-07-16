@@ -131,7 +131,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
               </div>
 
               <div className="col-span-1 sm:col-span-2">
-                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Linked Meeting (MOM)</span>
+                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Linked Meeting</span>
                 {linkedMom ? (
                   <Link
                     to={`/moms/${linkedMom.id}`}

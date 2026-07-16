@@ -90,7 +90,7 @@ export const ScenarioGuide: React.FC = () => {
       id: 5,
       title: "MOM reuse guard",
       category: "Policy",
-      description: "Each completed Minutes of Meeting (MOM) document can only be linked to a single claim to prevent double-claiming.",
+      description: "Each completed Minutes of Meeting document can only be linked to a single claim to prevent double-claiming.",
       rolesInvolved: ["Any Requestor"],
       steps: [
         "Go to 'Submit Claim' as any Requestor.",

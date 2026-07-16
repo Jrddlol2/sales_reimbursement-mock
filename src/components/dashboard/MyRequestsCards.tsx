@@ -36,11 +36,16 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
   const returned = myClaims.filter(c => c.status === ClaimStatus.RETURNED).length
                  + myLiqs.filter(l => l.status === LiquidationStatus.RETURNED_FOR_REVISION).length;
 
+  const totalVisibleCards = (returned > 0 ? 1 : 0) + 4;
+  const gridColsClass = totalVisibleCards === 5
+    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5'
+    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+
   return (
     <div className="mb-8">
       <h2 className="text-lg font-bold text-slate-800 mb-1">My Requests</h2>
       <p className="text-sm text-slate-500 mb-4">Track the status of your submitted requests</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className={`grid ${gridColsClass} gap-4`}>
         {returned > 0 && (
           <KPICard 
             title="Needs Correction" 

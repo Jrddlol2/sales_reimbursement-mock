@@ -12,10 +12,36 @@ export interface QuickAction {
 
 interface QuickActionsCardProps {
   actions: QuickAction[];
+  layout?: 'grid' | 'horizontal';
 }
 
-export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({ actions }) => {
+export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({ actions, layout = 'grid' }) => {
   const navigate = useNavigate();
+
+  if (layout === 'horizontal') {
+    const colsClass = actions.length === 3 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4';
+    return (
+      <div className="corp-card p-3 md:p-4 mb-6">
+        <div className={`grid ${colsClass} gap-3 md:gap-4`}>
+          {actions.map((action, idx) => {
+            const IconComp = action.icon;
+            return (
+              <button
+                key={idx}
+                onClick={() => navigate(action.path)}
+                className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-slate-200 transition-all hover:bg-slate-50 group text-left w-full"
+              >
+                <div className={`p-2 rounded-lg transition-transform group-hover:scale-105 shrink-0 ${action.bgColorClass} ${action.colorClass}`}>
+                  <IconComp size={20} weight="duotone" />
+                </div>
+                <span className="text-xs md:text-sm font-semibold text-slate-700 tracking-tight leading-tight">{action.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="corp-card flex flex-col">

@@ -34,7 +34,7 @@ export const MyRecentSubmissionsTable: React.FC<{ user: User; claims: Claim[]; c
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
 
   return (
-    <div className="mt-8">
+    <div className="mb-8">
       <RecentActivityTable title="My Recent Submissions" items={myRecentItems} emptyMessage="You haven't submitted any requests recently." />
     </div>
   );

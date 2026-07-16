@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CloudArrowUp, X, Warning, Trash, Sparkle } from '@phosphor-icons/react';
 import Tesseract from 'tesseract.js';
+import { ReceiptThumbnail } from './ReceiptThumbnail';
 
 export interface ExpenseItemState {
   id: string;
@@ -83,6 +84,20 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   onChange
 }) => {
   const [localFile, setLocalFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!localFile) {
+      setPreviewUrl('');
+      return;
+    }
+    const url = URL.createObjectURL(localFile);
+    setPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [localFile]);
+
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrHint, setOcrHint] = useState<string | null>(null);
@@ -370,14 +385,22 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
               </label>
             </div>
             {item.receiptName && (
-              <div className="flex items-center justify-between text-[11px] bg-white border border-gray-200 rounded px-2 py-1 font-semibold text-slate-800">
-                <span className="truncate max-w-[250px]">{item.receiptName}</span>
+              <div className="flex items-center gap-3 bg-white border border-gray-200 rounded p-2 text-slate-800 shadow-xs relative">
+                <ReceiptThumbnail
+                  url={previewUrl || (item.receiptName.startsWith('http') || item.receiptName.startsWith('/') || item.receiptName.startsWith('data:') ? item.receiptName : `/uploads/${item.receiptName}`)}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">{item.receiptName}</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Live Upload Preview</p>
+                </div>
                 <button
                   type="button"
                   onClick={handleClearReceipt}
-                  className="text-red-500 hover:text-red-700 font-bold"
+                  className="p-1 text-slate-400 hover:text-red-600 rounded-full hover:bg-slate-50 transition-colors shrink-0"
+                  title="Remove file"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             )}

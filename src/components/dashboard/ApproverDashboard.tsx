@@ -23,7 +23,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
       apiFetch('/api/liquidations'),
-      apiFetch('/api/approver/review-meetings')
+      apiFetch('/api/review-meetings')
     ]).then(([claimsData, cadvsData, liqsData, meetingsData]) => {
       setClaims(claimsData);
       setCadvs(cadvsData);
@@ -74,7 +74,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
   const pendingClaims = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user.id);
   const pendingCadvs = cadvs.filter(c => c.status === CashAdvanceStatus.SUBMITTED && c.approverId === user.id);
   const pendingLiqs = liqs.filter(l => l.status === LiquidationStatus.SUBMITTED); // We assume if it's visible and pending, it's theirs
-  const pendingMeetings = meetings.filter(m => m.status === ReviewMeetingStatus.SCHEDULED);
+  const pendingMeetings = meetings.filter(m => m.approver_id === user.id && m.status === ReviewMeetingStatus.PENDING_CONFIRMATION);
 
   const pendingTotal = pendingClaims.length + pendingCadvs.length + pendingLiqs.length + pendingMeetings.length;
 

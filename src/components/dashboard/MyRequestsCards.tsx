@@ -56,25 +56,25 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
             additionalContext="Requires your action"
           />
         )}
-        <KPICard 
-          title="Pending" 
-          value={pending} 
-          icon={Tray} 
-          variant="info" 
+        <KPICard
+          title="Pending"
+          value={pending}
+          icon={Tray}
+          variant="warning"
           description="Awaiting approval"
         />
-        <KPICard 
-          title="Approved" 
-          value={approved} 
-          icon={CheckCircle} 
-          variant="success" 
+        <KPICard
+          title="Approved"
+          value={approved}
+          icon={CheckCircle}
+          variant="success"
           description="In processing"
         />
-        <KPICard 
-          title="Completed" 
-          value={completed} 
-          icon={Receipt} 
-          variant="default" 
+        <KPICard
+          title="Completed"
+          value={completed}
+          icon={Receipt}
+          variant="success"
           description="Finalized"
         />
         <KPICard 

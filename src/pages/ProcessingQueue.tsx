@@ -188,7 +188,7 @@ export const ProcessingQueue: React.FC = () => {
         body: JSON.stringify({ code: customClaimCode })
       });
 
-      // 2. Mark Ready for Claim
+      // 2. Mark Ready to Claim
       await apiFetch(`/api/claims/${claimId}/ready-for-claim`, {
         method: 'POST',
         body: JSON.stringify({ payment_method: paymentMethod })
@@ -196,7 +196,7 @@ export const ProcessingQueue: React.FC = () => {
 
       setExpandedId(null);
       fetchClaims();
-      toast.success('Claim marked as Ready for Claim! The requestor has been notified with their Claim Code.');
+      toast.success('Claim marked as Ready to Claim! The requestor has been notified with their Claim Code.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to process claim');
     } finally {
@@ -559,7 +559,7 @@ export const ProcessingQueue: React.FC = () => {
                                         className="corp-btn-primary"
                                       >
                                         <Check className="w-4 h-4" /> 
-                                        {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready for Claim'}
+                                        {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready to Claim'}
                                       </button>
                                     </div>
 
@@ -704,7 +704,7 @@ export const ProcessingQueue: React.FC = () => {
                                 className="w-full corp-btn-primary py-2 flex items-center justify-center gap-1.5 text-xs"
                               >
                                 <Check className="w-4 h-4" /> 
-                                {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready for Claim'}
+                                {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready to Claim'}
                               </button>
                             </div>
                           </div>
@@ -827,7 +827,7 @@ export const ProcessingQueue: React.FC = () => {
                                   ? 'bg-green-50 border-green-200 text-green-700' 
                                   : 'bg-blue-50 border-blue-200 text-blue-700'
                               }`}>
-                                {isClaimed ? 'Completed (Claimed)' : 'Ready for Claim'}
+                                {isClaimed ? 'Completed (Claimed)' : 'Ready to Claim'}
                               </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-[10px] text-gray-500">

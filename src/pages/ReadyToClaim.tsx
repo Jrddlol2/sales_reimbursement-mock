@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
-import { getClaimNumber, formatPHP } from '../utils';
+import { getClaimNumber, formatPHP, getStatusDisplayLabel } from '../utils';
 import { Wallet, Key, Calendar, Tag, ArrowRight, CurrencyDollar } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
@@ -72,7 +72,7 @@ export const ReadyToClaim: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Wallet className="w-6 h-6 text-brand" />
-            Ready to Claim Funds
+            Ready to Claim
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             Surfaces all of your approved reimbursement claims that are finalized and waiting for your release-code entry.
@@ -137,7 +137,7 @@ export const ReadyToClaim: React.FC = () => {
                             {formatPHP(claim.total_amount)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-center">
-                            <StatusBadge status={claim.status} size="sm" />
+                            <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} size="sm" />
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <button
@@ -163,7 +163,7 @@ export const ReadyToClaim: React.FC = () => {
                     <div key={claim.id} className="p-4 hover:bg-slate-50 flex flex-col gap-3 transition-colors">
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-brand">{claimNumber}</span>
-                        <StatusBadge status={claim.status} size="sm" />
+                        <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} size="sm" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-y-1.5 text-xs text-slate-600">

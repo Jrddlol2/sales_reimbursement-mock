@@ -1,40 +1,59 @@
 import { ClaimStatus, Claim, Approval, User } from './types';
 
+// Maps a claim/cash-advance/liquidation status to one of the semantic badge
+// classes defined in index.css (corp-badge-success/warning/danger/info).
+// Pending-type statuses -> warning, approved/completed/closed -> success,
+// rejected -> danger, in-flight/neutral pipeline statuses -> info. Draft and
+// unrecognized statuses stay neutral slate since they aren't a semantic state.
 export const getStatusColor = (status: ClaimStatus | string) => {
   switch (status) {
     case ClaimStatus.DRAFT:
     case 'Draft':
       return 'bg-slate-100 text-slate-700 border-slate-200';
     case ClaimStatus.PENDING_APPROVAL:
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'corp-badge-warning';
     case ClaimStatus.APPROVED:
     case 'Approved':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'corp-badge-success';
     case ClaimStatus.PROCESSING:
-      return 'bg-amber-50 text-amber-700 border-amber-200';
+      return 'corp-badge-info';
     case ClaimStatus.READY_FOR_CLAIM:
-      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-    case ClaimStatus.COMPLETED: 
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case ClaimStatus.REJECTED: 
+      return 'corp-badge-info';
+    case ClaimStatus.COMPLETED:
+      return 'corp-badge-success';
+    case ClaimStatus.REJECTED:
     case 'Rejected':
-      return 'bg-red-50 text-red-700 border-red-200';
-    case ClaimStatus.RETURNED: 
-      return 'bg-orange-50 text-orange-700 border-orange-200';
+      return 'corp-badge-danger';
+    case ClaimStatus.RETURNED:
+      return 'corp-badge-warning';
     case 'Submitted':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'corp-badge-info';
     case 'Released':
-      return 'bg-violet-50 text-violet-700 border-violet-200';
+      return 'corp-badge-success';
     case 'ReturnedForRevision':
-      return 'bg-rose-50 text-rose-700 border-rose-200';
+      return 'corp-badge-warning';
     case 'Reviewed':
-      return 'bg-sky-50 text-sky-700 border-sky-200';
+      return 'corp-badge-info';
     case 'Closed':
     case 'Liquidated':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    default: 
+      return 'corp-badge-success';
+    case 'PendingConfirmation':
+      return 'corp-badge-warning';
+    case 'Confirmed':
+      return 'corp-badge-success';
+    case 'DeclineRequested':
+      return 'corp-badge-danger';
+    default:
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }
+};
+
+// Display-only label override for the payout/release step. The stored status
+// value stays ClaimStatus.READY_FOR_CLAIM ('Ready for Claim') everywhere in
+// data/business logic; this just standardizes the user-facing copy to match
+// the "Ready to Claim" term already used for the nav item and page title.
+export const getStatusDisplayLabel = (status: string): string | undefined => {
+  return status === ClaimStatus.READY_FOR_CLAIM ? 'Ready to Claim' : undefined;
 };
 
 export const formatPHP = (amount: number) => {

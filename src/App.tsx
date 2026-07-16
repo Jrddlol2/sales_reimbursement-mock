@@ -25,6 +25,8 @@ import { Calendar } from './pages/Calendar';
 import { Settings } from './pages/Settings';
 import { SystemEmails } from './pages/SystemEmails';
 import { Receipts as ReceiptArchive } from './pages/ReceiptArchive';
+import { UserAccounts } from './pages/UserAccounts';
+import { CompanyDirectory } from './pages/CompanyDirectory';
 import { Moms } from './pages/Moms';
 import { MomDetail } from './pages/MomDetail';
 import { ScenarioGuide } from './pages/ScenarioGuide';
@@ -109,6 +111,8 @@ export default function App() {
                   <Route path="history" element={<TransactionHistory />} />
                   <Route path="audit" element={<AuditLog />} />
                   <Route path="receipts" element={<ReceiptArchive />} />
+                  <Route path="users" element={<UserAccounts />} />
+                  <Route path="companies" element={<CompanyDirectory />} />
                   <Route path="notifications" element={<SystemEmails />} />
                   <Route path="emails" element={<SystemEmails />} />
                   <Route path="moms" element={<Moms />} />

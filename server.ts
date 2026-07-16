@@ -7,7 +7,7 @@ import {
   ExpenseLineItem, Approval, StatusHistory, Email,
   CashAdvance, CashAdvanceStatus, Liquidation, LiquidationStatus,
   LiquidationVarianceType, LiquidationLineItem,
-  ReviewMeeting, ReviewMeetingStatus
+  ReviewMeeting, ReviewMeetingStatus, Company
 } from './src/types';
 
 const LIQUIDATION_DEADLINE_DAYS = 7;
@@ -25,6 +25,40 @@ let liquidationLineItems: LiquidationLineItem[] = [];
 let reviewMeetings: ReviewMeeting[] = [];
 
 let claimCounter = 123;
+
+// Company Directory - canonical master list of client companies. Seeded from
+// the same names the mock-data generators use (see SEED_COMPANY_NAMES below)
+// so seeding and the real directory share one source of truth: any client
+// name touched by seeding or by a real MOM submission funnels through
+// getOrCreateCompany() and ends up here exactly once.
+const SEED_COMPANY_NAMES = [
+  // Sales
+  'SM Prime Holdings', 'PLDT Inc', 'Jollibee Foods Corp', 'Bank of the Philippine Islands',
+  'Globe Telecom', 'San Miguel Corporation', 'Meralco', 'BDO Unibank',
+  // Marketing
+  'Creative Agency', 'Partner Promo Group', 'Media Corp',
+  // Engineering
+  'Internal Operations', 'Beta Testing Corp', 'DevOps Consultants',
+  // Operations
+  'Headquarters', 'Cebu Branch Office', 'Manila Warehouse',
+  // Used by the hand-written /api/admin/seed demo records and mkMomAndClaim
+  'Ayala Land Inc', 'Maxs Restaurant Corp', 'JG Summit', 'Robinsons Land Corp',
+  'Cebu Pacific Air', 'Metrobank', 'Internal / Partner'
+];
+
+const buildInitialCompanies = (): Company[] =>
+  SEED_COMPANY_NAMES.map(name => ({ id: uuidv4(), name }));
+
+let companies: Company[] = buildInitialCompanies();
+
+const getOrCreateCompany = (name?: string | null): void => {
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  const exists = companies.some(c => c.name.toLowerCase() === trimmed.toLowerCase());
+  if (!exists) {
+    companies.push({ id: uuidv4(), name: trimmed });
+  }
+};
 
 // The standard demo org chart: two full approval chains (Bob<-Alice,Eve and
 // Grace<-Frank,Henry) so Admin Reassignment always has a second Approver to
@@ -187,8 +221,146 @@ async function startServer() {
     });
   };
 
+  const addUserHistory = (userId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string) => {
+    statusHistories.push({
+      id: uuidv4(),
+      claim_id: '',
+      user_id: userId,
+      old_status: oldStatus,
+      new_status: newStatus,
+      changed_by: changedBy,
+      reason,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Walks the (pre-change) reporting chain upward from candidateManagerId; if
+  // it ever reaches userId, assigning candidateManagerId as userId's manager
+  // would close a loop (direct or transitive). Guards against pre-existing
+  // cycles/bad data causing an infinite walk.
+  const wouldCreateCycle = (userId: string, candidateManagerId: string): boolean => {
+    if (candidateManagerId === userId) return true;
+    let currentId: string | null = candidateManagerId;
+    const visited = new Set<string>();
+    while (currentId) {
+      if (currentId === userId) return true;
+      if (visited.has(currentId)) return false;
+      visited.add(currentId);
+      const currentUser: User | undefined = users.find(u => u.id === currentId);
+      currentId = currentUser?.reports_to ?? null;
+    }
+    return false;
+  };
+
   // Auth endpoints (Mock)
   app.get('/api/users', (req, res) => res.json(users));
+
+  // Admin: Update a user's role/department/job title/reporting manager.
+  // Configuration action, deliberately separate from claim approval/processing
+  // permissions - segregation of duties for claims is untouched by this route.
+  app.put('/api/users/:id', (req, res) => {
+    const admin = getUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    const target = users.find(u => u.id === req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const { role, department, job_title, reports_to, confirmOrphan } = req.body;
+
+    // Defense in depth - the UI also disables this, but never trust the client.
+    if (target.id === admin.id && role !== undefined && role !== UserRole.ADMIN) {
+      return res.status(400).json({ error: 'You cannot remove your own Admin role.' });
+    }
+
+    if (reports_to !== undefined && reports_to !== null) {
+      if (reports_to === target.id) {
+        return res.status(400).json({ error: 'A user cannot report to themselves.' });
+      }
+      if (wouldCreateCycle(target.id, reports_to)) {
+        return res.status(400).json({ error: 'This change would create a circular reporting chain.' });
+      }
+    }
+
+    const roleChanging = role !== undefined && role !== target.role;
+    if (roleChanging && target.role === UserRole.APPROVER && role !== UserRole.APPROVER) {
+      const reportees = users.filter(u => u.reports_to === target.id);
+      if (reportees.length > 0 && !confirmOrphan) {
+        return res.status(409).json({
+          error: 'orphan_warning',
+          message: `${target.name} still has ${reportees.length} direct report${reportees.length > 1 ? 's' : ''} (${reportees.map(u => u.name).join(', ')}) who will be left without a valid approver. Confirm to proceed anyway.`,
+          reportees: reportees.map(u => ({ id: u.id, name: u.name }))
+        });
+      }
+    }
+
+    const changed: string[] = [];
+
+    if (role !== undefined && role !== target.role) {
+      addUserHistory(target.id, target.role, role, admin.id, `Changed ${target.name}'s role`);
+      target.role = role;
+      changed.push('role');
+    }
+    if (department !== undefined && department !== target.department) {
+      addUserHistory(target.id, target.department, department, admin.id, `Changed ${target.name}'s department`);
+      target.department = department;
+      changed.push('department');
+    }
+    if (job_title !== undefined && job_title !== target.job_title) {
+      addUserHistory(target.id, target.job_title || '(none)', job_title || '(none)', admin.id, `Changed ${target.name}'s job title`);
+      target.job_title = job_title;
+      changed.push('job_title');
+    }
+    if (reports_to !== undefined && reports_to !== target.reports_to) {
+      const oldManagerName = users.find(u => u.id === target.reports_to)?.name || '(none)';
+      const newManagerName = reports_to ? (users.find(u => u.id === reports_to)?.name || reports_to) : '(none)';
+      addUserHistory(target.id, oldManagerName, newManagerName, admin.id, `Changed ${target.name}'s reporting manager`);
+      target.reports_to = reports_to;
+      changed.push('reports_to');
+    }
+
+    res.json({ user: target, changed });
+  });
+
+  // Company Directory - readable by any authenticated role since MOM creation
+  // (any Requestor/Approver) needs to read it; create/edit is Admin-only.
+  app.get('/api/companies', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    res.json([...companies].sort((a, b) => a.name.localeCompare(b.name)));
+  });
+
+  app.post('/api/companies', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    const { name, industry, notes } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Company name is required.' });
+    if (companies.some(c => c.name.toLowerCase() === name.trim().toLowerCase())) {
+      return res.status(400).json({ error: 'A company with this name already exists.' });
+    }
+
+    const company: Company = { id: uuidv4(), name: name.trim(), industry, notes };
+    companies.push(company);
+    res.json(company);
+  });
+
+  app.put('/api/companies/:id', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    const company = companies.find(c => c.id === req.params.id);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const { name, industry, notes } = req.body;
+    if (name !== undefined) {
+      if (!name.trim()) return res.status(400).json({ error: 'Company name is required.' });
+      company.name = name.trim();
+    }
+    if (industry !== undefined) company.industry = industry;
+    if (notes !== undefined) company.notes = notes;
+
+    res.json(company);
+  });
   app.post('/api/login', (req, res) => {
     const { email } = req.body;
     const user = users.find(u => u.email === email);
@@ -366,6 +538,7 @@ async function startServer() {
       participants_external: req.body.participants_external || ''
     };
 
+    getOrCreateCompany(mom.client);
     moms.push(mom);
     res.json(mom);
   });
@@ -400,6 +573,7 @@ async function startServer() {
     }
 
     mom.client = req.body.client ?? mom.client;
+    getOrCreateCompany(mom.client);
     mom.contact_person = req.body.contact_person ?? mom.contact_person;
     mom.contact_person_email = req.body.contact_person_email ?? mom.contact_person_email;
     mom.meeting_date = req.body.meeting_date ?? mom.meeting_date;
@@ -481,7 +655,8 @@ ${user.name}`;
         ...h,
         changedBy: users.find(u => u.id === h.changed_by)
       })).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      return { ...c, mom, requestor: reqUser, expenses: claimExpenses, approvals: claimApprovals, history: claimHistory };
+      const reviewMeeting = reviewMeetings.find(rm => rm.claim_id === c.id);
+      return { ...c, mom, requestor: reqUser, expenses: claimExpenses, approvals: claimApprovals, history: claimHistory, reviewMeeting };
     });
 
     res.json(enriched);
@@ -490,15 +665,31 @@ ${user.name}`;
   app.get('/api/claims/:id', (req, res) => {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    
+
     const claim = claims.find(c => c.id === req.params.id);
     if (!claim) return res.status(404).json({ error: 'Not found' });
-    
+
+    // Mirror the scoping already applied by GET /api/claims - the list endpoint
+    // was correctly scoped but this single-record lookup was not, allowing any
+    // authenticated user to read any claim by id.
+    let hasAccess = false;
+    if (user.role === UserRole.ADMIN) {
+      hasAccess = true;
+    } else if (user.role === UserRole.REQUESTOR) {
+      hasAccess = claim.requestor_id === user.id;
+    } else if (user.role === UserRole.APPROVER) {
+      hasAccess = claim.current_approver_id === user.id || claim.original_approver_id === user.id || claim.requestor_id === user.id;
+    } else if (user.role === UserRole.CUSTODIAN) {
+      hasAccess = [ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(claim.status) || claim.requestor_id === user.id;
+    }
+    if (!hasAccess) return res.status(403).json({ error: 'Forbidden' });
+
     const claimExpenses = expenses.filter(e => e.claim_id === claim.id);
     const claimApprovals = approvals.filter(a => a.claim_id === claim.id);
     const claimHistory = statusHistories.filter(h => h.claim_id === claim.id).map(h => ({      ...h,      changedBy: users.find(u => u.id === h.changed_by)    })).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const mom = moms.find(m => m.id === claim.mom_id);
     const requestor = users.find(u => u.id === claim.requestor_id);
+    const reviewMeeting = reviewMeetings.find(rm => rm.claim_id === claim.id);
 
     res.json({
       ...claim,
@@ -506,7 +697,8 @@ ${user.name}`;
       approvals: claimApprovals,
       history: claimHistory,
       mom,
-      requestor
+      requestor,
+      reviewMeeting
     });
   });
 
@@ -622,7 +814,7 @@ ${user.name}`;
 
     const hasConflict = reviewMeetings.some(rm =>
       rm.approver_id === currentApproverId &&
-      rm.status === ReviewMeetingStatus.SCHEDULED &&
+      [ReviewMeetingStatus.PENDING_CONFIRMATION, ReviewMeetingStatus.CONFIRMED].includes(rm.status) &&
       rm.meeting_date === meeting_date &&
       rm.meeting_time === meeting_time
     );
@@ -658,7 +850,7 @@ ${user.name}`;
       approver_id: currentApproverId,
       meeting_date,
       meeting_time,
-      status: ReviewMeetingStatus.SCHEDULED,
+      status: ReviewMeetingStatus.PENDING_CONFIRMATION,
       created_at: new Date().toISOString()
     });
 
@@ -727,6 +919,140 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
     });
 
     res.json(enriched);
+  });
+
+  // Shared by confirm/decline: a Review Meeting can be acted on by its
+  // assigned approver_id, or by whoever they've actively delegated to right
+  // now - the same dynamic delegation check already used for MOM PUT access.
+  const isAuthorizedForReviewMeeting = (rm: ReviewMeeting, user: User): boolean => {
+    if (rm.approver_id === user.id) return true;
+    const originalApprover = users.find(u => u.id === rm.approver_id);
+    if (originalApprover?.delegation) {
+      const now = new Date();
+      const start = new Date(originalApprover.delegation.start_date);
+      const end = new Date(originalApprover.delegation.end_date);
+      end.setHours(23, 59, 59, 999);
+      return now >= start && now <= end && originalApprover.delegation.delegate_id === user.id;
+    }
+    return false;
+  };
+
+  // Approver (or active delegate) confirms a proposed Review Meeting time.
+  app.post('/api/review-meetings/:id/confirm', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const rm = reviewMeetings.find(r => r.id === req.params.id);
+    if (!rm) return res.status(404).json({ error: 'Review Meeting not found' });
+    if (!isAuthorizedForReviewMeeting(rm, user)) {
+      return res.status(403).json({ error: 'Forbidden: not your assigned Review Meeting' });
+    }
+    if (rm.status !== ReviewMeetingStatus.PENDING_CONFIRMATION) {
+      return res.status(400).json({ error: 'Only a meeting pending confirmation can be confirmed.' });
+    }
+
+    rm.status = ReviewMeetingStatus.CONFIRMED;
+    rm.decline_reason = undefined;
+
+    const requestor = users.find(u => u.id === rm.requestor_id);
+    const claim = claims.find(c => c.id === rm.claim_id);
+    const claimNumber = claim?.claim_number || `REIM-${rm.claim_id.substring(0, 6)}`;
+
+    sendEmail(
+      rm.requestor_id,
+      `Review Meeting Confirmed - ${claimNumber}`,
+      `${user.name} has confirmed your proposed Review Meeting for claim ${claimNumber} on ${rm.meeting_date} at ${rm.meeting_time}.
+
+Reference:
+${claimNumber}`
+    );
+
+    res.json(rm);
+  });
+
+  // Approver (or active delegate) declines a proposed Review Meeting time,
+  // optionally with a reason. The Requestor must propose a new time via
+  // PUT /api/review-meetings/:id/reschedule before the meeting can move
+  // forward again.
+  app.post('/api/review-meetings/:id/decline', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const rm = reviewMeetings.find(r => r.id === req.params.id);
+    if (!rm) return res.status(404).json({ error: 'Review Meeting not found' });
+    if (!isAuthorizedForReviewMeeting(rm, user)) {
+      return res.status(403).json({ error: 'Forbidden: not your assigned Review Meeting' });
+    }
+    if (rm.status !== ReviewMeetingStatus.PENDING_CONFIRMATION) {
+      return res.status(400).json({ error: 'Only a meeting pending confirmation can be declined.' });
+    }
+
+    const { reason } = req.body;
+    rm.status = ReviewMeetingStatus.DECLINE_REQUESTED;
+    rm.decline_reason = reason || undefined;
+
+    const claim = claims.find(c => c.id === rm.claim_id);
+    const claimNumber = claim?.claim_number || `REIM-${rm.claim_id.substring(0, 6)}`;
+
+    sendEmail(
+      rm.requestor_id,
+      `Review Meeting Declined - ${claimNumber}`,
+      `${user.name} can't make the proposed Review Meeting for claim ${claimNumber} on ${rm.meeting_date} at ${rm.meeting_time}.
+${reason ? `\nReason:\n${reason}\n` : ''}
+Required Action:
+Please log in to the system and propose a new date/time for this Review Meeting.`
+    );
+
+    res.json(rm);
+  });
+
+  // Requestor proposes a new date/time for their own Review Meeting - reused
+  // after a decline (or any time before the meeting is Completed), re-opening
+  // the same pending-confirmation cycle rather than a separate claim step.
+  app.put('/api/review-meetings/:id/reschedule', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const rm = reviewMeetings.find(r => r.id === req.params.id && r.requestor_id === user.id);
+    if (!rm) return res.status(404).json({ error: 'Review Meeting not found' });
+    if (rm.status === ReviewMeetingStatus.COMPLETED) {
+      return res.status(400).json({ error: 'This Review Meeting has already been completed.' });
+    }
+
+    const { meeting_date, meeting_time } = req.body;
+    if (!meeting_date || !meeting_time) {
+      return res.status(400).json({ error: 'A new meeting date and time are required.' });
+    }
+
+    const hasConflict = reviewMeetings.some(other =>
+      other.id !== rm.id &&
+      other.approver_id === rm.approver_id &&
+      [ReviewMeetingStatus.PENDING_CONFIRMATION, ReviewMeetingStatus.CONFIRMED].includes(other.status) &&
+      other.meeting_date === meeting_date &&
+      other.meeting_time === meeting_time
+    );
+    if (hasConflict) {
+      return res.status(409).json({ error: 'Your Approver already has a Review Meeting scheduled at that date and time. Please choose another slot.' });
+    }
+
+    rm.meeting_date = meeting_date;
+    rm.meeting_time = meeting_time;
+    rm.status = ReviewMeetingStatus.PENDING_CONFIRMATION;
+    rm.decline_reason = undefined;
+
+    const claim = claims.find(c => c.id === rm.claim_id);
+    const claimNumber = claim?.claim_number || `REIM-${rm.claim_id.substring(0, 6)}`;
+
+    sendEmail(
+      rm.approver_id,
+      `Review Meeting Rescheduled - ${claimNumber}`,
+      `${user.name} has proposed a new time for the Review Meeting on claim ${claimNumber}: ${meeting_date} at ${meeting_time}.
+
+Required Action:
+Please log in to the system and confirm or decline this new time.`
+    );
+
+    res.json(rm);
   });
 
   // Revise & Resubmit: a Requestor reopens their own Returned claim, edits
@@ -908,7 +1234,7 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
       }
     }
 
-    const relevant = reviewMeetings.filter(rm => rm.approver_id === currentApproverId && rm.status === ReviewMeetingStatus.SCHEDULED);
+    const relevant = reviewMeetings.filter(rm => rm.approver_id === currentApproverId && [ReviewMeetingStatus.PENDING_CONFIRMATION, ReviewMeetingStatus.CONFIRMED].includes(rm.status));
     res.json(relevant.map(rm => ({ meeting_date: rm.meeting_date, meeting_time: rm.meeting_time })));
   });
 
@@ -1127,24 +1453,27 @@ BSM Assistant | BSD - IT Security Business`;
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    // calendar: count of upcoming scheduled review meetings
+    // calendar: count of upcoming active (pending-confirmation or confirmed) review meetings
+    const activeMeetingStatuses = [ReviewMeetingStatus.PENDING_CONFIRMATION, ReviewMeetingStatus.CONFIRMED, ReviewMeetingStatus.DECLINE_REQUESTED];
     let calendarCount = 0;
     if (user.role === UserRole.REQUESTOR) {
-      calendarCount = reviewMeetings.filter(rm => rm.requestor_id === user.id && rm.status === ReviewMeetingStatus.SCHEDULED).length;
+      calendarCount = reviewMeetings.filter(rm => rm.requestor_id === user.id && activeMeetingStatuses.includes(rm.status)).length;
     } else if (user.role === UserRole.APPROVER) {
       const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
-      calendarCount = reviewMeetings.filter(rm => (rm.requestor_id === user.id || rm.approver_id === user.id || reporteeIds.includes(rm.requestor_id)) && rm.status === ReviewMeetingStatus.SCHEDULED).length;
+      calendarCount = reviewMeetings.filter(rm => (rm.requestor_id === user.id || rm.approver_id === user.id || reporteeIds.includes(rm.requestor_id)) && activeMeetingStatuses.includes(rm.status)).length;
     }
 
     // emails: count of unread emails for the user
     const emailsCount = emails.filter(e => e.recipient_id === user.id && !e.read).length;
 
-    // inbox: (Approver only) count of pending-approval claims assigned to them + their own returned claims
+    // inbox: (Approver only) count of pending-approval claims assigned to them,
+    // their own returned claims, and Review Meetings awaiting their confirmation
     let inboxCount = 0;
     if (user.role === UserRole.APPROVER) {
       const pendingClaims = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user.id);
       const returnedClaims = claims.filter(c => c.status === ClaimStatus.RETURNED && c.requestor_id === user.id);
-      inboxCount = pendingClaims.length + returnedClaims.length;
+      const pendingMeetingConfirmations = reviewMeetings.filter(rm => rm.approver_id === user.id && rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION);
+      inboxCount = pendingClaims.length + returnedClaims.length + pendingMeetingConfirmations.length;
     }
 
     // processing: (Custodian only) count of claims currently in PROCESSING status
@@ -1198,7 +1527,8 @@ BSM Assistant | BSD - IT Security Business`;
     const enriched = statusHistories.map(h => {
       const claim = claims.find(c => c.id === h.claim_id);
       const changedBy = users.find(u => u.id === h.changed_by);
-      return { ...h, claim, changedBy };
+      const targetUser = h.user_id ? users.find(u => u.id === h.user_id) : undefined;
+      return { ...h, claim, changedBy, targetUser };
     }).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     
     res.json(enriched);
@@ -1258,6 +1588,19 @@ BSM Assistant | BSD - IT Security Business`;
 
     const ca = cashAdvances.find(c => c.id === req.params.id);
     if (!ca) return res.status(404).json({ error: 'Cash Advance not found' });
+
+    // Mirror the scoping already applied by GET /api/cash-advances - the list
+    // endpoint was correctly scoped but this single-record lookup was not.
+    let hasAccess = false;
+    if (user.role === UserRole.REQUESTOR) {
+      hasAccess = ca.requestorId === user.id;
+    } else if (user.role === UserRole.APPROVER) {
+      const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
+      hasAccess = ca.approverId === user.id || ca.requestorId === user.id || reporteeIds.includes(ca.requestorId);
+    } else {
+      hasAccess = true; // Custodian and Admin see all
+    }
+    if (!hasAccess) return res.status(403).json({ error: 'Forbidden' });
 
     const requestor = users.find(u => u.id === ca.requestorId);
     const approver = users.find(u => u.id === ca.approverId);
@@ -1519,6 +1862,20 @@ BSM Assistant | BSD - IT Security Business`;
 
     const l = liquidations.find(liq => liq.id === req.params.id);
     if (!l) return res.status(404).json({ error: 'Liquidation not found' });
+
+    // Mirror the scoping already applied by GET /api/liquidations - the list
+    // endpoint was correctly scoped but this single-record lookup was not.
+    let hasAccess = false;
+    if (user.role === UserRole.REQUESTOR) {
+      hasAccess = l.requestorId === user.id;
+    } else if (user.role === UserRole.APPROVER) {
+      const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
+      const relatedCa = cashAdvances.find(c => c.id === l.cashAdvanceId);
+      hasAccess = l.requestorId === user.id || relatedCa?.approverId === user.id || reporteeIds.includes(l.requestorId);
+    } else {
+      hasAccess = true; // Custodian and Admin see all
+    }
+    if (!hasAccess) return res.status(403).json({ error: 'Forbidden' });
 
     const requestor = users.find(u => u.id === l.requestorId);
     const cashAdvance = cashAdvances.find(c => c.id === l.cashAdvanceId);
@@ -1954,6 +2311,7 @@ BSM Assistant | BSD - IT Security Business`;
     liquidations = [];
     liquidationLineItems = [];
     reviewMeetings = [];
+    companies = buildInitialCompanies();
 
     users.length = 0;
     users.push(...buildDefaultUsers());
@@ -1965,15 +2323,19 @@ BSM Assistant | BSD - IT Security Business`;
     };
 
     // Bob has an active delegation to Grace (covers "today", so auto-routing is
-    // demoable live). 
+    // demoable live). Looked up by id, not array position - buildDefaultUsers()
+    // has been reordered before and a positional index silently pointed at the
+    // wrong user (Noah) the last time this drifted.
     const activeDelegationStart = rDate(2).split('T')[0];
     const activeDelegationEnd = rDate(-5).split('T')[0];
-    users[1].delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
-    
+    const bob = users.find(u => u.id === 'u2');
+    if (bob) bob.delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
+
     // Henry has an expired delegation to Bob (ended 2 days ago).
     const expiredStart = rDate(10).split('T')[0];
     const expiredEnd = rDate(2).split('T')[0];
-    users[7].delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
+    const henry = users.find(u => u.id === 'u8');
+    if (henry) henry.delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
 
     let seedCounter = 123;
     const nextClaimNumber = () => `REIM-${new Date().getFullYear()}-${String(seedCounter++).padStart(6, '0')}`;
@@ -2033,6 +2395,7 @@ BSM Assistant | BSD - IT Security Business`;
         created_at: momDate,
         minutes_source: MinutesSource.TEMPLATE
       };
+      getOrCreateCompany(actualClient);
       moms.push(mom);
       return mom;
     };
@@ -3128,6 +3491,7 @@ BSM Assistant | BSD - IT Security Business`;
         status: MomStatus.COMPLETED,
         created_at: rDate(daysAgo)
       };
+      getOrCreateCompany(mom.client);
       moms.push(mom);
       mkClaim({
         requestorId: reqId,
@@ -3235,6 +3599,7 @@ BSM Assistant | BSD - IT Security Business`;
     liquidations = [];
     liquidationLineItems = [];
     reviewMeetings = [];
+    companies = buildInitialCompanies();
 
     users.length = 0;
     users.push(...buildDefaultUsers());
@@ -3246,15 +3611,19 @@ BSM Assistant | BSD - IT Security Business`;
     };
 
     // Bob has an active delegation to Grace (covers "today", so auto-routing is
-    // demoable live). 
+    // demoable live). Looked up by id, not array position - buildDefaultUsers()
+    // has been reordered before and a positional index silently pointed at the
+    // wrong user (Noah) the last time this drifted.
     const activeDelegationStart = rDate(2).split('T')[0];
     const activeDelegationEnd = rDate(-5).split('T')[0];
-    users[1].delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
-    
+    const bob = users.find(u => u.id === 'u2');
+    if (bob) bob.delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
+
     // Henry has an expired delegation to Bob (ended 2 days ago).
     const expiredStart = rDate(10).split('T')[0];
     const expiredEnd = rDate(2).split('T')[0];
-    users[7].delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
+    const henry = users.find(u => u.id === 'u8');
+    if (henry) henry.delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
 
     let seedCounter = 123;
     const nextClaimNumber = () => `REIM-${new Date().getFullYear()}-${String(seedCounter++).padStart(6, '0')}`;
@@ -3314,6 +3683,7 @@ BSM Assistant | BSD - IT Security Business`;
         created_at: momDate,
         minutes_source: MinutesSource.TEMPLATE
       };
+      getOrCreateCompany(actualClient);
       moms.push(mom);
       return mom;
     };
@@ -4013,6 +4383,7 @@ BSM Assistant | BSD - IT Security Business`;
         status: MomStatus.COMPLETED,
         created_at: rDate(daysAgo)
       };
+      getOrCreateCompany(mom.client);
       moms.push(mom);
       mkClaim({
         requestorId: reqId,
@@ -4393,6 +4764,7 @@ BSM Assistant | BSD - IT Security Business`;
     liquidations = [];
     liquidationLineItems = [];
     reviewMeetings = [];
+    companies = buildInitialCompanies();
 
     users.length = 0;
     users.push(...buildDefaultUsers());

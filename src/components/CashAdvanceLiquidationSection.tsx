@@ -685,15 +685,15 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         );
       })()}
 
-      {/* Ready for Claim Attention Items Banner */}
+      {/* Ready to Claim Attention Items Banner */}
       {userClaims.some(c => c.status === ClaimStatus.READY_FOR_CLAIM) && (
         <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3 shadow-sm animate-fade-in">
           <div className="flex items-start gap-2.5">
             <WarningCircle className="w-5 h-5 text-brand shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider mb-0.5">Action Required: Ready for Claim</h3>
+              <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider mb-0.5">Action Required: Ready to Claim</h3>
               <p className="text-xs text-slate-700 leading-normal font-semibold">
-                You have approved reimbursement claims that are Ready for Claim! Coordinate with the Custodian, present your Claim Code, and complete redemption below.
+                You have approved reimbursement claims that are Ready to Claim! Coordinate with the Custodian, present your Claim Code, and complete redemption below.
               </p>
             </div>
           </div>
@@ -1031,7 +1031,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                             'bg-slate-100 text-slate-500 border border-slate-200'
                           ) : ''
                         }`}>
-                          {item.status === ClaimStatus.PROCESSING ? 'Processing' : item.status}
+                          {item.status === ClaimStatus.PROCESSING ? 'Processing' : item.status === ClaimStatus.READY_FOR_CLAIM ? 'Ready to Claim' : item.status}
                         </span>
                       </td>
 

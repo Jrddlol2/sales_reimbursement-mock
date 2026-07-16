@@ -1,6 +1,6 @@
 import React from 'react';
 import { StatusBadge } from '../StatusBadge';
-import { formatPHP } from '../../utils';
+import { formatPHP, getStatusDisplayLabel } from '../../utils';
 import { useNavigate } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
 
@@ -70,7 +70,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                         <span className="text-slate-500">{new Date(item.date).toLocaleDateString()}</span>
                       </td>
                       <td>
-                        <StatusBadge status={item.status} size="sm" />
+                        <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
                       </td>
                       <td className="text-right">
                         <CaretRight size={16} weight="bold" className="text-slate-400 inline-block" />
@@ -91,7 +91,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold text-brand">{item.reference}</span>
-                    <StatusBadge status={item.status} size="sm" />
+                    <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
                   </div>
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                     <div>

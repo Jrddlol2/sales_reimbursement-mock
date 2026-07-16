@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { Claim, ClaimStatus } from '../types';
+import { Claim, ClaimStatus, ReviewMeetingStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
-import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning } from '@phosphor-icons/react';
+import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { KPITile } from '../components/KPITile';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -21,13 +21,18 @@ export const ApprovalQueue: React.FC = () => {
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'inbox' | 'history' | 'cadv'>('inbox');
-  
+  const [tab, setTab] = useState<'inbox' | 'meetings' | 'history' | 'cadv'>('inbox');
+
   // Cash Advance / Liquidation states
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
   const [liquidations, setLiquidations] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [approvalsComment, setApprovalsComment] = useState<Record<string, string>>({});
+
+  // Review Meeting confirmation state
+  const [reviewMeetings, setReviewMeetings] = useState<any[]>([]);
+  const [meetingComment, setMeetingComment] = useState<Record<string, string>>({});
+  const [isProcessingMeeting, setIsProcessingMeeting] = useState<string | null>(null);
 
   // Bulk actions
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
@@ -49,8 +54,9 @@ export const ApprovalQueue: React.FC = () => {
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
       apiFetch('/api/liquidations'),
-      apiFetch('/api/users')
-    ]).then(([claimsData, caData, liqData, usersData]) => {
+      apiFetch('/api/users'),
+      apiFetch('/api/review-meetings')
+    ]).then(([claimsData, caData, liqData, usersData, meetingsData]) => {
       setAllClaims(claimsData);
       const pendingApprovals = claimsData.filter((c: Claim) => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user?.id);
       const returnedClaims = claimsData.filter((c: Claim) => c.status === ClaimStatus.RETURNED && c.requestor_id === user?.id);
@@ -64,11 +70,42 @@ export const ApprovalQueue: React.FC = () => {
       setCashAdvances(caData);
       setLiquidations(liqData);
       setUsers(usersData);
+      setReviewMeetings(meetingsData);
       setLoading(false);
     }).catch(err => {
       console.error(err);
       setLoading(false);
     });
+  };
+
+  const handleConfirmMeeting = async (id: string) => {
+    setIsProcessingMeeting(id);
+    try {
+      await apiFetch(`/api/review-meetings/${id}/confirm`, { method: 'POST' });
+      toast.success('Review Meeting confirmed. The requestor has been notified.');
+      fetchClaims();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to confirm the Review Meeting.');
+    } finally {
+      setIsProcessingMeeting(null);
+    }
+  };
+
+  const handleDeclineMeeting = async (id: string) => {
+    setIsProcessingMeeting(id);
+    try {
+      await apiFetch(`/api/review-meetings/${id}/decline`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: meetingComment[id] || '' })
+      });
+      toast.success('Review Meeting declined. The requestor has been asked to propose a new time.');
+      setMeetingComment(p => ({ ...p, [id]: '' }));
+      fetchClaims();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to decline the Review Meeting.');
+    } finally {
+      setIsProcessingMeeting(null);
+    }
   };
 
   const handleApproveAdvance = async (id: string, decision: 'Approved' | 'Rejected') => {
@@ -107,6 +144,7 @@ export const ApprovalQueue: React.FC = () => {
 
   const pendingAdvances = cashAdvances.filter(ca => ca.status === 'Submitted' && ca.approverId === user?.id);
   const pendingLiqs = liquidations.filter(l => l.status === 'Submitted' && cashAdvances.find(ca => ca.id === l.cashAdvanceId)?.approverId === user?.id);
+  const pendingMeetingConfirmations = reviewMeetings.filter(rm => rm.approver_id === user?.id && rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION);
 
   const toggleBulkSelection = (id: string) => {
     setSelectedForBulk(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -192,14 +230,14 @@ export const ApprovalQueue: React.FC = () => {
   const returnedClaims = inboxClaims.filter(c => c.status === ClaimStatus.RETURNED);
   
   const approverClaims = allClaims.filter(c => c.current_approver_id === user?.id || c.original_approver_id === user?.id);
-  const spendByDept = approverClaims
+  const spendByRequestor = approverClaims
     .filter(c => [ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(c.status))
     .reduce((acc, c) => {
-      const dept = c.requestor?.department || "General";
-      acc[dept] = (acc[dept] || 0) + c.total_amount;
+      const name = c.requestor?.name || "Unknown";
+      acc[name] = (acc[name] || 0) + c.total_amount;
       return acc;
     }, {} as Record<string, number>);
-  const deptData = Object.entries(spendByDept).map(([name, value]) => ({ name, value: Number(value) })).sort((a,b) => b.value - a.value);
+  const requestorData = Object.entries(spendByRequestor).map(([name, value]) => ({ name, value: Number(value) })).sort((a,b) => b.value - a.value);
 
   const totalAmountPending = pendingApprovals.reduce((sum, c) => sum + (c.total_amount || 0), 0);
 
@@ -266,36 +304,6 @@ export const ApprovalQueue: React.FC = () => {
         </div>
       </div>
 
-      {/* Spend Insights Widget */}
-      {deptData.length > 0 && (
-        <div className="corp-card space-y-4">
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Approved Spend by Department</h3>
-              <p className="text-[10px] text-slate-500">Total approved reimbursements from your reports</p>
-            </div>
-          </div>
-          <div className="px-6 pb-6 h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deptData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#475569" }} width={90} />
-                <Tooltip 
-                  cursor={{ fill: "#f1f5f9" }} 
-                  formatter={(value: number) => formatPHP(value)}
-                  contentStyle={{ fontSize: "11px", borderRadius: "4px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}
-                />
-                <Bar dataKey="value" radius={[0, 2, 2, 0]} barSize={18}>
-                  {deptData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#cbd5e1"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {/* Navigation tabs */}
       <div className="flex gap-1 border-b border-slate-200">
         <button 
@@ -306,8 +314,16 @@ export const ApprovalQueue: React.FC = () => {
         >
           Pending ({inboxClaims.length})
         </button>
-        <button 
-          onClick={() => setTab('history')} 
+        <button
+          onClick={() => setTab('meetings')}
+          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
+            tab === 'meetings' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Review Meetings ({pendingMeetingConfirmations.length})
+        </button>
+        <button
+          onClick={() => setTab('history')}
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'history' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -484,6 +500,63 @@ export const ApprovalQueue: React.FC = () => {
                 })
               )}
             </div>
+          </div>
+        </div>
+      ) : tab === 'meetings' ? (
+        <div className="corp-card flex flex-col overflow-hidden">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Review Meetings Awaiting Your Confirmation</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {pendingMeetingConfirmations.length === 0 ? (
+              <div className="px-4 py-8 text-center text-slate-400 italic">No Review Meetings currently awaiting your confirmation.</div>
+            ) : (
+              pendingMeetingConfirmations.map(rm => (
+                <div key={rm.id} className="p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <Link
+                        to={`/claims/${rm.claim_id}`}
+                        className="font-bold text-brand hover:underline text-sm block"
+                      >
+                        {rm.claim_number || `REIM-${rm.claim_id.substring(0, 6).toUpperCase()}`}
+                      </Link>
+                      <div className="text-xs text-slate-500 font-semibold mt-0.5">
+                        Requestor: <strong className="text-slate-800">{rm.requestor_name}</strong>
+                      </div>
+                      <div className="text-xs text-slate-600 mt-2">
+                        Proposed: <strong>{new Date(rm.meeting_date).toLocaleDateString()}</strong> at <strong>{rm.meeting_time}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Optional reason if declining..."
+                      value={meetingComment[rm.id] || ''}
+                      onChange={e => setMeetingComment(p => ({ ...p, [rm.id]: e.target.value }))}
+                      className="flex-1 border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
+                    />
+                    <div className="flex gap-1.5 w-full sm:w-auto">
+                      <button
+                        onClick={() => handleDeclineMeeting(rm.id)}
+                        disabled={isProcessingMeeting === rm.id}
+                        className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleConfirmMeeting(rm.id)}
+                        disabled={isProcessingMeeting === rm.id}
+                        className="corp-btn-primary"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       ) : tab === 'inbox' ? (
@@ -778,6 +851,36 @@ export const ApprovalQueue: React.FC = () => {
                 })
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spend Insights Widget */}
+      {requestorData.length > 0 && (
+        <div className="corp-card space-y-4">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Approved Spend by Requestor</h3>
+              <p className="text-[10px] text-slate-500">Total approved reimbursements from your reports</p>
+            </div>
+          </div>
+          <div className="px-6 pb-6 h-48 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={requestorData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#475569" }} width={90} />
+                <Tooltip
+                  cursor={{ fill: "#f1f5f9" }}
+                  formatter={(value: number) => formatPHP(value)}
+                  contentStyle={{ fontSize: "11px", borderRadius: "4px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}
+                />
+                <Bar dataKey="value" radius={[0, 2, 2, 0]} barSize={18}>
+                  {requestorData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#cbd5e1"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}

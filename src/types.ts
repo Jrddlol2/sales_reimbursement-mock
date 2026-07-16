@@ -59,8 +59,10 @@ export interface Mom {
 }
 
 export enum ReviewMeetingStatus {
-  SCHEDULED = 'Scheduled',
-  COMPLETED = 'Completed',
+  PENDING_CONFIRMATION = 'PendingConfirmation', // Requestor proposed a time; Approver hasn't responded yet
+  CONFIRMED = 'Confirmed',                      // Approver agreed to the proposed time
+  DECLINE_REQUESTED = 'DeclineRequested',        // Approver declined; Requestor needs to propose a new time
+  COMPLETED = 'Completed',                       // The meeting actually happened
 }
 
 export interface ReviewMeeting {
@@ -71,6 +73,7 @@ export interface ReviewMeeting {
   meeting_date: string;
   meeting_time: string;
   status: ReviewMeetingStatus;
+  decline_reason?: string;
   created_at: string;
 }
 
@@ -134,6 +137,7 @@ export interface Claim {
   sourceLiquidationId?: string;
   created_at: string;
   updated_at: string;
+  reviewMeeting?: ReviewMeeting; // enriched by GET /api/claims and GET /api/claims/:id
 }
 
 export interface Approval {
@@ -145,7 +149,14 @@ export interface Approval {
   timestamp: string;
 }
 
-export interface StatusHistory {  id: string;  claim_id: string;  cash_advance_id?: string;  liquidation_id?: string;  old_status: string;  new_status: string;  changed_by: string;  changedBy?: User;  reason?: string;  timestamp: string;}
+export interface StatusHistory {  id: string;  claim_id: string;  cash_advance_id?: string;  liquidation_id?: string;  user_id?: string;  old_status: string;  new_status: string;  changed_by: string;  changedBy?: User;  reason?: string;  timestamp: string;}
+
+export interface Company {
+  id: string;
+  name: string;
+  industry?: string;
+  notes?: string;
+}
 
 export interface Email {
   id: string;

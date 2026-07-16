@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
-import { ClaimStatus, UserRole } from '../types';
+import { ClaimStatus, UserRole, ReviewMeetingStatus } from '../types';
 import {
   FileText, CheckCircle, Question, Warning,
   MapPin, Calendar, Clock, CurrencyDollar, Shield, Check, Info, ArrowRight,
   PencilSimple, Download, ArrowCounterClockwise
 } from '@phosphor-icons/react';
-import { formatPHP, getClaimNumber } from '../utils';
+import { formatPHP, getClaimNumber, getStatusDisplayLabel } from '../utils';
 import { MomEditForm } from '../components/MomEditForm';
 import { ClaimMomSummary } from '../components/ClaimMomSummary';
 import { ClaimLineItems } from '../components/ClaimLineItems';
@@ -76,6 +76,11 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
   const [reassignReason, setReassignReason] = useState('');
 
   const [previewFile, setPreviewFile] = useState<{ type: 'mom' | 'receipt', url: string, name: string } | null>(null);
+
+  // Review Meeting reschedule state (Requestor, only usable after a decline)
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
 
   const fetchClaimDetails = () => {
     setLoading(true);
@@ -159,6 +164,25 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
     }
   };
 
+  const handleReschedule = async () => {
+    if (!rescheduleDate || !rescheduleTime) {
+      return toast.error('Please pick a new date and time.');
+    }
+    try {
+      await apiFetch(`/api/review-meetings/${claim.reviewMeeting.id}/reschedule`, {
+        method: 'PUT',
+        body: JSON.stringify({ meeting_date: rescheduleDate, meeting_time: rescheduleTime })
+      });
+      toast.success('New Review Meeting time proposed. Your Approver has been notified.');
+      setShowReschedule(false);
+      setRescheduleDate('');
+      setRescheduleTime('');
+      fetchClaimDetails();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to propose a new time.');
+    }
+  };
+
   const claimNumber = claim ? getClaimNumber(claim) : `REIM-${claimId.substring(0, 6)}`;
 
   const drawerContent = (
@@ -209,7 +233,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
           <DetailHeader
             eyebrow="Reimbursement Request"
             title={claimNumber}
-            status={claim && <StatusBadge status={claim.status} />}
+            status={claim && <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} />}
             onClose={onClose}
             actions={
               <>
@@ -353,6 +377,85 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                   />
                 )}
               </SummaryCard>
+
+              {/* REVIEW MEETING STATUS */}
+              {claim.reviewMeeting && (
+                <SummaryCard title="Review Meeting">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="w-5 h-5 text-slate-400" />
+                      <div>
+                        <div className="text-sm font-bold text-slate-900">
+                          {new Date(claim.reviewMeeting.meeting_date).toLocaleDateString()} at {claim.reviewMeeting.meeting_time}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">Internal review call with your Approver — separate from the client meeting.</div>
+                      </div>
+                    </div>
+                    <StatusBadge
+                      status={claim.reviewMeeting.status}
+                      label={
+                        claim.reviewMeeting.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? 'Pending Confirmation'
+                        : claim.reviewMeeting.status === ReviewMeetingStatus.CONFIRMED ? 'Confirmed'
+                        : claim.reviewMeeting.status === ReviewMeetingStatus.DECLINE_REQUESTED ? 'Declined — Please Reschedule'
+                        : 'Completed'
+                      }
+                    />
+                  </div>
+
+                  {claim.reviewMeeting.status === ReviewMeetingStatus.DECLINE_REQUESTED && claim.reviewMeeting.decline_reason && (
+                    <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2.5">
+                      <span className="font-bold block mb-0.5">Approver's reason:</span> "{claim.reviewMeeting.decline_reason}"
+                    </div>
+                  )}
+
+                  {claim.reviewMeeting.status === ReviewMeetingStatus.DECLINE_REQUESTED && user?.id === claim.requestor_id && (
+                    <div className="mt-3">
+                      {!showReschedule ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowReschedule(true)}
+                          className="text-xs font-bold text-brand hover:text-brand-hover"
+                        >
+                          Propose a New Time
+                        </button>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mt-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">New Date</label>
+                            <input
+                              type="date"
+                              value={rescheduleDate}
+                              onChange={e => setRescheduleDate(e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1.5 text-xs focus:border-brand focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">New Time</label>
+                            <input
+                              type="time"
+                              value={rescheduleTime}
+                              onChange={e => setRescheduleTime(e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1.5 text-xs focus:border-brand focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowReschedule(false)}
+                              className="px-3 py-1.5 border border-gray-300 rounded text-xs font-bold text-gray-600 bg-white"
+                            >
+                              Cancel
+                            </button>
+                            <button type="button" onClick={handleReschedule} className="corp-btn-primary text-xs">
+                              Propose Time
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </SummaryCard>
+              )}
 
               {/* LINKED MINUTES OF MEETING */}
               {claim.mom && (

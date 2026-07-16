@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { Mom, MomStatus, MinutesSource, UserRole } from '../types';
+import { Mom, MomStatus, MinutesSource, UserRole, Company } from '../types';
 import { useAuth } from '../components/AuthContext';
 import { getStatusColor } from '../utils';
 import { 
@@ -40,6 +40,10 @@ export const Moms: React.FC = () => {
   const [participantsInternal, setParticipantsInternal] = useState('');
   const [participantsExternal, setParticipantsExternal] = useState('');
 
+  // Company Directory - Client (Company Name) picker
+  const [companyDirectory, setCompanyDirectory] = useState<Company[]>([]);
+  const [clientMode, setClientMode] = useState<'select' | 'custom'>('select');
+
   // Preview State
   const [previewMom, setPreviewMom] = useState<Mom | null>(null);
 
@@ -65,10 +69,12 @@ export const Moms: React.FC = () => {
 
   useEffect(() => {
     fetchMoms();
+    apiFetch('/api/companies').then(setCompanyDirectory).catch(console.error);
   }, []);
 
   const handleCreateNew = () => {
     setEditingMom(null);
+    setClientMode('select');
     setClient('');
     setContactPerson('');
     setContactPersonEmail('');
@@ -98,6 +104,8 @@ export const Moms: React.FC = () => {
   const handleEdit = (mom: Mom) => {
     setEditingMom(mom);
     setClient(mom.client || '');
+    const isKnownCompany = !mom.client || companyDirectory.some(c => c.name.toLowerCase() === mom.client!.toLowerCase());
+    setClientMode(isKnownCompany ? 'select' : 'custom');
     setContactPerson(mom.contact_person || '');
     setContactPersonEmail(mom.contact_person_email || '');
     setMeetingDate(mom.meeting_date || '');
@@ -162,6 +170,8 @@ export const Moms: React.FC = () => {
     const d = new Date();
     d.setDate(d.getDate() - Math.floor(Math.random() * 30));
 
+    const isKnownCompany = companyDirectory.some(c => c.name.toLowerCase() === clientName.toLowerCase());
+    setClientMode(isKnownCompany ? 'select' : 'custom');
     setClient(clientName);
     setContactPerson(contactName);
     setContactPersonEmail(`${first.toLowerCase()}.${last.toLowerCase()}@${clientName.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`);
@@ -606,7 +616,7 @@ export const Moms: React.FC = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden"
+            className="bg-white rounded border border-gray-200 shadow-sm overflow-y-auto flex-1 min-h-0"
             id="mom_upload_form_view"
           >
             <form onSubmit={handleSaveUploadDraft} className="p-6 space-y-6 max-w-2xl mx-auto">
@@ -807,11 +817,11 @@ export const Moms: React.FC = () => {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-2"
+            className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-2 flex-1 min-h-0"
             id="mom_form_view"
           >
             {/* Form Left Column */}
-            <form onSubmit={handleSaveDraft} className="p-6 space-y-6 border-r border-gray-100">
+            <form onSubmit={handleSaveDraft} className="p-6 space-y-6 border-r border-gray-100 overflow-y-auto min-h-0">
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                 <div className="flex items-center gap-4">
                   <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
@@ -839,14 +849,37 @@ export const Moms: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Client (Company Name) *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. SM Prime Holdings"
-                    value={client}
-                    onChange={e => setClient(e.target.value)}
-                    className="block w-full text-sm border border-gray-300 rounded px-3 py-2 focus:border-brand focus:outline-none"
-                  />
+                  <select
+                    required={clientMode === 'select'}
+                    value={clientMode === 'custom' ? '__custom__' : client}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') {
+                        setClientMode('custom');
+                        setClient('');
+                      } else {
+                        setClientMode('select');
+                        setClient(e.target.value);
+                      }
+                    }}
+                    className="block w-full text-sm border border-gray-300 rounded px-3 py-2 focus:border-brand focus:outline-none bg-white"
+                  >
+                    <option value="">-- Select Company --</option>
+                    {companyDirectory.map(c => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                    <option value="__custom__">+ Specify your own...</option>
+                  </select>
+                  {clientMode === 'custom' && (
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="Enter new company name"
+                      value={client}
+                      onChange={e => setClient(e.target.value)}
+                      className="block w-full text-sm border border-gray-300 rounded px-3 py-2 mt-2 focus:border-brand focus:outline-none"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">Contact Person Name *</label>
@@ -1017,7 +1050,7 @@ export const Moms: React.FC = () => {
             </form>
 
             {/* Live Corporate Styled Memo Preview */}
-            <div className="bg-gray-50 p-6 flex flex-col h-full overflow-y-auto max-h-[850px] space-y-4">
+            <div className="bg-gray-50 p-6 flex flex-col h-full min-h-0 overflow-y-auto space-y-4">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Live Corporate Memo Preview</h3>
               <div className="bg-white border border-gray-200 shadow-sm p-8 font-sans text-gray-900 rounded space-y-6">
                 <div className="text-center border-b-2 border-gray-900 pb-4">
@@ -1102,7 +1135,7 @@ export const Moms: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="flex flex-col flex-1 min-h-0 space-y-6">
                 {/* Filter controls */}
                 <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-4">
                   {/* Status Select */}
@@ -1192,7 +1225,7 @@ export const Moms: React.FC = () => {
                           placeholder="Search company or contact..."
                           value={searchTerm}
                           onChange={e => setSearchTerm(e.target.value)}
-                          className="corp-input w-full text-xs pl-8 pr-8 py-1.5"
+                          className="corp-input corp-input-icon-left corp-input-icon-right w-full text-xs py-1.5"
                         />
                         <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
                           <MagnifyingGlass className="w-4 h-4" />

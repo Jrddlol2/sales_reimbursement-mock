@@ -8,6 +8,10 @@ export interface QuickAction {
   path: string;
   colorClass: string;
   bgColorClass: string;
+  // Optional sub-grouping label, e.g. "Start New" vs "Manage / Schedule" —
+  // lets QuickActionsCard visually separate actions that create a new
+  // claim/request from actions that manage or schedule existing ones.
+  group?: string;
 }
 
 interface QuickActionsCardProps {
@@ -15,29 +19,55 @@ interface QuickActionsCardProps {
   layout?: 'grid' | 'horizontal';
 }
 
+const ActionButton: React.FC<{ action: QuickAction; onClick: () => void }> = ({ action, onClick }) => {
+  const IconComp = action.icon;
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-slate-200 transition-all hover:bg-slate-50 group text-left w-full"
+    >
+      <div className={`p-2 rounded-lg transition-transform group-hover:scale-105 shrink-0 ${action.bgColorClass} ${action.colorClass}`}>
+        <IconComp size={20} weight="duotone" />
+      </div>
+      <span className="text-xs md:text-sm font-semibold text-slate-700 tracking-tight leading-tight">{action.label}</span>
+    </button>
+  );
+};
+
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({ actions, layout = 'grid' }) => {
   const navigate = useNavigate();
 
   if (layout === 'horizontal') {
+    const groups = Array.from(new Set(actions.map(a => a.group).filter((g): g is string => !!g)));
     const colsClass = actions.length === 3 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4';
+
+    if (groups.length > 1) {
+      return (
+        <div className="corp-card p-3 md:p-4 mb-6 flex flex-col sm:flex-row gap-3 md:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+          {groups.map(groupName => {
+            const groupActions = actions.filter(a => a.group === groupName);
+            const groupColsClass = groupActions.length >= 2 ? 'grid-cols-2' : 'grid-cols-1';
+            return (
+              <div key={groupName} className="flex-1 pt-3 sm:pt-0 sm:pl-4 first:pt-0 first:sm:pl-0">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 px-1">{groupName}</span>
+                <div className={`grid ${groupColsClass} gap-3 md:gap-4`}>
+                  {groupActions.map((action, idx) => (
+                    <ActionButton key={idx} action={action} onClick={() => navigate(action.path)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     return (
       <div className="corp-card p-3 md:p-4 mb-6">
         <div className={`grid ${colsClass} gap-3 md:gap-4`}>
-          {actions.map((action, idx) => {
-            const IconComp = action.icon;
-            return (
-              <button
-                key={idx}
-                onClick={() => navigate(action.path)}
-                className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-slate-200 transition-all hover:bg-slate-50 group text-left w-full"
-              >
-                <div className={`p-2 rounded-lg transition-transform group-hover:scale-105 shrink-0 ${action.bgColorClass} ${action.colorClass}`}>
-                  <IconComp size={20} weight="duotone" />
-                </div>
-                <span className="text-xs md:text-sm font-semibold text-slate-700 tracking-tight leading-tight">{action.label}</span>
-              </button>
-            );
-          })}
+          {actions.map((action, idx) => (
+            <ActionButton key={idx} action={action} onClick={() => navigate(action.path)} />
+          ))}
         </div>
       </div>
     );

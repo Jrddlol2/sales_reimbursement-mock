@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { formatPHP } from '../utils';
 import { useToast } from '../components/Toast';
 import { ExpenseLineItemEditor } from '../components/ExpenseLineItemEditor';
+import { MomQuickCreateModal } from '../components/MomQuickCreateModal';
 
 interface LineItem {
   id: string;
@@ -54,6 +55,7 @@ export const SubmitClaim: React.FC = () => {
     { id: Math.random().toString(), category: '', amount: '', receiptName: '', or_number: '' }
   ]);
 
+  const [showMomCreateModal, setShowMomCreateModal] = useState(false);
   const [pastClaims, setPastClaims] = useState<any[]>([]);
   const [requestType, setRequestType] = useState<'reimbursement' | 'cash_advance'>('reimbursement');
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -165,6 +167,12 @@ export const SubmitClaim: React.FC = () => {
     ]);
     setRemarks('Sales meeting lunch with client decision makers. Discussed next steps for contract renewal.');
     setSupportingDocs('SOW_Draft_v1.pdf');
+  };
+
+  const handleMomCreated = (mom: Mom) => {
+    setMoms(prev => [...prev, mom]);
+    setSelectedMomId(mom.id);
+    setShowMomCreateModal(false);
   };
 
   const handleFileDrop = (e: React.DragEvent, id: string) => {
@@ -521,12 +529,19 @@ export const SubmitClaim: React.FC = () => {
                   Under enterprise compliance policy, an approved <strong>Minutes of Meeting</strong> must be finalized and sent to the client before any sales expense reimbursement can be submitted.
                 </p>
               </div>
-              <div className="pt-2">
-                <Link
-                  to="/moms"
+              <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowMomCreateModal(true)}
                   className="corp-btn-primary"
                 >
-                  Go to MOM Manager to Complete a MOM
+                  <Plus className="w-4 h-4" /> Create New MOM
+                </button>
+                <Link
+                  to="/moms"
+                  className="inline-flex items-center justify-center text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded uppercase tracking-wider font-display"
+                >
+                  Go to MOM Manager
                 </Link>
               </div>
             </motion.div>
@@ -543,19 +558,28 @@ export const SubmitClaim: React.FC = () => {
                     <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
                       1. Link Completed Meeting *
                     </label>
-                    <select
-                      required
-                      value={selectedMomId}
-                      onChange={e => setSelectedMomId(e.target.value)}
-                      className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:ring-brand focus:outline-none"
-                    >
-                      <option value="">-- Select Completed MOM --</option>
-                      {moms.map(mom => (
-                        <option key={mom.id} value={mom.id}>
-                          {mom.client} - {mom.purpose} ({mom.meeting_date})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <select
+                        required
+                        value={selectedMomId}
+                        onChange={e => setSelectedMomId(e.target.value)}
+                        className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:ring-brand focus:outline-none"
+                      >
+                        <option value="">-- Select Completed MOM --</option>
+                        {moms.map(mom => (
+                          <option key={mom.id} value={mom.id}>
+                            {mom.client} - {mom.purpose} ({mom.meeting_date})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowMomCreateModal(true)}
+                        className="inline-flex items-center justify-center gap-1 text-xs font-bold text-brand bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded whitespace-nowrap shrink-0"
+                      >
+                        <Plus className="w-4 h-4" /> Create New MOM
+                      </button>
+                    </div>
                     <p className="text-[10px] text-gray-400 mt-1">
                       Only Completed MOMs verified and dispatched to clients are listed here.
                     </p>
@@ -722,6 +746,13 @@ export const SubmitClaim: React.FC = () => {
             </form>
           )}
         </>
+      )}
+
+      {showMomCreateModal && (
+        <MomQuickCreateModal
+          onClose={() => setShowMomCreateModal(false)}
+          onCreated={handleMomCreated}
+        />
       )}
     </div>
   );

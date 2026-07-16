@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../types';
 import { apiFetch } from '../lib/api';
-import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive } from '@phosphor-icons/react';
+import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings } from '@phosphor-icons/react';
 import { formatPHP } from '../utils';
 
 export const navItems = [
@@ -15,8 +15,10 @@ export const navItems = [
   { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
-  { label: 'Meeting Minutes', path: '/moms', icon: ClipboardText, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
+  { label: 'Meeting Minutes', path: '/moms', icon: ClipboardText, group: 'COMPLIANCE', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
   { label: 'Receipt Archive', path: '/receipts', icon: Archive, group: 'SYSTEM', roles: [UserRole.ADMIN] },
+  { label: 'User Accounts', path: '/users', icon: UsersThree, group: 'SYSTEM', roles: [UserRole.ADMIN] },
+  { label: 'Company Directory', path: '/companies', icon: Buildings, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Audit Log', path: '/audit', icon: ShieldCheck, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Settings', path: '/settings', icon: Gear, group: 'SYSTEM', roles: [UserRole.APPROVER, UserRole.ADMIN] },
   { label: 'Scenario Guide', path: '/scenarios', icon: BookOpen, group: 'RESOURCES', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
@@ -225,7 +227,7 @@ export const Layout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-slate-50 flex flex-col md:flex-row text-sm font-sans overflow-hidden">
+    <div className="h-screen bg-slate-100 flex flex-col md:flex-row text-sm font-sans overflow-hidden">
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div 
@@ -265,7 +267,7 @@ export const Layout: React.FC = () => {
               return acc;
             }, {} as Record<string, typeof navItems[0][]>);
 
-            const groupOrder = ['PRIMARY', 'COMMUNICATION', 'PLANNING', 'SYSTEM', 'RESOURCES', 'OTHER'];
+            const groupOrder = ['PRIMARY', 'COMMUNICATION', 'PLANNING', 'COMPLIANCE', 'SYSTEM', 'RESOURCES', 'OTHER'];
             const activeGroups = groupOrder.filter(g => groupedItems[g] && groupedItems[g].length > 0);
             const showLabels = activeGroups.length > 1;
 
@@ -581,7 +583,7 @@ export const Layout: React.FC = () => {
         </header>
 
         {/* Main scrollable content */}
-        <main className={`flex-1 bg-slate-50 p-4 sm:p-6 md:p-8 ${
+        <main className={`flex-1 bg-slate-100 p-4 sm:p-6 md:p-8 ${
           location.pathname === '/emails' || location.pathname === '/moms'
             ? 'flex flex-col overflow-hidden'
             : 'overflow-auto'

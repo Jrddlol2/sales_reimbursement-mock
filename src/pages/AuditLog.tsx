@@ -87,6 +87,8 @@ export const AuditLog: React.FC = () => {
                         <Link to={`/claims/${log.claim.id}`} className="text-brand hover:text-brand-hover hover:underline">
                           {getClaimNumber(log.claim)}
                         </Link>
+                      ) : log.targetUser ? (
+                        <span className="text-slate-900 font-sans font-bold">{log.targetUser.name}</span>
                       ) : (
                         <span className="text-slate-900">{log.claim_id.substring(0,8)}</span>
                       )}
@@ -130,6 +132,8 @@ export const AuditLog: React.FC = () => {
                       <Link to={`/claims/${log.claim.id}`} className="text-brand hover:text-brand-hover hover:underline">
                         {getClaimNumber(log.claim)}
                       </Link>
+                    ) : log.targetUser ? (
+                      <span className="text-slate-900 font-sans font-bold">{log.targetUser.name}</span>
                     ) : (
                       <span className="text-slate-900">{log.claim_id.substring(0,8)}</span>
                     )}

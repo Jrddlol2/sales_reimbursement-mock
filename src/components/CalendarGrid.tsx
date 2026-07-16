@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Mom, MomStatus, UserRole } from '../types';
+import { Mom, MomStatus, UserRole, ReviewMeetingStatus } from '../types';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -16,6 +16,7 @@ interface ReviewMeetingLike {
   meeting_time?: string;
   approver_name?: string;
   requestor_name?: string;
+  status?: ReviewMeetingStatus;
 }
 
 interface CalendarGridProps {
@@ -96,8 +97,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                       <div
                         key={mom.id}
                         className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block shadow-xs border",
-                          mom.status === MomStatus.COMPLETED ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                          "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block shadow-xs",
+                          mom.status === MomStatus.COMPLETED ? "corp-badge-success" : "corp-badge-warning"
                         )}
                         title={`${mom.client} at ${mom.meeting_time || 'unspecified time'} (${mom.purpose || 'No purpose'})`}
                       >
@@ -107,12 +108,26 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                   })}
                   {dayReviewMeetings.map(rm => {
                     const withName = rm.approver_name || rm.requestor_name || 'Approver';
-                    const displayLabel = `${rm.meeting_time || 'Review'} - ${withName}`;
+                    const statusSuffix = rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? ' (Pending)'
+                      : rm.status === ReviewMeetingStatus.DECLINE_REQUESTED ? ' (Declined)'
+                      : '';
+                    const displayLabel = `${rm.meeting_time || 'Review'} - ${withName}${statusSuffix}`;
+                    const statusLabel = rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? 'awaiting Approver confirmation'
+                      : rm.status === ReviewMeetingStatus.DECLINE_REQUESTED ? 'declined by the Approver - needs a new time'
+                      : rm.status === ReviewMeetingStatus.CONFIRMED ? 'confirmed by the Approver'
+                      : 'completed';
                     return (
                       <div
                         key={rm.id}
-                        className="text-[10px] px-1.5 py-0.5 rounded truncate font-medium block shadow-xs border bg-violet-50 text-violet-700 border-violet-200"
-                        title={`Review Meeting with ${withName} at ${rm.meeting_time || 'unspecified time'} - your internal claim review call, not the client meeting`}
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block",
+                          rm.status === ReviewMeetingStatus.DECLINE_REQUESTED
+                            ? "border border-dashed border-red-300 bg-red-50/60 text-red-700"
+                            : rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION
+                              ? "border border-dashed border-slate-300 bg-slate-50 text-slate-500"
+                              : "shadow-xs corp-badge-info"
+                        )}
+                        title={`Review Meeting with ${withName} at ${rm.meeting_time || 'unspecified time'} - ${statusLabel}. Your internal claim review call, not the client meeting.`}
                       >
                         {displayLabel}
                       </div>

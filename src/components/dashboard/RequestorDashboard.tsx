@@ -77,10 +77,10 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   const totalReimbursed = completedClaims.reduce((acc, c) => acc + c.total_amount, 0);
 
   const quickActions = [
-    { label: 'New Reimbursement', icon: Receipt, path: '/claims/new', colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50' },
-    { label: 'New Cash Advance', icon: Money, path: '/cash-advances/new', colorClass: 'text-emerald-600', bgColorClass: 'bg-emerald-50' },
-    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-amber-600', bgColorClass: 'bg-amber-50' },
-    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-blue-600', bgColorClass: 'bg-blue-50' },
+    { label: 'New Reimbursement', icon: Receipt, path: '/claims/new', colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50', group: 'Start New' },
+    { label: 'New Cash Advance', icon: Money, path: '/cash-advances/new', colorClass: 'text-emerald-600', bgColorClass: 'bg-emerald-50', group: 'Start New' },
+    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-amber-600', bgColorClass: 'bg-amber-50', group: 'Manage / Schedule' },
+    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-blue-600', bgColorClass: 'bg-blue-50', group: 'Manage / Schedule' },
   ];
 
   const recentItems = [
@@ -120,6 +120,11 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
     { name: 'Completed', value: completedClaims.length, color: '#10b981' },
     { name: 'Rejected', value: claims.filter(c => c.status === ClaimStatus.REJECTED).length, color: '#ef4444' }
   ].filter(d => d.value > 0);
+
+  const rejectedClaims = claims.filter(c => c.status === ClaimStatus.REJECTED);
+  const decidedClaimsCount = completedClaims.length + rejectedClaims.length;
+  const approvalRate = decidedClaimsCount > 0 ? Math.round((completedClaims.length / decidedClaimsCount) * 100) : null;
+  const avgClaimAmount = completedClaims.length > 0 ? totalReimbursed / completedClaims.length : 0;
 
   // Group reimbursements by month (last 6 months)
   const monthlyData = () => {
@@ -165,15 +170,49 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">
           <AnalyticsCard title="Reimbursement Trend">
-            <SimpleLineChart data={monthlyData()} dataKey="Amount" />
+            {claims.length > 0 ? (
+              <SimpleLineChart data={monthlyData()} dataKey="Amount" />
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-center px-6">
+                <Receipt className="w-10 h-10 text-slate-300 mb-3" />
+                <h3 className="text-sm font-semibold text-slate-900 mb-1">No Reimbursement Activity Yet</h3>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+                  Your spending trend will appear here once you submit your first reimbursement claim.
+                </p>
+                <Link to="/claims/new" className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded">
+                  Submit Your First Claim
+                </Link>
+              </div>
+            )}
           </AnalyticsCard>
         </div>
         <div>
           <AnalyticsCard title="Claim Status Distribution">
             {statusDistribution.length > 0 ? (
-              <DonutChart data={statusDistribution} />
+              <>
+                <DonutChart data={statusDistribution} />
+                <div className="grid grid-cols-2 gap-2 pt-3 mt-1 border-t border-slate-100">
+                  <div className="text-center">
+                    <div className="text-sm font-extrabold text-slate-900">{approvalRate !== null ? `${approvalRate}%` : '—'}</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mt-0.5">Approval Rate</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-extrabold text-slate-900">{formatPHP(avgClaimAmount)}</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mt-0.5">Avg Claim Amount</div>
+                  </div>
+                </div>
+              </>
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-slate-400 text-sm">No data available</div>
+              <div className="h-[300px] flex flex-col items-center justify-center text-center px-6">
+                <Receipt className="w-10 h-10 text-slate-300 mb-3" />
+                <h3 className="text-sm font-semibold text-slate-900 mb-1">No Claims Submitted Yet</h3>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+                  Submit your first reimbursement to see your status breakdown here.
+                </p>
+                <Link to="/claims/new" className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded">
+                  Submit Your First Claim
+                </Link>
+              </div>
             )}
           </AnalyticsCard>
         </div>

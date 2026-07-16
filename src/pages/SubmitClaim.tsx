@@ -4,9 +4,9 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { Mom, MomStatus, User, ClaimStatus } from '../types';
 import { 
-  FileText, Sparkles, UploadCloud, X, Send, AlertCircle, 
-  HelpCircle, Calendar, ShieldCheck, ArrowLeft, Landmark, Check, Plus, Trash2
-} from 'lucide-react';
+  FileText, Sparkle, CloudArrowUp, X, PaperPlaneRight, WarningCircle, 
+  Question, Calendar, ShieldCheck, ArrowLeft, Bank, Check, Plus, Trash
+} from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import { formatPHP } from '../utils';
 import { useToast } from '../components/Toast';
@@ -18,6 +18,7 @@ interface LineItem {
   amount: string;
   receiptName: string;
   isDragOver?: boolean;
+  or_number?: string;
 }
 
 const REIMBURSEMENT_CATEGORIES = [
@@ -50,7 +51,7 @@ export const SubmitClaim: React.FC = () => {
   const [approverSlots, setApproverSlots] = useState<{ meeting_date: string; meeting_time: string }[]>([]);
 
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: Math.random().toString(), category: '', amount: '', receiptName: '' }
+    { id: Math.random().toString(), category: '', amount: '', receiptName: '', or_number: '' }
   ]);
 
   const [pastClaims, setPastClaims] = useState<any[]>([]);
@@ -125,14 +126,16 @@ export const SubmitClaim: React.FC = () => {
             id: Math.random().toString(),
             category: e.category || '',
             amount: e.amount != null ? String(e.amount) : '',
-            receiptName: e.receipt_url ? e.receipt_url.split('/').pop() : ''
+            receiptName: e.receipt_url ? e.receipt_url.split('/').pop() : '',
+            or_number: e.or_number || ''
           })));
         } else {
           setLineItems([{
             id: Math.random().toString(),
             category: claim.expense_category || '',
             amount: claim.total_amount != null ? String(claim.total_amount) : '',
-            receiptName: claim.receipt_url ? claim.receipt_url.split('/').pop() : ''
+            receiptName: claim.receipt_url ? claim.receipt_url.split('/').pop() : '',
+            or_number: claim.or_number || ''
           }]);
         }
       })
@@ -180,7 +183,7 @@ export const SubmitClaim: React.FC = () => {
   };
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { id: Math.random().toString(), category: '', amount: '', receiptName: '' }]);
+    setLineItems([...lineItems, { id: Math.random().toString(), category: '', amount: '', receiptName: '', or_number: '' }]);
   };
 
   const removeLineItem = (id: string) => {
@@ -220,7 +223,8 @@ export const SubmitClaim: React.FC = () => {
       const payloadLineItems = lineItems.map(item => ({
         category: item.category,
         amount: parseFloat(item.amount),
-        receipt_url: `/uploads/${item.receiptName}`
+        receipt_url: `/uploads/${item.receiptName}`,
+        or_number: item.or_number || undefined
       }));
 
       const body = JSON.stringify({
@@ -305,7 +309,7 @@ export const SubmitClaim: React.FC = () => {
               onClick={handleQuickFill}
               className="inline-flex items-center justify-center text-xs font-bold text-brand bg-blue-50 border border-blue-200 hover:bg-blue-100 px-4 py-2 rounded shadow-sm gap-1.5 uppercase tracking-wider font-display"
             >
-              <Sparkles className="w-4 h-4" /> Quick-fill Sample Data
+              <Sparkle className="w-4 h-4" /> Quick-fill Sample Data
             </button>
             {pastClaims.length > 0 && (
               <button
@@ -313,7 +317,7 @@ export const SubmitClaim: React.FC = () => {
                 onClick={handleSimulateDuplicate}
                 className="inline-flex items-center justify-center text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 px-4 py-2 rounded shadow-sm gap-1.5 uppercase tracking-wider font-display"
               >
-                <AlertCircle className="w-4 h-4" /> Simulate Duplicate
+                <WarningCircle className="w-4 h-4" /> Simulate Duplicate
               </button>
             )}
           </div>
@@ -322,7 +326,7 @@ export const SubmitClaim: React.FC = () => {
 
       {!user?.reports_to && (
         <div className="bg-red-50 border border-red-200 rounded p-4 text-sm text-red-700 flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <WarningCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <span className="font-semibold block mb-1">No Approver Configured</span>
             You are at the top of the reporting chain. You cannot submit a claim because there is no configured supervisor to route this to for approval.
@@ -383,7 +387,7 @@ export const SubmitClaim: React.FC = () => {
 
                 return (
                   <div className="bg-amber-50 border border-amber-200 rounded p-4 flex gap-2.5 items-start">
-                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <WarningCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div className="text-xs text-amber-800 leading-normal font-semibold">
                       <span className="block font-bold uppercase tracking-wider text-[10px] text-amber-900 mb-0.5">Active Cash Advance Notice</span>
                       You already have an active Cash Advance that has not been liquidated (CADV-{activeAdv.id.substring(0,6).toUpperCase()}).
@@ -488,7 +492,7 @@ export const SubmitClaim: React.FC = () => {
               <button
                 type="submit"
                 disabled={submittingAdvance || cashAdvances.some(ca => ca.requestorId === user?.id && ca.status !== 'Liquidated' && ca.status !== 'Rejected')}
-                className="flex-1 bg-brand hover:bg-brand-hover text-white text-xs px-4 py-2.5 rounded font-bold uppercase tracking-wider font-display shadow-sm transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                className="corp-btn-primary"
               >
                 {submittingAdvance ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -510,7 +514,7 @@ export const SubmitClaim: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="bg-amber-50 border border-amber-200 rounded p-8 text-center space-y-4 max-w-2xl mx-auto"
             >
-              <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
+              <WarningCircle className="w-12 h-12 text-amber-500 mx-auto" />
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-gray-900">Minutes of Meeting Required</h3>
                 <p className="text-sm text-gray-600 max-w-md mx-auto leading-relaxed">
@@ -520,7 +524,7 @@ export const SubmitClaim: React.FC = () => {
               <div className="pt-2">
                 <Link
                   to="/moms"
-                  className="inline-flex items-center justify-center bg-brand hover:bg-brand-hover text-white text-sm font-semibold px-5 py-2.5 rounded shadow-sm"
+                  className="corp-btn-primary"
                 >
                   Go to MOM Manager to Complete a MOM
                 </Link>
@@ -625,7 +629,7 @@ export const SubmitClaim: React.FC = () => {
                       </div>
                       {hasMeetingConflict && (
                         <div className="flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <WarningCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           Your Approver already has a Review Meeting scheduled at that date and time. Please choose another slot.
                         </div>
                       )}
@@ -709,9 +713,9 @@ export const SubmitClaim: React.FC = () => {
                   <button
                     type="submit"
                     disabled={loading || !user?.reports_to || (!isResubmit && hasMeetingConflict)}
-                    className="w-full bg-brand hover:bg-brand-hover text-white text-sm font-semibold py-2.5 px-4 rounded shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    className="corp-btn-primary"
                   >
-                    <Send className="w-4 h-4" /> {loading ? 'Submitting...' : (isResubmit ? 'Resubmit Claim' : 'Submit Claim')}
+                    <PaperPlaneRight className="w-4 h-4" /> {loading ? 'Submitting...' : (isResubmit ? 'Resubmit Claim' : 'Submit Claim')}
                   </button>
                 </div>
               </div>

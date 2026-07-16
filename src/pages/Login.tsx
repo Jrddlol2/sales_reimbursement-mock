@@ -46,7 +46,7 @@ export const Login: React.FC = () => {
             <input 
               type="email"
               required
-              className="w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black sm:text-sm p-2 border"
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-brand focus:ring-brand sm:text-sm p-2 border"
               value={selectedEmail}
               onChange={e => setSelectedEmail(e.target.value)}
               placeholder="name@example.com"
@@ -56,7 +56,7 @@ export const Login: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input 
               type="password"
-              className="w-full border-gray-300 rounded-md shadow-sm focus:border-black focus:ring-black sm:text-sm p-2 border"
+              className="w-full border-gray-300 rounded-md shadow-sm focus:border-brand focus:ring-brand sm:text-sm p-2 border"
               value="password"
               readOnly
             />

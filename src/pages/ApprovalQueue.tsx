@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
-import { ChevronDown, Inbox, CheckSquare, Activity, Clock, AlertTriangle } from 'lucide-react';
+import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { KPITile } from '../components/KPITile';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -152,7 +152,40 @@ export const ApprovalQueue: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="text-sm text-gray-500">Loading inbox...</div>;
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {/* Skeleton Header */}
+        <div className="animate-pulse">
+          <div className="h-7 w-48 bg-slate-200 rounded-md mb-2"></div>
+          <div className="h-4 w-96 bg-slate-100 rounded-md"></div>
+        </div>
+
+        {/* Skeleton KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-pulse">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 h-28 flex flex-col justify-between">
+              <div className="h-4 w-24 bg-slate-200 rounded"></div>
+              <div className="h-8 w-16 bg-slate-100 rounded"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton Table */}
+        <div className="corp-card flex flex-col overflow-hidden animate-pulse">
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+            <div className="h-4 w-32 bg-slate-200 rounded"></div>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="h-8 bg-slate-100 rounded-md w-full"></div>
+            <div className="h-12 bg-slate-50 rounded-md w-full"></div>
+            <div className="h-12 bg-slate-50 rounded-md w-full"></div>
+            <div className="h-12 bg-slate-50 rounded-md w-full"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Derive stats
   const pendingApprovals = inboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
@@ -219,7 +252,7 @@ export const ApprovalQueue: React.FC = () => {
             label="Returned to You"
             value={returnedClaims.length}
             description="Your own claims needing revision."
-            icon={AlertTriangle}
+            icon={Warning}
             isActive={returnedClaims.length > 0}
           />
         </div>
@@ -235,12 +268,14 @@ export const ApprovalQueue: React.FC = () => {
 
       {/* Spend Insights Widget */}
       {deptData.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-4">
-          <div>
-            <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Approved Spend by Department</h3>
-            <p className="text-[10px] text-slate-500">Total approved reimbursements from your reports</p>
+        <div className="corp-card space-y-4">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Approved Spend by Department</h3>
+              <p className="text-[10px] text-slate-500">Total approved reimbursements from your reports</p>
+            </div>
           </div>
-          <div className="h-48 w-full">
+          <div className="px-6 pb-6 h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={deptData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
                 <XAxis type="number" hide />
@@ -252,7 +287,7 @@ export const ApprovalQueue: React.FC = () => {
                 />
                 <Bar dataKey="value" radius={[0, 2, 2, 0]} barSize={18}>
                   {deptData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? "#0063A9" : "#0284c7"} />
+                    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#cbd5e1"} />
                   ))}
                 </Bar>
               </BarChart>
@@ -292,9 +327,9 @@ export const ApprovalQueue: React.FC = () => {
       {tab === 'cadv' ? (
         <div className="space-y-6">
           {/* Pending Cash Advances */}
-          <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+          <div className="corp-card flex flex-col overflow-hidden">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Cash Advance Requests Pending Approval</h3>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Cash Advance Requests Pending Approval</h3>
             </div>
             <div className="divide-y divide-slate-100">
               {pendingAdvances.length === 0 ? (
@@ -338,7 +373,7 @@ export const ApprovalQueue: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleApproveAdvance(ca.id, 'Approved')}
-                            className="flex-1 sm:flex-none bg-brand hover:bg-brand-hover text-white px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider"
+                            className="corp-btn-primary"
                           >
                             Approve
                           </button>
@@ -352,9 +387,9 @@ export const ApprovalQueue: React.FC = () => {
           </div>
 
           {/* Pending Liquidations */}
-          <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+          <div className="corp-card flex flex-col overflow-hidden">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Liquidation Reports Pending Your Review</h3>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Liquidation Reports Pending Your Review</h3>
             </div>
             <div className="divide-y divide-slate-100">
               {pendingLiqs.length === 0 ? (
@@ -378,7 +413,7 @@ export const ApprovalQueue: React.FC = () => {
                             {ca ? (
                               <Link 
                                 to={`/cash-advances/${ca.id}`}
-                                className="font-bold text-indigo-700 hover:underline"
+                                className="font-bold text-brand hover:underline"
                               >
                                 CADV-{ca.id.substring(0,6).toUpperCase()}
                               </Link>
@@ -438,7 +473,7 @@ export const ApprovalQueue: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleReviewLiquidation(l.id, 'Approved')}
-                            className="flex-1 sm:flex-none bg-brand hover:bg-brand-hover text-white px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider"
+                            className="corp-btn-primary"
                           >
                             Approve & Close
                           </button>
@@ -452,59 +487,135 @@ export const ApprovalQueue: React.FC = () => {
           </div>
         </div>
       ) : tab === 'inbox' ? (
-        <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+        <div className="corp-card flex flex-col overflow-hidden">
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Action Items</h3>
+          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Action Items</h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-2.5 w-10">
-                  <input 
-                    type="checkbox" 
-                    className="rounded border-gray-300 text-brand focus:ring-brand"
-                    checked={pendingApprovals.length > 0 && selectedForBulk.length === pendingApprovals.length}
-                    onChange={selectAllBulk}
-                    disabled={pendingApprovals.length === 0}
-                  />
-                </th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  <div className="flex items-center gap-1">Requestor <ChevronDown className="w-3 h-3 text-transparent"/></div>
-                </th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  <div className="flex items-center gap-1">Category <ChevronDown className="w-3 h-3 text-transparent"/></div>
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  <div className="flex items-center justify-end gap-1">Amount <ChevronDown className="w-3 h-3 text-transparent"/></div>
-                </th>
-                <th className="px-4 py-2.5 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                  <div className="flex items-center justify-center gap-1">Type/Status <ChevronDown className="w-3 h-3 text-transparent"/></div>
-                </th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {inboxClaims.length === 0 ? (
+          {/* Desktop Table View */}
+          <div className="hidden sm:block">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                      <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                        <Inbox className="w-5 h-5" />
-                      </div>
-                      <p className="text-sm font-bold text-gray-700">Inbox Zero!</p>
-                      <p className="text-xs text-gray-400 max-w-sm mx-auto">You have no pending approvals or returned claims.</p>
-                    </div>
-                  </td>
+                  <th className="px-4 py-2.5 w-10">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-brand focus:ring-brand"
+                      checked={pendingApprovals.length > 0 && selectedForBulk.length === pendingApprovals.length}
+                      onChange={selectAllBulk}
+                      disabled={pendingApprovals.length === 0}
+                    />
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                    <div className="flex items-center gap-1">Requestor <CaretDown className="w-3 h-3 text-transparent"/></div>
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                    <div className="flex items-center gap-1">Category <CaretDown className="w-3 h-3 text-transparent"/></div>
+                  </th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                    <div className="flex items-center justify-end gap-1">Amount <CaretDown className="w-3 h-3 text-transparent"/></div>
+                  </th>
+                  <th className="px-4 py-2.5 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                    <div className="flex items-center justify-center gap-1">Type/Status <CaretDown className="w-3 h-3 text-transparent"/></div>
+                  </th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    Action
+                  </th>
                 </tr>
-              ) : inboxClaims.map((claim: any) => {
-                const claimNumber = getClaimNumber(claim);
-                const isReturned = claim.status === ClaimStatus.RETURNED;
-                return (
-                  <tr key={claim.id} className={`hover:bg-blue-50/50 transition-colors ${isReturned ? 'bg-amber-50/20' : ''}`}>
-                    <td className="px-4 py-2.5 whitespace-nowrap">
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {inboxClaims.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                          <Tray className="w-5 h-5" />
+                        </div>
+                        <p className="text-sm font-bold text-gray-700">Inbox Zero!</p>
+                        <p className="text-xs text-gray-400 max-w-sm mx-auto">You have no pending approvals or returned claims.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : inboxClaims.map((claim: any) => {
+                  const claimNumber = getClaimNumber(claim);
+                  const isReturned = claim.status === ClaimStatus.RETURNED;
+                  return (
+                    <tr key={claim.id} className={`transition-colors ${selectedForBulk.includes(claim.id) ? 'bg-brand/10' : 'hover:bg-brand/5'} ${isReturned ? 'bg-amber-50/20' : ''}`}>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {!isReturned && (
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300 text-brand focus:ring-brand"
+                            checked={selectedForBulk.includes(claim.id)}
+                            onChange={() => toggleBulkSelection(claim.id)}
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        <div className="text-xs font-mono font-bold text-brand cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
+                          {claimNumber}
+                        </div>
+                        <div className="text-sm font-bold text-gray-950 mt-0.5">{isReturned ? 'You (Self)' : claim.requestor?.name}</div>
+                        <div className="text-[10px] text-gray-500">
+                          {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span>{claim.expense_category || 'Meals'}</span>
+                          {claim.sourceLiquidationId && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              Auto-generated from Cash Advance Shortfall
+                            </span>
+                          )}
+                          {claim.flagged_high_value && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                              <Warning className="w-2 h-2" /> High Value — Review Closely
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs font-bold text-gray-900">
+                        {formatPHP(claim.total_amount)}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-center">
+                         {isReturned ? (
+                           <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Needs Revision</span>
+                         ) : (
+                           <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approval Required</span>
+                         )}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
+                        <button onClick={() => setSelectedClaimId(claim.id)} className="text-brand hover:text-brand-hover">
+                          {isReturned ? 'Fix & Resubmit' : 'Review'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Stacked Card View */}
+          <div className="sm:hidden flex flex-col divide-y divide-slate-100">
+            {inboxClaims.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                    <Tray className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-bold text-gray-700">Inbox Zero!</p>
+                  <p className="text-xs text-gray-400 max-w-sm mx-auto">You have no pending approvals or returned claims.</p>
+                </div>
+              </div>
+            ) : inboxClaims.map((claim: any) => {
+              const claimNumber = getClaimNumber(claim);
+              const isReturned = claim.status === ClaimStatus.RETURNED;
+              return (
+                <div key={claim.id} className={`p-4 hover:bg-slate-50 flex flex-col gap-2.5 transition-colors ${selectedForBulk.includes(claim.id) ? 'bg-brand/5' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       {!isReturned && (
                         <input 
                           type="checkbox" 
@@ -513,51 +624,46 @@ export const ApprovalQueue: React.FC = () => {
                           onChange={() => toggleBulkSelection(claim.id)}
                         />
                       )}
-                    </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap">
-                      <div className="text-xs font-mono font-bold text-brand cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
+                      <span className="font-mono font-bold text-brand text-xs cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
                         {claimNumber}
+                      </span>
+                    </div>
+                    {isReturned ? (
+                      <span className="px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Needs Revision</span>
+                    ) : (
+                      <span className="px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approval Required</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                    <div>
+                      <span className="text-slate-400 font-medium mr-1">Requestor:</span>
+                      <span className="font-bold text-slate-900">{isReturned ? 'You (Self)' : claim.requestor?.name}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                      <span className="font-extrabold text-slate-900">{formatPHP(claim.total_amount)}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400 font-medium mr-1">Category:</span>
+                      <span className="font-semibold text-slate-800">{claim.expense_category || 'Meals'}</span>
+                    </div>
+                    {claim.flagged_high_value && (
+                      <div className="col-span-2 mt-1">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          <Warning className="w-2.5 h-2.5 mr-0.5 inline" /> High Value — Review Closely
+                        </span>
                       </div>
-                      <div className="text-sm font-bold text-gray-950 mt-0.5">{isReturned ? 'You (Self)' : claim.requestor?.name}</div>
-                      <div className="text-[10px] text-gray-500">
-                        {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
-                      <div className="flex flex-col gap-1 items-start">
-                        <span>{claim.expense_category || 'Meals'}</span>
-                        {claim.sourceLiquidationId && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                            Auto-generated from Cash Advance Shortfall
-                          </span>
-                        )}
-                        {claim.flagged_high_value && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                            <AlertTriangle className="w-2 h-2" /> High Value — Review Closely
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs font-bold text-gray-900">
-                      {formatPHP(claim.total_amount)}
-                    </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap text-center">
-                       {isReturned ? (
-                         <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Needs Revision</span>
-                       ) : (
-                         <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approval Required</span>
-                       )}
-                    </td>
-                    <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                      <button onClick={() => setSelectedClaimId(claim.id)} className="text-brand hover:text-brand-hover">
-                        {isReturned ? 'Fix & Resubmit' : 'Review'}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    )}
+                  </div>
+                  <div className="flex justify-end mt-1">
+                    <button onClick={() => setSelectedClaimId(claim.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
+                      {isReturned ? 'Fix & Resubmit' : 'Review'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
         
         {inboxClaims.length > 0 && (
@@ -569,61 +675,109 @@ export const ApprovalQueue: React.FC = () => {
         )}
       </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+        <div className="corp-card flex flex-col overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-            <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Decision History</h3>
+            <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Decision History</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Requestor</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Date</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
-                  <th className="px-4 py-2.5 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Decision</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Comment</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {decisionHistoryItems.length === 0 ? (
+            {/* Desktop Table View */}
+            <div className="hidden sm:block">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
-                      <p className="text-sm text-gray-500">No decisions made yet.</p>
-                    </td>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Requestor</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Date</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                    <th className="px-4 py-2.5 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Decision</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Comment</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Action</th>
                   </tr>
-                ) : (
-                  decisionHistoryItems.map((item, idx) => {
-                    const claimNumber = getClaimNumber(item.claim);
-                    return (
-                      <tr key={`${item.claim.id}-${idx}`} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <div className="text-sm font-bold text-gray-950">{item.claim.requestor?.name}</div>
-                          <div className="text-[10px] text-gray-500">{claimNumber}</div>
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600">
-                          {new Date(item.date).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs font-bold text-gray-900">
-                          {formatPHP(item.claim.total_amount)}
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-center">
-                          <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full ${getStatusColor(item.decision)}`}>
-                            {item.decision}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600 italic truncate max-w-[200px]">
-                          {item.comment ? `"${item.comment}"` : "-"}
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                          <button onClick={() => setSelectedClaimId(item.claim.id)} className="text-brand hover:text-brand-hover">View Claim</button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {decisionHistoryItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center">
+                        <p className="text-sm text-gray-500">No decisions made yet.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    decisionHistoryItems.map((item, idx) => {
+                      const claimNumber = getClaimNumber(item.claim);
+                      return (
+                        <tr key={`${item.claim.id}-${idx}`} className="hover:bg-brand/5 transition-colors">
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            <div className="text-sm font-bold text-gray-950">{item.claim.requestor?.name}</div>
+                            <div className="text-[10px] text-gray-500">{claimNumber}</div>
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600">
+                            {new Date(item.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs font-bold text-gray-900">
+                            {formatPHP(item.claim.total_amount)}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-center">
+                            <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full ${getStatusColor(item.decision)}`}>
+                              {item.decision}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-600 italic truncate max-w-[200px]">
+                            {item.comment ? `"${item.comment}"` : "-"}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
+                            <button onClick={() => setSelectedClaimId(item.claim.id)} className="text-brand hover:text-brand-hover">View Claim</button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Card View */}
+            <div className="sm:hidden flex flex-col divide-y divide-slate-100">
+              {decisionHistoryItems.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-500">No decisions made yet.</div>
+              ) : (
+                decisionHistoryItems.map((item, idx) => {
+                  const claimNumber = getClaimNumber(item.claim);
+                  return (
+                    <div key={`${item.claim.id}-${idx}`} className="p-4 hover:bg-slate-50 flex flex-col gap-2 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-brand text-xs">{claimNumber}</span>
+                        <span className={`px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full ${getStatusColor(item.decision)}`}>
+                          {item.decision}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                        <div>
+                          <span className="text-slate-400 font-medium mr-1">Requestor:</span>
+                          <span className="font-bold text-slate-900">{item.claim.requestor?.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                          <span className="font-extrabold text-slate-900">{formatPHP(item.claim.total_amount)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-medium mr-1">Date:</span>
+                          <span className="text-slate-700">{new Date(item.date).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      {item.comment && (
+                        <div className="text-[11px] text-slate-500 italic mt-1 bg-slate-50 p-1.5 rounded">
+                          "{item.comment}"
+                        </div>
+                      )}
+                      <div className="flex justify-end mt-1">
+                        <button onClick={() => setSelectedClaimId(item.claim.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
+                          View Claim
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -638,32 +792,34 @@ export const ApprovalQueue: React.FC = () => {
 
       {/* Bulk Action Bar */}
       {selectedForBulk.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t border-gray-200 p-4 shadow-lg flex items-center justify-between z-40">
-          <div className="text-sm font-bold text-gray-700">
+        <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t border-gray-200 p-4 shadow-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 z-40">
+          <div className="text-xs sm:text-sm font-bold text-gray-700 text-center sm:text-left">
             {selectedForBulk.length} claim{selectedForBulk.length > 1 ? 's' : ''} selected
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input 
               type="text" 
               placeholder="Optional comment..." 
               value={bulkComment}
               onChange={e => setBulkComment(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-1.5 text-xs w-64 focus:border-brand focus:outline-none"
+              className="border border-gray-300 rounded px-3 py-1.5 text-xs w-full sm:w-64 focus:border-brand focus:outline-none"
             />
-            <button 
-              onClick={() => handleBulkSubmit('Rejected')}
-              className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded text-xs font-bold"
-              disabled={isProcessingBulk}
-            >
-              Reject All
-            </button>
-            <button 
-              onClick={() => handleBulkSubmit('Approved')}
-              className="bg-brand text-white hover:bg-brand-hover px-4 py-1.5 rounded text-xs font-bold"
-              disabled={isProcessingBulk}
-            >
-              Approve All
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => handleBulkSubmit('Rejected')}
+                className="flex-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded text-xs font-bold"
+                disabled={isProcessingBulk}
+              >
+                Reject All
+              </button>
+              <button 
+                onClick={() => handleBulkSubmit('Approved')}
+                className="flex-1 corp-btn-primary text-xs"
+                disabled={isProcessingBulk}
+              >
+                Approve All
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { 
-  BookOpen, ShieldAlert, UserCheck, RefreshCw, Ban, 
-  CheckSquare, AlertCircle, HelpCircle, User, Award, 
-  Clock, Lock, Zap, Sliders, Layers, ChevronRight, Activity, Server
-} from 'lucide-react';
+  BookOpen, ShieldWarning, UserCheck, ArrowsClockwise, Prohibit, 
+  CheckSquare, WarningCircle, Question, User, Medal, 
+  Clock, Lock, Lightning, Sliders, Stack, CaretRight, Pulse, HardDrives,
+  Compass
+} from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 
 interface Scenario {
   id: number;
   title: string;
-  category: 'Policy' | 'Delegation' | 'Workflow' | 'Admin' | 'Edge Cases';
+  category: 'Policy' | 'Delegation' | 'Workflow' | 'Admin' | 'Edge Cases' | 'Navigation & UX';
   description: string;
   badge?: string;
   badgeType?: 'default' | 'amber' | 'rose' | 'green';
@@ -148,16 +149,16 @@ export const ScenarioGuide: React.FC = () => {
       title: "Admin reassignment",
       category: "Admin",
       description: "System administrators can manually override any claim's current approver to resolve organizational blockers.",
-      badge: "Reassignment panel exists but claim detail is unreachable for Admin",
-      badgeType: "amber",
       rolesInvolved: ["Dave Admin (Admin)"],
       steps: [
-        "The reassignment controls (choose a new approver, provide a reason, confirm) are built into the claim detail panel and are gated to the Admin role.",
-        "However, the Audit Log has no click-through to an individual claim, and Admin is not currently among the roles permitted to open a claim detail page directly — so this panel cannot be reached through any current navigation path.",
-        "This is a known access gap, not a missing feature; the underlying reassignment logic and audit trail already work correctly once the panel is reachable."
+        "Switch to Dave Admin (dave@example.com) using the role switcher.",
+        "Navigate to the 'Audit Log' page to view the list of system events.",
+        "Click any highlighted claim number link (e.g., REIM-XXXXXX) to navigate to its Claim Detail page.",
+        "In the Admin Reassignment panel at the top of the detail view, select a new approver (e.g., Ivy Senior Approver), input a reassignment reason, and click 'Confirm Reassignment'.",
+        "Verify that the claim is immediately reassigned to the new approver, and that the change is logged in both the activity timeline and the audit log."
       ],
-      expectedOutcome: "Once claim detail access is restored for Admin, the claim is instantly reassigned to the new approver, bypasses hierarchy, and logs the change.",
-      status: "Blocked"
+      expectedOutcome: "The claim is instantly reassigned to the new approver, bypassing standard hierarchy, and logging the manual override in the audit trail.",
+      status: "Fully Implemented"
     },
     {
       id: 10,
@@ -203,10 +204,70 @@ export const ScenarioGuide: React.FC = () => {
       ],
       expectedOutcome: "The duplicate alert renders dynamically on screen in real-time.",
       status: "Fully Implemented"
+    },
+    {
+      id: 13,
+      title: "Global search and role-scoping",
+      category: "Navigation & UX",
+      description: "Verifies searching via the global search bar returns correctly scoped and accessible results based on the logged-in user's role.",
+      rolesInvolved: ["Alice Requestor (Requestor)", "Dave Admin (Admin)"],
+      steps: [
+        "Logged in as Alice Requestor (alice@example.com), use the global search bar at the top to search for claims (by reference, claimant, purpose, or amount). Verify only Alice's own requests are listed.",
+        "Click a search result and verify it successfully navigates to Alice's claim detail page.",
+        "Switch to Dave Admin (dave@example.com) and search for the exact same query in the global search bar.",
+        "Verify that Dave can search and find all claims across the entire organization, and clicking any result navigates to its details."
+      ],
+      expectedOutcome: "Search results are correctly filtered and scoped to the active user's permissions, with seamless navigation to detail pages.",
+      status: "Fully Implemented"
+    },
+    {
+      id: 14,
+      title: "Role-based navigation hierarchy",
+      category: "Navigation & UX",
+      description: "Verifies that navigation links and their category section headers are conditionally rendered based on the user's role.",
+      rolesInvolved: ["Alice Requestor (Requestor)", "Carol Custodian (Custodian)", "Dave Admin (Admin)"],
+      steps: [
+        "Logged in as Alice Requestor, verify the sidebar only displays permitted links (Dashboard, Submit Claim, Calendar, MOM, etc.) under relevant headers.",
+        "Switch to Carol Custodian and verify her sidebar displays custodian-specific links like 'Processing Queue'.",
+        "Switch to Dave Admin and verify that his sidebar displays admin-only links like 'Audit Log'.",
+        "Confirm that group section headers (e.g., PRIMARY, PLANNING, SYSTEM) are dynamically hidden when the active role has no visible items in that group."
+      ],
+      expectedOutcome: "Each role is presented with a tailored sidebar navigation matching their permissions, with empty sections automatically hidden.",
+      status: "Fully Implemented"
+    },
+    {
+      id: 15,
+      title: "Approval Delegation vs. Data Management naming",
+      category: "Navigation & UX",
+      description: "Verifies that the former 'Settings' navigation item, page title, and breadcrumbs dynamically adapt their labels and controls depending on the active user's role.",
+      rolesInvolved: ["Bob Approver (Approver)", "Dave Admin (Admin)"],
+      steps: [
+        "Switch to Bob Approver (bob@example.com) and verify the lower navigation menu link is labeled 'Approval Delegation' with a user-switching icon.",
+        "Click the link and verify that the page header, breadcrumbs, and content render as 'Approval Delegation' with delegation and date-range controls.",
+        "Switch to Dave Admin (dave@example.com) and observe the same navigation item is now labeled 'Data Management' with a database icon.",
+        "Click the link and verify the header, breadcrumbs, and content render as 'Data Management' with database seed and reset controls."
+      ],
+      expectedOutcome: "The settings navigation item, page headers, and breadcrumbs dynamically adapt to the user's role, providing an intuitive experience.",
+      status: "Fully Implemented"
+    },
+    {
+      id: 16,
+      title: "Responsive UX: Mobile drawers and tables",
+      category: "Navigation & UX",
+      description: "Verifies the application adapts fluidly to mobile viewport widths, switching to layout patterns optimized for smaller screens.",
+      rolesInvolved: ["Any User"],
+      steps: [
+        "Resize the browser window below the mobile breakpoint (768px) or use a mobile device simulator.",
+        "Verify that the sidebar collapses into an off-canvas drawer that opens via a hamburger menu button and includes a shaded overlay backdrop.",
+        "Verify that the global search bar collapses into an icon-triggered overlay to conserve header space.",
+        "Verify that tabular data (e.g., claim lists) seamlessly transforms into stacked responsive card layouts rather than introducing horizontal scrolling."
+      ],
+      expectedOutcome: "The interface gracefully restructures with slide-out drawers, overlay search, and responsive cards for optimal touch-screen usability.",
+      status: "Fully Implemented"
     }
   ];
 
-  const categories = ['All', 'Policy', 'Delegation', 'Workflow', 'Admin', 'Edge Cases'];
+  const categories = ['All', 'Policy', 'Delegation', 'Workflow', 'Admin', 'Edge Cases', 'Navigation & UX'];
 
   const filteredScenarios = selectedCategory === 'All' 
     ? scenarios 
@@ -251,11 +312,12 @@ export const ScenarioGuide: React.FC = () => {
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'Policy': return <ShieldAlert className="w-4 h-4 text-rose-500" />;
-      case 'Delegation': return <Layers className="w-4 h-4 text-purple-500" />;
-      case 'Workflow': return <Zap className="w-4 h-4 text-amber-500" />;
+      case 'Policy': return <ShieldWarning className="w-4 h-4 text-rose-500" />;
+      case 'Delegation': return <Stack className="w-4 h-4 text-purple-500" />;
+      case 'Workflow': return <Lightning className="w-4 h-4 text-amber-500" />;
       case 'Admin': return <Sliders className="w-4 h-4 text-blue-500" />;
-      case 'Edge Cases': return <Activity className="w-4 h-4 text-emerald-500" />;
+      case 'Edge Cases': return <Pulse className="w-4 h-4 text-emerald-500" />;
+      case 'Navigation & UX': return <Compass className="w-4 h-4 text-indigo-500" />;
       default: return <BookOpen className="w-4 h-4 text-gray-500" />;
     }
   };
@@ -273,7 +335,7 @@ export const ScenarioGuide: React.FC = () => {
           </p>
         </div>
         <div className="bg-brand bg-opacity-5 border border-brand border-opacity-10 rounded px-4 py-2 flex items-center gap-2.5">
-          <Server className="w-4 h-4 text-brand shrink-0" />
+          <HardDrives className="w-4 h-4 text-brand shrink-0" />
           <div className="text-xs">
             <span className="font-bold text-gray-700">Sandbox Environment:</span> Active. Use the <span className="font-semibold text-brand">Preview As…</span> switcher to toggle users instantly.
           </div>
@@ -347,7 +409,7 @@ export const ScenarioGuide: React.FC = () => {
 
             {/* Expected Result */}
             <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2 text-xs text-gray-700">
-              <Award className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <Medal className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
               <div>
                 <span className="font-semibold text-gray-900">Expected System Outcome:</span> {scenario.expectedOutcome}
               </div>

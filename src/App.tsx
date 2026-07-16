@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { IconContext } from '@phosphor-icons/react';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmModal';
@@ -14,6 +15,8 @@ import { Dashboard } from './pages/Dashboard';
 import { SubmitClaim } from './pages/SubmitClaim';
 import { ApprovalQueue } from './pages/ApprovalQueue';
 import { ProcessingQueue } from './pages/ProcessingQueue';
+import { ReadyToClaim } from './pages/ReadyToClaim';
+import { TransactionHistory } from './pages/TransactionHistory';
 import { AuditLog } from './pages/AuditLog';
 import { ClaimDetail } from './pages/ClaimDetail';
 import { CashAdvanceDetail } from './pages/CashAdvanceDetail';
@@ -22,6 +25,7 @@ import { Calendar } from './pages/Calendar';
 import { Settings } from './pages/Settings';
 import { SystemEmails } from './pages/SystemEmails';
 import { Moms } from './pages/Moms';
+import { MomDetail } from './pages/MomDetail';
 import { ScenarioGuide } from './pages/ScenarioGuide';
 import { DebugRoleSwitcher } from './DebugRoleSwitcher';
 import { UserRole } from './types';
@@ -51,8 +55,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
   // 2. Check for claim details: "/claims/:id" (but not /claims/new), "/cash-advances/:id", "/liquidations/:id"
   else if (
-    (path.startsWith('/claims/') && path !== '/claims/new') || 
-    path.startsWith('/cash-advances/') || 
+    (path.startsWith('/claims/') && path !== '/claims/new') ||
+    path.startsWith('/cash-advances/') ||
     path.startsWith('/liquidations/')
   ) {
     if (path.endsWith('/resubmit')) {
@@ -83,34 +87,39 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<Dashboard />} />
-                <Route path="calendar" element={<Calendar />} />
-                <Route path="claims/new" element={<SubmitClaim />} />
-                <Route path="claims/:id/resubmit" element={<SubmitClaim />} />
-                <Route path="claims/:id" element={<ClaimDetail />} />
-                <Route path="cash-advances/:id" element={<CashAdvanceDetail />} />
-                <Route path="liquidations/:id" element={<LiquidationDetail />} />
-                <Route path="approvals" element={<ApprovalQueue />} />
-                <Route path="processing" element={<ProcessingQueue />} />
-                <Route path="audit" element={<AuditLog />} />
-                <Route path="notifications" element={<SystemEmails />} />
-                <Route path="emails" element={<SystemEmails />} />
-                <Route path="moms" element={<Moms />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="scenarios" element={<ScenarioGuide />} />
-              </Route>
-            </Routes>
-            <DebugRoleSwitcher />
-          </BrowserRouter>
-        </AuthProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <IconContext.Provider value={{ size: 20, weight: 'regular' }}>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="calendar" element={<Calendar />} />
+                  <Route path="claims/new" element={<SubmitClaim />} />
+                  <Route path="claims/:id/resubmit" element={<SubmitClaim />} />
+                  <Route path="claims/:id" element={<ClaimDetail />} />
+                  <Route path="cash-advances/:id" element={<CashAdvanceDetail />} />
+                  <Route path="liquidations/:id" element={<LiquidationDetail />} />
+                  <Route path="approvals" element={<ApprovalQueue />} />
+                  <Route path="processing" element={<ProcessingQueue />} />
+                  <Route path="ready-to-claim" element={<ReadyToClaim />} />
+                  <Route path="history" element={<TransactionHistory />} />
+                  <Route path="audit" element={<AuditLog />} />
+                  <Route path="notifications" element={<SystemEmails />} />
+                  <Route path="emails" element={<SystemEmails />} />
+                  <Route path="moms" element={<Moms />} />
+                  <Route path="moms/:id" element={<MomDetail />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="scenarios" element={<ScenarioGuide />} />
+                </Route>
+              </Routes>
+              <DebugRoleSwitcher />
+            </BrowserRouter>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </IconContext.Provider>
   );
 }

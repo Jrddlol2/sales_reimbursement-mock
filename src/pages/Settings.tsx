@@ -18,6 +18,8 @@ export const Settings: React.FC = () => {
 
   const [seeding, setSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
+  const [seedingYear, setSeedingYear] = useState(false);
+  const [seedYearSuccess, setSeedYearSuccess] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
@@ -92,6 +94,29 @@ export const Settings: React.FC = () => {
     setSeeding(false);
   };
 
+  const handleSeedYearData = async () => {
+    const ok = await confirmAction({
+      title: 'Generate 1 Year of History?',
+      message: 'This will wipe all existing data and backfill the database with a full 12 months of historical Claims, Cash Advances, and Liquidations across multiple departments.',
+      confirmLabel: 'Generate 1 Year of History',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setSeedingYear(true);
+    setSeedYearSuccess(false);
+    try {
+      await apiFetch('/api/admin/seed-year', { method: 'POST' });
+      setSeedYearSuccess(true);
+      setTimeout(() => {
+        setSeedYearSuccess(false);
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      toast.error('Failed to generate 1 year of historical data');
+    }
+    setSeedingYear(false);
+  };
+
   const handleResetSimulation = async () => {
     const ok = await confirmAction({
       title: 'Reset the simulation?',
@@ -117,11 +142,17 @@ export const Settings: React.FC = () => {
 
   const approverOptions = users.filter(u => u.role === UserRole.APPROVER && u.id !== user.id);
 
+  const isApprover = user?.role === UserRole.APPROVER;
+  const pageTitle = isApprover ? 'Approval Delegation' : 'Data Management';
+  const pageDescription = isApprover
+    ? 'Configure delegation of approval duties when you are on leave or unavailable.'
+    : 'Manage mock simulation data, seed lifecycle records, or reset the system state.';
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Settings</h2>
-        <p className="mt-1 text-xs text-slate-500">Configure your preferences and system settings.</p>
+        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">{pageTitle}</h2>
+        <p className="mt-1 text-xs text-slate-500">{pageDescription}</p>
       </div>
 
       {user.role === UserRole.APPROVER && (
@@ -196,12 +227,20 @@ export const Settings: React.FC = () => {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleSeedData}
-                disabled={seeding}
+                disabled={seeding || seedingYear}
                 className="px-4 py-2 bg-slate-950 text-white text-xs font-bold uppercase tracking-wider rounded hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-sm font-display"
               >
                 {seeding ? 'Generating Data...' : 'Generate Mock Data'}
               </button>
+              <button
+                onClick={handleSeedYearData}
+                disabled={seeding || seedingYear}
+                className="px-4 py-2 bg-slate-950 text-white text-xs font-bold uppercase tracking-wider rounded hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-sm font-display"
+              >
+                {seedingYear ? 'Generating History...' : 'Generate 1 Year of History'}
+              </button>
               {seedSuccess && <span className="text-green-600 text-xs font-bold">Mock data generated successfully! Reloading...</span>}
+              {seedYearSuccess && <span className="text-green-600 text-xs font-bold">1 Year of historical data generated! Reloading...</span>}
             </div>
           </div>
 

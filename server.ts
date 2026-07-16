@@ -32,6 +32,13 @@ let claimCounter = 123;
 // chains. Shared by both /api/admin/seed and /api/admin/reset so the two
 // never drift apart.
 const buildDefaultUsers = (): User[] => [
+  { id: 'u13', name: 'Mia Requestor', email: 'mia@example.com', role: UserRole.REQUESTOR, department: 'Marketing', job_title: 'Marketing Specialist', reports_to: 'u14' },
+  { id: 'u14', name: 'Noah Approver', email: 'noah@example.com', role: UserRole.APPROVER, department: 'Marketing', job_title: 'Marketing Director', reports_to: 'u19' },
+  { id: 'u15', name: 'Olivia Requestor', email: 'olivia@example.com', role: UserRole.REQUESTOR, department: 'Engineering', job_title: 'Software Engineer', reports_to: 'u16' },
+  { id: 'u16', name: 'Peter Approver', email: 'peter@example.com', role: UserRole.APPROVER, department: 'Engineering', job_title: 'Engineering Manager', reports_to: 'u19' },
+  { id: 'u17', name: 'Quinn Requestor', email: 'quinn@example.com', role: UserRole.REQUESTOR, department: 'Operations', job_title: 'Operations Coordinator', reports_to: 'u18' },
+  { id: 'u18', name: 'Ryan Approver', email: 'ryan@example.com', role: UserRole.APPROVER, department: 'Operations', job_title: 'Operations Manager', reports_to: 'u19' },
+  { id: 'u19', name: 'Sarah Executive', email: 'sarah@example.com', role: UserRole.APPROVER, department: 'Executive', job_title: 'VP of Operations', reports_to: null },
   { id: 'u1', name: 'Alice Requestor', email: 'alice@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
   { id: 'u2', name: 'Bob Approver', email: 'bob@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
   { id: 'u3', name: 'Carol Custodian', email: 'carol@example.com', role: UserRole.CUSTODIAN, department: 'Finance', job_title: 'Reimbursement Processor', reports_to: null },
@@ -51,12 +58,15 @@ const buildDefaultUsers = (): User[] => [
 // used for the MOM email to an external client contact, which must read as a personal
 // message, not a system notification. Every other notification keeps the full
 // enterprise template by omitting opts.
-const sendEmail = (toOrId: string, subject: string, body: string, ccId?: string, opts?: { plain?: boolean; recipientName?: string; fromLabel?: string }) => {
+const sendEmail = (toOrId: string, subject: string, body: string, ccId?: string, opts?: { plain?: boolean; recipientName?: string; fromLabel?: string; timestamp?: string }) => {
   const recipient = users.find(u => u.id === toOrId);
   const toEmail = recipient ? recipient.email : toOrId;
   const recipientId = recipient ? recipient.id : 'external';
   const recipientName = opts?.recipientName || (recipient ? recipient.name : toOrId.split('@')[0]);
   const fromLine = opts?.plain ? (opts.fromLabel || 'system@reimbursement.local') : "SharePoint Online <no-reply@company.com>";
+
+  const emailTimestamp = opts?.timestamp || new Date().toISOString();
+  const sentString = new Date(emailTimestamp).toLocaleString('en-US', { timeZone: 'Asia/Manila' });
 
   const finalBody = opts?.plain
     ? `Dear ${recipientName},
@@ -67,7 +77,7 @@ ${body}`
 ${fromLine}
 
 Sent:
-${new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })}
+${sentString}
 
 To:
 ${toEmail}${ccId ? `\nCC:\n${users.find(u => u.id === ccId)?.email || ccId}` : ''}
@@ -97,7 +107,7 @@ Business Support Management Assistant`;
     subject,
     body: finalBody,
     read: false,
-    timestamp: new Date().toISOString()
+    timestamp: emailTimestamp
   };
   emails.push(email);
 
@@ -112,7 +122,7 @@ Business Support Management Assistant`;
         subject: `[CC] ${subject}`,
         body: finalBody,
         read: false,
-        timestamp: new Date().toISOString()
+        timestamp: emailTimestamp
       });
     }
   }
@@ -214,11 +224,33 @@ async function startServer() {
       return { 
         ...m, 
         prepared_by: requestor ? requestor.name : (m.prepared_by || 'Unknown'),
+        prepared_by_department: requestor ? requestor.department : undefined,
+        prepared_by_job_title: requestor ? requestor.job_title : undefined,
         client_name: m.client || m.summary || 'Unknown Client' // for calendar/retro-compatibility
       };
     });
     
     res.json(enriched);
+  });
+
+  app.get('/api/moms/:id', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const mom = moms.find(m => m.id === req.params.id);
+    if (!mom) return res.status(404).json({ error: 'Minutes of Meeting not found' });
+
+    const requestor = users.find(u => u.id === mom.requestor_id);
+    const linkedClaim = mom.claim_id ? claims.find(c => c.id === mom.claim_id) : undefined;
+
+    res.json({
+      ...mom,
+      requestor,
+      prepared_by: requestor ? requestor.name : (mom.prepared_by || 'Unknown'),
+      prepared_by_department: requestor ? requestor.department : undefined,
+      prepared_by_job_title: requestor ? requestor.job_title : undefined,
+      linkedClaim,
+    });
   });
 
   app.post('/api/moms', (req, res) => {
@@ -350,7 +382,7 @@ ${user.name}`;
     } else if (user.role === UserRole.APPROVER) {
       filtered = claims.filter(c => c.current_approver_id === user.id || c.original_approver_id === user.id || c.requestor_id === user.id);
     } else if (user.role === UserRole.CUSTODIAN) {
-      filtered = claims.filter(c => [ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(c.status));
+      filtered = claims.filter(c => [ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(c.status) || c.requestor_id === user.id);
     } else if (user.role === UserRole.ADMIN) {
       filtered = claims; // Admin sees all
     }
@@ -397,7 +429,7 @@ ${user.name}`;
     const user = getUser(req);
     if (!user || !user.reports_to) return res.status(403).json({ error: 'Forbidden: You must have a designated manager (reports_to) to submit.' });
     
-    const { mom_id, expense_category, total_amount, receipt_url, remarks, supporting_documents, line_items, meeting_date, meeting_time } = req.body;
+    const { mom_id, expense_category, total_amount, receipt_url, or_number, remarks, supporting_documents, line_items, meeting_date, meeting_time } = req.body;
 
     if (!mom_id) return res.status(400).json({ error: 'Minutes of Meeting (MOM) is required.' });
     const mom = moms.find(m => m.id === mom_id);
@@ -430,6 +462,7 @@ ${user.name}`;
           category: item.category,
           amount: numericAmount,
           receipt_url: item.receipt_url,
+          or_number: item.or_number,
           business_purpose: remarks || `Sales reimbursement for meeting with ${mom.client}`
         });
         claimTotal += numericAmount;
@@ -454,6 +487,7 @@ ${user.name}`;
         category: expense_category,
         amount: numericAmount,
         receipt_url: receipt_url,
+        or_number: or_number,
         business_purpose: remarks || `Sales reimbursement for meeting with ${mom.client}`
       });
       claimTotal = numericAmount;
@@ -479,7 +513,8 @@ ${user.name}`;
         amount: item.amount,
         payment_method: 'Cash',
         business_purpose: item.business_purpose,
-        receipt_url: item.receipt_url
+        receipt_url: item.receipt_url,
+        or_number: item.or_number
       });
     }
 
@@ -623,7 +658,7 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
       return res.status(400).json({ error: 'Only a claim that has been Returned can be revised and resubmitted.' });
     }
 
-    const { mom_id, expense_category, total_amount, receipt_url, remarks, supporting_documents, line_items } = req.body;
+    const { mom_id, expense_category, total_amount, receipt_url, or_number, remarks, supporting_documents, line_items } = req.body;
 
     if (!mom_id) return res.status(400).json({ error: 'Minutes of Meeting (MOM) is required.' });
     const mom = moms.find(m => m.id === mom_id);
@@ -653,6 +688,7 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
           category: item.category,
           amount: numericAmount,
           receipt_url: item.receipt_url,
+          or_number: item.or_number,
           business_purpose: remarks || `Sales reimbursement for meeting with ${mom.client}`
         });
         claimTotal += numericAmount;
@@ -677,6 +713,7 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
         category: expense_category,
         amount: numericAmount,
         receipt_url: receipt_url,
+        or_number: or_number,
         business_purpose: remarks || `Sales reimbursement for meeting with ${mom.client}`
       });
       claimTotal = numericAmount;
@@ -707,7 +744,8 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
         amount: item.amount,
         payment_method: 'Cash',
         business_purpose: item.business_purpose,
-        receipt_url: item.receipt_url
+        receipt_url: item.receipt_url,
+        or_number: item.or_number
       });
     }
 
@@ -1004,55 +1042,51 @@ BSM Assistant | BSD - IT Security Business`;
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const userSeen = lastSeenStore[user.id] || {};
-    const lastSeenCalendar = userSeen.calendar || '1970-01-01T00:00:00.000Z';
-    const lastSeenInbox = userSeen.inbox || '1970-01-01T00:00:00.000Z';
-    const lastSeenProcessing = userSeen.processing || '1970-01-01T00:00:00.000Z';
-    const lastSeenDashboard = userSeen.dashboard || '1970-01-01T00:00:00.000Z';
-
-    // calendar: visible MOMs (own if Requestor, own + direct reports if Approver) has created_at > lastSeenCalendar
-    let calendarActivity = false;
-    let relevantMoms: Mom[] = [];
+    // calendar: count of upcoming scheduled review meetings
+    let calendarCount = 0;
     if (user.role === UserRole.REQUESTOR) {
-      relevantMoms = moms.filter(m => m.requestor_id === user.id);
+      calendarCount = reviewMeetings.filter(rm => rm.requestor_id === user.id && rm.status === ReviewMeetingStatus.SCHEDULED).length;
     } else if (user.role === UserRole.APPROVER) {
       const reporteeIds = users.filter(u => u.reports_to === user.id).map(u => u.id);
-      relevantMoms = moms.filter(m => m.requestor_id === user.id || (m.requestor_id && reporteeIds.includes(m.requestor_id)));
+      calendarCount = reviewMeetings.filter(rm => (rm.requestor_id === user.id || rm.approver_id === user.id || reporteeIds.includes(rm.requestor_id)) && rm.status === ReviewMeetingStatus.SCHEDULED).length;
     }
-    calendarActivity = relevantMoms.some(m => m.created_at && m.created_at > lastSeenCalendar);
 
-    // emails: true if user has any unread email in emails array where recipient_id === user.id
-    const emailsActivity = emails.some(e => e.recipient_id === user.id && !e.read);
+    // emails: count of unread emails for the user
+    const emailsCount = emails.filter(e => e.recipient_id === user.id && !e.read).length;
 
-    // inbox: (Approver only) true if any claim in their Pending Approval queue or their own Returned claims has an updated_at newer than their last-seen "inbox" timestamp.
-    let inboxActivity = false;
+    // inbox: (Approver only) count of pending-approval claims assigned to them + their own returned claims
+    let inboxCount = 0;
     if (user.role === UserRole.APPROVER) {
       const pendingClaims = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user.id);
       const returnedClaims = claims.filter(c => c.status === ClaimStatus.RETURNED && c.requestor_id === user.id);
-      const inboxClaims = [...pendingClaims, ...returnedClaims];
-      inboxActivity = inboxClaims.some(c => c.updated_at && c.updated_at > lastSeenInbox);
+      inboxCount = pendingClaims.length + returnedClaims.length;
     }
 
-    // processing: (Custodian only) true if any claim newly entered Processing status with an updated_at newer than their last-seen "processing" timestamp.
-    let processingActivity = false;
+    // processing: (Custodian only) count of claims currently in PROCESSING status
+    let processingCount = 0;
     if (user.role === UserRole.CUSTODIAN) {
-      const processingClaims = claims.filter(c => c.status === ClaimStatus.PROCESSING);
-      processingActivity = processingClaims.some(c => c.updated_at && c.updated_at > lastSeenProcessing);
+      processingCount = claims.filter(c => c.status === ClaimStatus.PROCESSING).length;
     }
 
-    // dashboard: (Requestor only) true if any of the user's own claims changed status (updated_at newer than their last-seen "dashboard" timestamp) since they last looked.
-    let dashboardActivity = false;
+    // dashboard: (Requestor only) count of the requestor's own claims currently in RETURNED status needing their action
+    let dashboardCount = 0;
     if (user.role === UserRole.REQUESTOR) {
-      const ownClaims = claims.filter(c => c.requestor_id === user.id);
-      dashboardActivity = ownClaims.some(c => c.updated_at && c.updated_at > lastSeenDashboard);
+      dashboardCount = claims.filter(c => c.requestor_id === user.id && c.status === ClaimStatus.RETURNED).length;
+    }
+
+    // readyToClaim: (Requestor only) count of their own claims in READY_FOR_CLAIM status
+    let readyToClaimCount = 0;
+    if (user.role === UserRole.REQUESTOR) {
+      readyToClaimCount = claims.filter(c => c.requestor_id === user.id && c.status === ClaimStatus.READY_FOR_CLAIM).length;
     }
 
     res.json({
-      calendar: calendarActivity,
-      emails: emailsActivity,
-      inbox: inboxActivity,
-      processing: processingActivity,
-      dashboard: dashboardActivity
+      calendar: calendarCount,
+      emails: emailsCount,
+      inbox: inboxCount,
+      processing: processingCount,
+      dashboard: dashboardCount,
+      readyToClaim: readyToClaimCount
     });
   });
 
@@ -1474,7 +1508,7 @@ BSM Assistant | BSD - IT Security Business`;
       return res.status(400).json({ error: 'This Liquidation is read-only because it has been submitted.' });
     }
 
-    const { expense_date, vendor, category, amount, payment_method, business_purpose, receipt_url, attachment_type } = req.body;
+    const { expense_date, vendor, category, amount, payment_method, business_purpose, receipt_url, attachment_type, or_number } = req.body;
     if (!expense_date || !vendor || !category || amount === undefined || !payment_method || !business_purpose || !receipt_url) {
       return res.status(400).json({ error: 'Missing required expense fields.' });
     }
@@ -1495,7 +1529,8 @@ BSM Assistant | BSD - IT Security Business`;
       payment_method,
       business_purpose,
       receipt_url,
-      attachment_type: attachment_type || 'Official Receipt'
+      attachment_type: attachment_type || 'Official Receipt',
+      or_number: or_number || undefined
     };
 
     liquidationLineItems.push(newItem);
@@ -1524,7 +1559,7 @@ BSM Assistant | BSD - IT Security Business`;
     const item = liquidationLineItems.find(i => i.id === req.params.itemId && i.liquidationId === l.id);
     if (!item) return res.status(404).json({ error: 'Line item not found' });
 
-    const { expense_date, vendor, category, amount, payment_method, business_purpose, receipt_url, attachment_type } = req.body;
+    const { expense_date, vendor, category, amount, payment_method, business_purpose, receipt_url, attachment_type, or_number } = req.body;
 
     if (expense_date !== undefined) item.expense_date = expense_date;
     if (vendor !== undefined) item.vendor = vendor;
@@ -1540,6 +1575,7 @@ BSM Assistant | BSD - IT Security Business`;
     if (business_purpose !== undefined) item.business_purpose = business_purpose;
     if (receipt_url !== undefined) item.receipt_url = receipt_url;
     if (attachment_type !== undefined) item.attachment_type = attachment_type;
+    if (or_number !== undefined) item.or_number = or_number;
 
     recalculateLiquidation(l.id);
     res.json(item);
@@ -1965,7 +2001,7 @@ BSM Assistant | BSD - IT Security Business`;
           : opts.status === ClaimStatus.RETURNED ? 'Returned'
           : undefined);
 
-      const approvedAt = opts.approvedDaysAgo !== undefined ? rDate(opts.approvedDaysAgo) : undefined;
+      const approvedAt = opts.approvedDaysAgo !== undefined ? rDate(opts.approvedDaysAgo) : createdAt;
 
       // Handle delegation for current_approver_id
       let currentApproverId = opts.approverId;
@@ -1990,12 +2026,13 @@ BSM Assistant | BSD - IT Security Business`;
             : decision === 'Rejected' ? 'Rejected: Out-of-policy amount exceeded without pre-approval.'
             : 'Returned for Revision: Please upload a clearer receipt image showing the tax breakdown.'
           ),
-          timestamp: approvedAt || createdAt
+          timestamp: approvedAt
         });
       }
 
       const isReleaseStage = [ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(opts.status);
-      const updatedAt = opts.processedDaysAgo !== undefined ? rDate(opts.processedDaysAgo) : (approvedAt || createdAt);
+      const processedAt = opts.processedDaysAgo !== undefined ? rDate(opts.processedDaysAgo) : approvedAt;
+      const updatedAt = isReleaseStage ? processedAt : (decision ? approvedAt : createdAt);
 
       const claim: Claim = {
         id: claimId,
@@ -2013,7 +2050,7 @@ BSM Assistant | BSD - IT Security Business`;
         release_code: isReleaseStage ? (opts.releaseCode || Math.random().toString(36).substring(2, 8).toUpperCase()) : undefined,
         payment_method: isReleaseStage ? (opts.paymentMethod || 'GCash') : undefined,
         processed_by: isReleaseStage ? 'u3' : undefined,
-        processing_date: isReleaseStage ? updatedAt : undefined,
+        processing_date: isReleaseStage ? processedAt : undefined,
         approved_at: decision === 'Approved' ? approvedAt : undefined,
         created_at: createdAt,
         updated_at: updatedAt
@@ -2021,15 +2058,178 @@ BSM Assistant | BSD - IT Security Business`;
 
       claims.push(claim);
 
+      // Get user names for email templates
+      const requestor = users.find(u => u.id === opts.requestorId);
+      const approver = users.find(u => u.id === currentApproverId);
+      const requestorName = requestor?.name || 'Requestor';
+      const approverName = approver?.name || 'Approver';
+
+      const comment = opts.approvalComment || (
+        decision === 'Approved' ? 'Approved. Valid receipt attached and MOM summary completed.'
+        : decision === 'Rejected' ? 'Rejected: Out-of-policy amount exceeded without pre-approval.'
+        : 'Returned for Revision: Please upload a clearer receipt image showing the tax breakdown.'
+      );
+
+      // --- SEQUENCE TRANSITIONS AND EMAILS ---
+
+      // 1. Initial Draft state
       statusHistories.push({
         id: uuidv4(),
         claim_id: claimId,
-        old_status: ClaimStatus.DRAFT,
-        new_status: opts.status,
+        old_status: '',
+        new_status: ClaimStatus.DRAFT,
         changed_by: opts.requestorId,
-        reason: 'Seeded realistic dataset',
+        reason: 'Claim created as draft',
         timestamp: createdAt
       });
+
+      // 2. Submission to Pending Approval
+      if (opts.status !== ClaimStatus.DRAFT) {
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.DRAFT,
+          new_status: ClaimStatus.PENDING_APPROVAL,
+          changed_by: opts.requestorId,
+          reason: 'Submitted for approval',
+          timestamp: createdAt
+        });
+
+        if (currentApproverId) {
+          const emailSubject = `Reimbursement Submitted - ${claimNumber}`;
+          const emailBody = `A new reimbursement request ${claimNumber} by ${requestorName} has been submitted and is awaiting your review and approval.
+
+Reference:
+${claimNumber}
+
+Required Action:
+Please log in to the system and navigate to the Approval Queue to approve or reject this claim.`;
+          sendEmail(currentApproverId, emailSubject, emailBody, undefined, { timestamp: createdAt });
+        }
+      }
+
+      // 3. Approver Decision
+      if ([ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(opts.status)) {
+        const nextStatus = opts.status === ClaimStatus.APPROVED ? ClaimStatus.APPROVED : ClaimStatus.PROCESSING;
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.PENDING_APPROVAL,
+          new_status: nextStatus,
+          changed_by: currentApproverId,
+          reason: comment,
+          timestamp: approvedAt
+        });
+
+        // Approved email to requestor
+        const approvedSubject = `Approved - ${claimNumber}`;
+        const approvedBody = `Your reimbursement request ${claimNumber} has been approved by ${approverName}. It has been forwarded to the Custodian for processing and payment release.
+
+Reference:
+${claimNumber}`;
+        sendEmail(opts.requestorId, approvedSubject, approvedBody, undefined, { timestamp: approvedAt });
+
+        // Processing email to custodians
+        const custodians = users.filter(u => u.role === UserRole.CUSTODIAN);
+        custodians.forEach(c => {
+          const custodianSubject = `Reimbursement Processing Required - ${claimNumber}`;
+          const custodianBody = `Reimbursement request ${claimNumber} submitted by ${requestorName} and approved by ${approverName} is now in your processing queue.
+
+Reference:
+${claimNumber}
+
+Required Action:
+Please generate the Claim Code, release the payment, and mark it as Ready for Claim.`;
+          sendEmail(c.id, custodianSubject, custodianBody, undefined, { timestamp: approvedAt });
+        });
+      } else if (opts.status === ClaimStatus.REJECTED) {
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.PENDING_APPROVAL,
+          new_status: ClaimStatus.REJECTED,
+          changed_by: currentApproverId,
+          reason: comment,
+          timestamp: approvedAt
+        });
+
+        const emailSubject = `Reimbursement Rejected - ${claimNumber}`;
+        const emailBody = `Your reimbursement request ${claimNumber} has been rejected by ${approverName}.
+
+Reason:
+${comment}
+
+Reference:
+${claimNumber}
+
+Required Action:
+No action required.`;
+        sendEmail(opts.requestorId, emailSubject, emailBody, undefined, { timestamp: approvedAt });
+      } else if (opts.status === ClaimStatus.RETURNED) {
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.PENDING_APPROVAL,
+          new_status: ClaimStatus.RETURNED,
+          changed_by: currentApproverId,
+          reason: comment,
+          timestamp: approvedAt
+        });
+
+        const emailSubject = `Reimbursement Returned - ${claimNumber}`;
+        const emailBody = `Your reimbursement request ${claimNumber} has been returned by ${approverName}.
+
+Reason:
+${comment}
+
+Reference:
+${claimNumber}
+
+Required Action:
+Please revise and resubmit your claim.`;
+        sendEmail(opts.requestorId, emailSubject, emailBody, undefined, { timestamp: approvedAt });
+      }
+
+      // 4. Ready for Claim
+      if ([ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(opts.status)) {
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.PROCESSING,
+          new_status: ClaimStatus.READY_FOR_CLAIM,
+          changed_by: 'u3', // Carol Custodian
+          reason: `Processed. Payment method: ${opts.paymentMethod || 'GCash'}.`,
+          timestamp: processedAt
+        });
+
+        const emailSubject = `Reimbursement - For Release`;
+        const emailBody = `This request ${claimNumber} by ${requestorName} has been approved and ready for release.
+
+Enter code ${opts.releaseCode || 'T8QXM4'} for releasing of cash.
+_________________________________________
+This is an automatically generated email, please do not reply.
+${requestorName}
+BSM Assistant | BSD - IT Security Business`;
+
+        sendEmail(opts.requestorId, emailSubject, emailBody, undefined, { 
+          plain: true,
+          fromLabel: "SharePoint Online <no-reply@sharepointonline.com>",
+          timestamp: processedAt
+        });
+      }
+
+      // 5. Completed
+      if (opts.status === ClaimStatus.COMPLETED) {
+        statusHistories.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          old_status: ClaimStatus.READY_FOR_CLAIM,
+          new_status: ClaimStatus.COMPLETED,
+          changed_by: opts.requestorId,
+          reason: 'Claim completed and cash received.',
+          timestamp: processedAt
+        });
+      }
 
       return claim;
     };
@@ -2162,7 +2362,36 @@ BSM Assistant | BSD - IT Security Business`;
 
     // ---- Cash Advance & Liquidation Seed Records ----
 
+    // Define helper functions for setting status history with custom timestamps
+    const addCaHistoryWithTimestamp = (caId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string, timestamp?: string) => {
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: '',
+        cash_advance_id: caId,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: changedBy,
+        reason,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    };
+
+    const addLiqHistoryWithTimestamp = (liqId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string, timestamp?: string) => {
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: '',
+        liquidation_id: liqId,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: changedBy,
+        reason,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    };
+
     // 1. Standalone Cash Advances
+
+    // ca1: Draft
     const ca1Id = uuidv4();
     cashAdvances.push({
       id: ca1Id,
@@ -2172,8 +2401,9 @@ BSM Assistant | BSD - IT Security Business`;
       approverId: 'u2',
       status: CashAdvanceStatus.DRAFT
     });
-    addCaHistory(ca1Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created');
+    addCaHistoryWithTimestamp(ca1Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(1));
 
+    // ca2: Submitted
     const ca2Id = uuidv4();
     cashAdvances.push({
       id: ca2Id,
@@ -2183,8 +2413,17 @@ BSM Assistant | BSD - IT Security Business`;
       approverId: 'u2',
       status: CashAdvanceStatus.SUBMITTED
     });
-    addCaHistory(ca2Id, '', CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval');
+    addCaHistoryWithTimestamp(ca2Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(3));
+    addCaHistoryWithTimestamp(ca2Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval', rDate(2));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca2Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 5000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Travel to Cebu`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
 
+    // ca3: Approved
     const ca3Id = uuidv4();
     cashAdvances.push({
       id: ca3Id,
@@ -2194,8 +2433,25 @@ BSM Assistant | BSD - IT Security Business`;
       approverId: 'u2',
       status: CashAdvanceStatus.APPROVED
     });
-    addCaHistory(ca3Id, '', CashAdvanceStatus.APPROVED, 'u2', 'Approved');
+    addCaHistoryWithTimestamp(ca3Id, '', CashAdvanceStatus.DRAFT, 'u6', 'Draft created', rDate(4));
+    addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u6', 'Submitted for Approval', rDate(3));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca3Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 7500 has been submitted by Frank Requestor for your approval.\n\nPurpose: Client Entertainment - BGC`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+    addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(2));
+    sendEmail(
+      'u6',
+      `Cash Advance Request Approved - CADV-${ca3Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 7500 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
 
+    // ca4: Rejected
     const ca4Id = uuidv4();
     cashAdvances.push({
       id: ca4Id,
@@ -2205,8 +2461,25 @@ BSM Assistant | BSD - IT Security Business`;
       approverId: 'u10',
       status: CashAdvanceStatus.REJECTED
     });
-    addCaHistory(ca4Id, '', CashAdvanceStatus.REJECTED, 'u10', 'Rejected due to budget constraints');
+    addCaHistoryWithTimestamp(ca4Id, '', CashAdvanceStatus.DRAFT, 'u11', 'Draft created', rDate(5));
+    addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u11', 'Submitted for Approval', rDate(4));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca4Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 12000 has been submitted by Kyle Requestor for your approval.\n\nPurpose: Team Building Advance`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.REJECTED, 'u10', 'Rejected due to budget constraints', rDate(3));
+    sendEmail(
+      'u11',
+      `Cash Advance Request Rejected - CADV-${ca4Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Mid-Level Approver.\n\nComment: Rejected due to budget constraints`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
 
+    // ca5: Released
     const ca5Id = uuidv4();
     cashAdvances.push({
       id: ca5Id,
@@ -2219,7 +2492,31 @@ BSM Assistant | BSD - IT Security Business`;
       releaseDate: rDate(2),
       releaseReference: 'REF-LIAM-CA'
     });
-    addCaHistory(ca5Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released');
+    addCaHistoryWithTimestamp(ca5Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(5));
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(4));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca5Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field surveys`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u10', 'Approved', rDate(3));
+    sendEmail(
+      'u12',
+      `Cash Advance Request Approved - CADV-${ca5Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(2));
+    sendEmail(
+      'u12',
+      `Cash Advance Released - CADV-${ca5Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
 
     // 2. Cash Advances with Liquidations in different stages
 
@@ -2237,7 +2534,31 @@ BSM Assistant | BSD - IT Security Business`;
       releaseReference: 'REF-LIAM-SURVEY'
     };
     cashAdvances.push(ca6);
-    addCaHistory(ca6Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released');
+    addCaHistoryWithTimestamp(ca6Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(6));
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(5));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca6Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field survey Liam`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u10', 'Approved', rDate(4));
+    sendEmail(
+      'u12',
+      `Cash Advance Request Approved - CADV-${ca6Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(3));
+    sendEmail(
+      'u12',
+      `Cash Advance Released - CADV-${ca6Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
 
     const liq1Id = uuidv4();
     liquidations.push({
@@ -2249,7 +2570,8 @@ BSM Assistant | BSD - IT Security Business`;
       varianceType: LiquidationVarianceType.REFUND_DUE,
       status: LiquidationStatus.DRAFT
     });
-    addLiqHistory(liq1Id, '', LiquidationStatus.DRAFT, 'u12', 'Draft Liquidation started');
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u12', 'Liquidation Started', rDate(2));
+    addLiqHistoryWithTimestamp(liq1Id, '', LiquidationStatus.DRAFT, 'u12', 'Draft Liquidation started', rDate(2));
 
     // Submitted Liquidation - SETTLED (Spent exactly PHP 5,000 of PHP 5,000)
     const ca7Id = uuidv4();
@@ -2267,7 +2589,31 @@ BSM Assistant | BSD - IT Security Business`;
       releaseReference: 'REF-ALICE-MAXS'
     };
     cashAdvances.push(ca7);
-    addCaHistory(ca7Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released');
+    addCaHistoryWithTimestamp(ca7Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(7));
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u1', 'Submitted for Approval', rDate(6));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca7Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Max's Group Lunch`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(5));
+    sendEmail(
+      'u1',
+      `Cash Advance Request Approved - CADV-${ca7Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(4));
+    sendEmail(
+      'u1',
+      `Cash Advance Released - CADV-${ca7Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
 
     const liq2Id = uuidv4();
     liquidations.push({
@@ -2290,7 +2636,17 @@ BSM Assistant | BSD - IT Security Business`;
       business_purpose: 'Lunch meeting with Maxs executive team',
       receipt_url: '/receipt_placeholder.png'
     });
-    addLiqHistory(liq2Id, '', LiquidationStatus.SUBMITTED, 'u1', 'Liquidation submitted for review');
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Started', rDate(3));
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Submitted', rDate(3));
+    addLiqHistoryWithTimestamp(liq2Id, '', LiquidationStatus.DRAFT, 'u1', 'Draft Liquidation started', rDate(3));
+    addLiqHistoryWithTimestamp(liq2Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u1', 'Liquidation submitted for review', rDate(3));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq2Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
 
     // Returned for Revision Liquidation - REFUND_DUE (Spent PHP 6,000 of PHP 8,000)
     const ca8Id = uuidv4();
@@ -2306,7 +2662,31 @@ BSM Assistant | BSD - IT Security Business`;
       releaseReference: 'REF-EVE-CEBU'
     };
     cashAdvances.push(ca8);
-    addCaHistory(ca8Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released');
+    addCaHistoryWithTimestamp(ca8Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(9));
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval', rDate(8));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca8Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 8000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Cebu Client Visit`,
+      undefined,
+      { timestamp: rDate(8) }
+    );
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(7));
+    sendEmail(
+      'u5',
+      `Cash Advance Request Approved - CADV-${ca8Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 8000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(7) }
+    );
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(6));
+    sendEmail(
+      'u5',
+      `Cash Advance Released - CADV-${ca8Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 8000 has been released by Carol Custodian.\n\nRelease Reference: REF-EVE-CEBU\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
 
     const liq3Id = uuidv4();
     liquidations.push({
@@ -2329,7 +2709,27 @@ BSM Assistant | BSD - IT Security Business`;
       business_purpose: 'Site transfers in Cebu',
       receipt_url: '/receipt_placeholder.png'
     });
-    addLiqHistory(liq3Id, '', LiquidationStatus.RETURNED_FOR_REVISION, 'u2', 'Returned: Please attach official receipts instead of booking screenshots');
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u5', 'Liquidation Started', rDate(5));
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u5', 'Liquidation Submitted', rDate(4));
+    addCaHistoryWithTimestamp(ca8Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u2', 'Liquidation Returned for Revision: Please attach official receipts instead of booking screenshots', rDate(3));
+    
+    addLiqHistoryWithTimestamp(liq3Id, '', LiquidationStatus.DRAFT, 'u5', 'Draft Liquidation started', rDate(5));
+    addLiqHistoryWithTimestamp(liq3Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u5', 'Liquidation submitted for review', rDate(4));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq3Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Eve Requestor for Cash Advance CADV-${ca8Id.substring(0,6)}.\n\nTotal Spent: PHP 6000\nVariance: PHP -2000 (REFUND_DUE)`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addLiqHistoryWithTimestamp(liq3Id, LiquidationStatus.SUBMITTED, LiquidationStatus.RETURNED_FOR_REVISION, 'u2', 'Returned: Please attach official receipts instead of booking screenshots', rDate(3));
+    sendEmail(
+      'u5',
+      `Liquidation Returned - LIQ-${liq3Id.substring(0,6)}`,
+      `Your Liquidation report has been returned for revision by Bob Approver.\n\nReason: Returned: Please attach official receipts instead of booking screenshots`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
 
     // Reviewed Liquidation - REFUND_DUE (Spent PHP 7,000 of PHP 10,000)
     const ca9Id = uuidv4();
@@ -2345,7 +2745,7 @@ BSM Assistant | BSD - IT Security Business`;
       releaseReference: 'REF-FRANK-BGC'
     };
     cashAdvances.push(ca9);
-    addCaHistory(ca9Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released');
+    addCaHistoryWithTimestamp(ca9Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(8));
 
     const liq4Id = uuidv4();
     liquidations.push({
@@ -2368,7 +2768,52 @@ BSM Assistant | BSD - IT Security Business`;
       business_purpose: 'Stay for BGC client account manager',
       receipt_url: '/receipt_placeholder.png'
     });
-    addLiqHistory(liq4Id, '', LiquidationStatus.REVIEWED, 'u2', 'Approved and Reviewed. Pending refund of PHP 3,000');
+    addCaHistoryWithTimestamp(ca9Id, '', CashAdvanceStatus.DRAFT, 'u6', 'Draft created', rDate(11));
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u6', 'Submitted for Approval', rDate(10));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca9Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 10000 has been submitted by Frank Requestor for your approval.\n\nPurpose: BGC Accounts`,
+      undefined,
+      { timestamp: rDate(10) }
+    );
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(9));
+    sendEmail(
+      'u6',
+      `Cash Advance Request Approved - CADV-${ca9Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 10000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(9) }
+    );
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(8));
+    sendEmail(
+      'u6',
+      `Cash Advance Released - CADV-${ca9Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 10000 has been released by Carol Custodian.\n\nRelease Reference: REF-FRANK-BGC\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(8) }
+    );
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u6', 'Liquidation Started', rDate(7));
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u6', 'Liquidation Submitted', rDate(6));
+    addCaHistoryWithTimestamp(ca9Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u2', 'Liquidation Reviewed (Pending Refund)', rDate(5));
+
+    addLiqHistoryWithTimestamp(liq4Id, '', LiquidationStatus.DRAFT, 'u6', 'Draft Liquidation started', rDate(7));
+    addLiqHistoryWithTimestamp(liq4Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u6', 'Liquidation submitted for review', rDate(6));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq4Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Frank Requestor for Cash Advance CADV-${ca9Id.substring(0,6)}.\n\nTotal Spent: PHP 7000\nVariance: PHP -3000 (REFUND_DUE)`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
+    addLiqHistoryWithTimestamp(liq4Id, LiquidationStatus.SUBMITTED, LiquidationStatus.REVIEWED, 'u2', 'Approved and Reviewed. Pending refund of PHP 3,000', rDate(5));
+    sendEmail(
+      'u6',
+      `Liquidation Reviewed & Approved - LIQ-${liq4Id.substring(0,6)}`,
+      `Your Liquidation has been approved and is awaiting Custodian refund collection of PHP 3000.`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
 
     // Closed (Refund Collected) Liquidation - REFUND_DUE (Spent PHP 3,000 of PHP 4,000)
     const ca10Id = uuidv4();
@@ -2381,7 +2826,6 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.LIQUIDATED
     };
     cashAdvances.push(ca10);
-    addCaHistory(ca10Id, '', CashAdvanceStatus.LIQUIDATED, 'u3', 'Closed (Refund Collected)');
 
     const liq5Id = uuidv4();
     liquidations.push({
@@ -2404,7 +2848,62 @@ BSM Assistant | BSD - IT Security Business`;
       business_purpose: 'Taguig client breakfast meeting',
       receipt_url: '/receipt_placeholder.png'
     });
-    addLiqHistory(liq5Id, '', LiquidationStatus.CLOSED, 'u3', 'Closed (Refund Collected). Note: Cash returned to Carol');
+
+    addCaHistoryWithTimestamp(ca10Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(13));
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u1', 'Submitted for Approval', rDate(12));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca10Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 4000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Client Sync Taguig`,
+      undefined,
+      { timestamp: rDate(12) }
+    );
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(11));
+    sendEmail(
+      'u1',
+      `Cash Advance Request Approved - CADV-${ca10Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 4000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(11) }
+    );
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(10));
+    sendEmail(
+      'u1',
+      `Cash Advance Released - CADV-${ca10Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 4000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-SYNC\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(10) }
+    );
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Started', rDate(9));
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Submitted', rDate(8));
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u2', 'Liquidation Reviewed (Pending Refund)', rDate(7));
+    addCaHistoryWithTimestamp(ca10Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.LIQUIDATED, 'u3', 'Closed (Refund Collected)', rDate(6));
+
+    addLiqHistoryWithTimestamp(liq5Id, '', LiquidationStatus.DRAFT, 'u1', 'Draft Liquidation started', rDate(9));
+    addLiqHistoryWithTimestamp(liq5Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u1', 'Liquidation submitted for review', rDate(8));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq5Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca10Id.substring(0,6)}.\n\nTotal Spent: PHP 3000\nVariance: PHP -1000 (REFUND_DUE)`,
+      undefined,
+      { timestamp: rDate(8) }
+    );
+    addLiqHistoryWithTimestamp(liq5Id, LiquidationStatus.SUBMITTED, LiquidationStatus.REVIEWED, 'u2', 'Approved and Reviewed. Pending refund of PHP 1,000', rDate(7));
+    sendEmail(
+      'u1',
+      `Liquidation Reviewed & Approved - LIQ-${liq5Id.substring(0,6)}`,
+      `Your Liquidation has been approved and is awaiting Custodian refund collection of PHP 1000.`,
+      undefined,
+      { timestamp: rDate(7) }
+    );
+    addLiqHistoryWithTimestamp(liq5Id, LiquidationStatus.REVIEWED, LiquidationStatus.CLOSED, 'u3', 'Closed (Refund Collected). Note: Cash returned to Carol', rDate(6));
+    sendEmail(
+      'u1',
+      `Liquidation Closed (Refund Collected) - LIQ-${liq5Id.substring(0,6)}`,
+      `Your Liquidation has been marked as Closed. Custodian Carol Custodian has verified collection of your refund of PHP 1000.`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
 
     // ---- SHORTFALL CASE: Closed with ReimbursementDue (Spent PHP 6,200 of PHP 5,000) ----
     const ca11Id = uuidv4();
@@ -2419,7 +2918,6 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.LIQUIDATED
     };
     cashAdvances.push(ca11);
-    addCaHistory(ca11Id, '', CashAdvanceStatus.LIQUIDATED, 'u3', 'Closed (Shortfall Reimbursement Payout Queued)');
 
     const liq6Id = uuidv4();
     liquidations.push({
@@ -2442,7 +2940,46 @@ BSM Assistant | BSD - IT Security Business`;
       business_purpose: 'Dinner meeting with SM Prime partners',
       receipt_url: '/receipt_placeholder.png'
     });
-    addLiqHistory(liq6Id, '', LiquidationStatus.CLOSED, 'u2', 'Approved & Closed. Shortfall reimbursement claim created.');
+
+    addCaHistoryWithTimestamp(ca11Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(10));
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u1', 'Submitted for Approval', rDate(9));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca11Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: SM Prime Partnership`,
+      undefined,
+      { timestamp: rDate(9) }
+    );
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(8));
+    sendEmail(
+      'u1',
+      `Cash Advance Request Approved - CADV-${ca11Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(8) }
+    );
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(7));
+    sendEmail(
+      'u1',
+      `Cash Advance Released - CADV-${ca11Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-SMPRIME\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(7) }
+    );
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Started', rDate(7));
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Submitted', rDate(6));
+    addCaHistoryWithTimestamp(ca11Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.LIQUIDATED, 'u3', 'Closed (Shortfall Reimbursement Payout Queued)', rDate(5));
+
+    addLiqHistoryWithTimestamp(liq6Id, '', LiquidationStatus.DRAFT, 'u1', 'Draft Liquidation started', rDate(7));
+    addLiqHistoryWithTimestamp(liq6Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u1', 'Liquidation submitted for review', rDate(6));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq6Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca11Id.substring(0,6)}.\n\nTotal Spent: PHP 6200\nVariance: PHP 1200 (REIMBURSEMENT_DUE)`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
+    addLiqHistoryWithTimestamp(liq6Id, LiquidationStatus.SUBMITTED, LiquidationStatus.CLOSED, 'u2', 'Approved & Closed. Shortfall reimbursement claim created.', rDate(5));
 
     // Auto shortfall claim in Custodian's queue (PROCESSING)
     const claimShortfallId = uuidv4();
@@ -2477,6 +3014,1263 @@ BSM Assistant | BSD - IT Security Business`;
     });
 
     addHistory(claimShortfallId, ClaimStatus.DRAFT, ClaimStatus.PROCESSING, 'u2', 'Automatic creation from Cash Advance Liquidation Shortfall');
+
+    // Shortfall Claim has claim number: shortfallClaimNo
+    sendEmail(
+      'u1',
+      `Liquidation Approved & Reimbursement Payout Queued - LIQ-${liq6Id.substring(0,6)}`,
+      `Your Liquidation has been approved. A shortfall reimbursement claim ${shortfallClaimNo} for PHP 1200 has been automatically created and routed directly to the Custodian's disbursement preparation queue.`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
+
+    // --- Additional seeds for other departments ---
+    const mkMomAndClaim = (reqId: string, appId: string, category: string, amt: number, status: ClaimStatus, daysAgo: number) => {
+      const momId = uuidv4();
+      const mom = {
+        id: momId,
+        requestor_id: reqId,
+        client_name: 'Internal / Partner',
+        contact_person: 'Partner Contact',
+        meeting_date: rDate(daysAgo),
+        minutes_source: MinutesSource.TEMPLATE,
+        meeting_type: 'In-person',
+        purpose: 'Departmental sync',
+        discussion: 'Regular departmental meeting.',
+        action_items: 'None',
+        status: MomStatus.COMPLETED,
+        created_at: rDate(daysAgo)
+      };
+      moms.push(mom);
+      mkClaim({
+        requestorId: reqId,
+        approverId: appId,
+        mom,
+        status,
+        category,
+        amount: amt,
+        createdDaysAgo: daysAgo,
+        approvedDaysAgo: daysAgo > 2 ? daysAgo - 1 : undefined,
+        processedDaysAgo: daysAgo > 3 ? daysAgo - 2 : undefined
+      });
+    };
+
+    // Marketing (u13 -> u14)
+    mkMomAndClaim('u13', 'u14', 'Marketing Materials', 15000, ClaimStatus.COMPLETED, 15);
+    mkMomAndClaim('u13', 'u14', 'Event Hosting', 25000, ClaimStatus.PENDING_APPROVAL, 2);
+    
+    // Engineering (u15 -> u16)
+    mkMomAndClaim('u15', 'u16', 'Software Licenses', 8500, ClaimStatus.PROCESSING, 5);
+    mkMomAndClaim('u15', 'u16', 'Cloud Hosting', 12000, ClaimStatus.COMPLETED, 20);
+    mkMomAndClaim('u15', 'u16', 'Team Lunch', 4500, ClaimStatus.REJECTED, 3);
+    
+    // Operations (u17 -> u18)
+    mkMomAndClaim('u17', 'u18', 'Office Supplies', 6000, ClaimStatus.READY_FOR_CLAIM, 7);
+    mkMomAndClaim('u17', 'u18', 'Equipment Repair', 9500, ClaimStatus.COMPLETED, 12);
+    
+    const mkCa = (reqId: string, appId: string, amt: number, purpose: string, status: CashAdvanceStatus, days: number) => {
+      const caId = uuidv4();
+      const ca: CashAdvance = {
+        id: caId,
+        requestorId: reqId,
+        amount: amt,
+        purpose,
+        approverId: appId,
+        status,
+      };
+      cashAdvances.push(ca);
+
+      const reqUser = users.find(u => u.id === reqId);
+      const reqName = reqUser?.name || 'Requestor';
+      const appUser = users.find(u => u.id === appId);
+      const appName = appUser?.name || 'Approver';
+
+      const createdDate = rDate(days + 1);
+      const actionDate = rDate(days);
+
+      // Draft
+      addCaHistoryWithTimestamp(caId, '', CashAdvanceStatus.DRAFT, reqId, 'Draft created', createdDate);
+
+      // Submitted
+      if (status !== CashAdvanceStatus.DRAFT) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, reqId, 'Submitted for Approval', createdDate);
+        
+        const subSubject = `Cash Advance Request Submitted - CADV-${caId.substring(0,6)}`;
+        const subBody = `A Cash Advance request for PHP ${amt} has been submitted by ${reqName} for your approval.\n\nPurpose: ${purpose}`;
+        sendEmail(appId, subSubject, subBody, undefined, { timestamp: createdDate });
+      }
+
+      // Approved / Rejected / Released
+      if (status === CashAdvanceStatus.APPROVED || status === CashAdvanceStatus.RELEASED) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, appId, 'Approved', actionDate);
+
+        const appSubject = `Cash Advance Request Approved - CADV-${caId.substring(0,6)}`;
+        const appBody = `Your Cash Advance request for PHP ${amt} has been Approved by ${appName}.`;
+        sendEmail(reqId, appSubject, appBody, undefined, { timestamp: actionDate });
+      } else if (status === CashAdvanceStatus.REJECTED) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.REJECTED, appId, 'Rejected due to policy limit', actionDate);
+
+        const rejSubject = `Cash Advance Request Rejected - CADV-${caId.substring(0,6)}`;
+        const rejBody = `Your Cash Advance request for PHP ${amt} has been Rejected by ${appName}.\n\nComment: Rejected due to policy limit`;
+        sendEmail(reqId, rejSubject, rejBody, undefined, { timestamp: actionDate });
+      }
+
+      if (status === CashAdvanceStatus.RELEASED) {
+        ca.releasedBy = 'u3';
+        ca.releaseDate = actionDate;
+        ca.releaseReference = `REF-${reqId.toUpperCase()}-${caId.substring(0,4).toUpperCase()}`;
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', actionDate);
+
+        const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
+        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+        sendEmail(reqId, relSubject, relBody, undefined, { timestamp: actionDate });
+      }
+    };
+    
+    mkCa('u13', 'u14', 10000, 'Upcoming Expo', CashAdvanceStatus.APPROVED, 3);
+    mkCa('u15', 'u16', 5000, 'Server Migration Overtime Food', CashAdvanceStatus.RELEASED, 4);
+    mkCa('u17', 'u18', 20000, 'Facility Maintenance Deposit', CashAdvanceStatus.SUBMITTED, 1);
+
+    claimCounter = seedCounter;
+
+    res.json({ success: true });
+  });
+
+  // Admin: Seed 1 Year of History
+  app.post('/api/admin/seed-year', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    moms = [];
+    claims = [];
+    expenses = [];
+    approvals = [];
+    statusHistories = [];
+    emails = [];
+    lastSeenStore = {};
+    cashAdvances = [];
+    liquidations = [];
+    liquidationLineItems = [];
+    reviewMeetings = [];
+
+    users.length = 0;
+    users.push(...buildDefaultUsers());
+
+    const rDate = (daysAgo: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return d.toISOString();
+    };
+
+    // Bob has an active delegation to Grace (covers "today", so auto-routing is
+    // demoable live). 
+    const activeDelegationStart = rDate(2).split('T')[0];
+    const activeDelegationEnd = rDate(-5).split('T')[0];
+    users[1].delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
+    
+    // Henry has an expired delegation to Bob (ended 2 days ago).
+    const expiredStart = rDate(10).split('T')[0];
+    const expiredEnd = rDate(2).split('T')[0];
+    users[7].delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
+
+    let seedCounter = 123;
+    const nextClaimNumber = () => `REIM-${new Date().getFullYear()}-${String(seedCounter++).padStart(6, '0')}`;
+
+    // Rotation pools so no two MOMs read as copy-pasted from one another.
+    const CONTACTS = ['Maria Santos', 'Carlos Dela Cruz', 'Angela Reyes', 'Ramon Villanueva', 'Patricia Lim'];
+    const PURPOSES = ['Sales and Partnership Discussion', 'Contract Renewal Discussion', 'Pilot Program Scoping', 'Marketing Collaboration Discussion', 'Accounts Receivable Follow-up'];
+    const DISCUSSIONS = [
+      (c: string) => `Reviewed Q3 procurement goals with ${c}. Presented our updated product catalog and volume-based discount tiers.`,
+      (c: string) => `Discussed renewal terms for ${c}'s existing service contract and walked through proposed SLA improvements.`,
+      (c: string) => `Conducted a needs-assessment session with ${c} to scope a potential pilot rollout across their Metro Manila branches.`,
+      (c: string) => `Presented Q4 marketing collaboration opportunities to ${c} and gathered feedback on co-branded campaign concepts.`,
+      (c: string) => `Followed up with ${c} on outstanding invoices and negotiated a revised payment schedule for the current quarter.`,
+    ];
+    const AGREEMENTS = [
+      'Client agreed to a trial order of 100 units; we agreed to draft a custom pricing proposal within the week.',
+      'Both parties agreed to a 6-month contract extension at current rates, pending legal review.',
+      'Client approved a 2-branch pilot starting next month; we agreed to provide onsite training support.',
+      'Client agreed to feature our product in their Q4 campaign in exchange for co-marketing budget support.',
+      'Client committed to settling 50% of the balance by month-end, with the remainder due in 30 days.',
+    ];
+    const ACTION_ITEMS = [
+      '1. Send pricing proposal\n2. Send trial contract guidelines',
+      '1. Draft renewal contract addendum\n2. Schedule legal review',
+      '1. Confirm pilot branch list\n2. Schedule onsite training dates',
+      '1. Share co-marketing budget breakdown\n2. Draft campaign brief',
+      '1. Send revised payment schedule\n2. Confirm receipt of partial payment',
+    ];
+    const LOCATIONS = ['Quezon City, Philippines', 'Makati City, Philippines', 'BGC, Taguig, Philippines', 'Cebu City, Philippines', 'Pasig City, Philippines'];
+    const TIMES = ['09:00', '10:30', '13:00', '14:00', '15:30'];
+
+    let momCursor = 0;
+    const mkMom = (requestorId: string, client: string, status: MomStatus, daysAgo: number): Mom => {
+      const idx = momCursor % 5;
+      momCursor++;
+      const reqUser = users.find(u => u.id === requestorId);
+      const contact = CONTACTS[idx];
+      const [first, ...rest] = contact.split(' ');
+      const last = rest[rest.length - 1] || first;
+      const momDate = rDate(daysAgo);
+      const mom: Mom = {
+        id: uuidv4(),
+        requestor_id: requestorId,
+        client,
+        contact_person: contact,
+        contact_person_email: `${first.toLowerCase()}.${last.toLowerCase()}@${client.replace(/[^a-zA-Z]/g, '').toLowerCase()}.com`,
+        meeting_date: momDate.split('T')[0],
+        meeting_time: TIMES[idx],
+        location: LOCATIONS[idx],
+        purpose: PURPOSES[idx],
+        discussion: DISCUSSIONS[idx](client),
+        agreements: AGREEMENTS[idx],
+        action_items: ACTION_ITEMS[idx],
+        prepared_by: reqUser?.name || 'Requestor',
+        status,
+        created_at: momDate,
+        minutes_source: MinutesSource.TEMPLATE
+      };
+      moms.push(mom);
+      return mom;
+    };
+
+    interface SeedClaimOpts {
+      requestorId: string;
+      approverId: string;
+      mom: Mom;
+      status: ClaimStatus;
+      category: string;
+      amount: number;
+      createdDaysAgo: number;
+      approvedDaysAgo?: number;
+      processedDaysAgo?: number;
+      releaseCode?: string;
+      paymentMethod?: string;
+      decisionOverride?: 'Approved' | 'Rejected' | 'Returned';
+      approvalComment?: string;
+      lineItems?: { vendor: string; category: string; amount: number; businessPurpose: string }[];
+    }
+
+    const mkClaim = (opts: SeedClaimOpts): Claim => {
+      const claimId = uuidv4();
+      const claimNumber = nextClaimNumber();
+      const createdAt = rDate(opts.createdDaysAgo);
+
+      opts.mom.claim_id = claimId;
+
+      const items = opts.lineItems && opts.lineItems.length > 0
+        ? opts.lineItems
+        : [{ vendor: 'Max Restaurant', category: opts.category, amount: opts.amount, businessPurpose: `Reimbursement for client meeting with ${opts.mom.client}` }];
+
+      items.forEach(item => {
+        expenses.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          expense_date: opts.mom.meeting_date,
+          vendor: item.vendor,
+          category: item.category,
+          amount: item.amount,
+          payment_method: 'Cash',
+          business_purpose: item.businessPurpose,
+          receipt_url: '/receipt_placeholder.png',
+          or_number: 'OR-' + Math.floor(10000 + Math.random() * 90000)
+        });
+      });
+
+      const decision: 'Approved' | 'Rejected' | 'Returned' | undefined = opts.decisionOverride
+        || ([ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(opts.status) ? 'Approved'
+          : opts.status === ClaimStatus.REJECTED ? 'Rejected'
+          : opts.status === ClaimStatus.RETURNED ? 'Returned'
+          : undefined);
+
+      const approvedAt = opts.approvedDaysAgo !== undefined ? rDate(opts.approvedDaysAgo) : createdAt;
+
+      let currentApproverId = opts.approverId;
+      const originalApprover = users.find(u => u.id === opts.approverId);
+      if (originalApprover?.delegation) {
+        const start = new Date(originalApprover.delegation.start_date).getTime();
+        const end = new Date(originalApprover.delegation.end_date).getTime();
+        const claimTime = new Date(createdAt).getTime();
+        if (claimTime >= start && claimTime <= end) {
+          currentApproverId = originalApprover.delegation.delegate_id;
+        }
+      }
+
+      if (decision) {
+        approvals.push({
+          id: uuidv4(),
+          claim_id: claimId,
+          approver_id: currentApproverId,
+          decision,
+          comment: opts.approvalComment || (
+            decision === 'Approved' ? 'Approved. Valid receipt attached and MOM summary completed.'
+            : decision === 'Rejected' ? 'Rejected: Out-of-policy amount exceeded without pre-approval.'
+            : 'Returned for Revision: Please upload a clearer receipt image showing the tax breakdown.'
+          ),
+          timestamp: approvedAt
+        });
+      }
+
+      const isReleaseStage = [ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(opts.status);
+      const processedAt = opts.processedDaysAgo !== undefined ? rDate(opts.processedDaysAgo) : approvedAt;
+      const updatedAt = isReleaseStage ? processedAt : (decision ? approvedAt : createdAt);
+
+      const claim: Claim = {
+        id: claimId,
+        claim_number: claimNumber,
+        requestor_id: opts.requestorId,
+        current_approver_id: currentApproverId,
+        original_approver_id: opts.approverId,
+        mom_id: opts.mom.id,
+        status: opts.status,
+        total_amount: opts.amount,
+        expense_category: opts.category,
+        receipt_url: '/receipt_placeholder.png',
+        remarks: `Reimbursement for sales meeting with ${opts.mom.client} team.`,
+        supporting_documents: 'Proposal_Draft_v1.pdf',
+        release_code: isReleaseStage ? (opts.releaseCode || Math.random().toString(36).substring(2, 8).toUpperCase()) : undefined,
+        payment_method: isReleaseStage ? (opts.paymentMethod || 'GCash') : undefined,
+        processed_by: isReleaseStage ? 'u3' : undefined,
+        processing_date: isReleaseStage ? processedAt : undefined,
+        approved_at: decision === 'Approved' ? approvedAt : undefined,
+        created_at: createdAt,
+        updated_at: updatedAt
+      };
+
+      claims.push(claim);
+
+      const requestor = users.find(u => u.id === opts.requestorId);
+      const approver = users.find(u => u.id === currentApproverId);
+      const requestorName = requestor?.name || 'Requestor';
+      const approverName = approver?.name || 'Approver';
+
+      const comment = opts.approvalComment || (
+        decision === 'Approved' ? 'Approved. Valid receipt attached and MOM summary completed.'
+        : decision === 'Rejected' ? 'Rejected: Out-of-policy amount exceeded without pre-approval.'
+        : 'Returned for Revision: Please upload a clearer receipt image showing the tax breakdown.'
+      );
+
+      // Status history chain
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: claimId,
+        old_status: '',
+        new_status: ClaimStatus.DRAFT,
+        changed_by: opts.requestorId,
+        timestamp: createdAt
+      });
+
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: claimId,
+        old_status: ClaimStatus.DRAFT,
+        new_status: ClaimStatus.PENDING_APPROVAL,
+        changed_by: opts.requestorId,
+        timestamp: createdAt
+      });
+
+      // Submit Email
+      sendEmail(
+        currentApproverId,
+        `Reimbursement Claim Submitted - ${claimNumber}`,
+        `A reimbursement claim for PHP ${opts.amount} has been submitted by ${requestorName} for your approval.\n\nDescription: Reimbursement for sales meeting with ${opts.mom.client} team.`,
+        undefined,
+        { timestamp: createdAt }
+      );
+
+      if (opts.status !== ClaimStatus.PENDING_APPROVAL) {
+        if (opts.status === ClaimStatus.RETURNED) {
+          statusHistories.push({
+            id: uuidv4(),
+            claim_id: claimId,
+            old_status: ClaimStatus.PENDING_APPROVAL,
+            new_status: ClaimStatus.RETURNED,
+            changed_by: currentApproverId,
+            reason: comment,
+            timestamp: approvedAt
+          });
+          sendEmail(
+            opts.requestorId,
+            `Reimbursement Claim Returned - ${claimNumber}`,
+            `Your reimbursement claim has been returned by ${approverName} for revision.\n\nComment: ${comment}`,
+            undefined,
+            { timestamp: approvedAt }
+          );
+        } else if (opts.status === ClaimStatus.REJECTED) {
+          statusHistories.push({
+            id: uuidv4(),
+            claim_id: claimId,
+            old_status: ClaimStatus.PENDING_APPROVAL,
+            new_status: ClaimStatus.REJECTED,
+            changed_by: currentApproverId,
+            reason: comment,
+            timestamp: approvedAt
+          });
+          sendEmail(
+            opts.requestorId,
+            `Reimbursement Claim Rejected - ${claimNumber}`,
+            `Your reimbursement claim has been rejected by ${approverName}.\n\nComment: ${comment}`,
+            undefined,
+            { timestamp: approvedAt }
+          );
+        } else {
+          // APPROVED, PROCESSING, READY_FOR_CLAIM, COMPLETED
+          statusHistories.push({
+            id: uuidv4(),
+            claim_id: claimId,
+            old_status: ClaimStatus.PENDING_APPROVAL,
+            new_status: ClaimStatus.APPROVED,
+            changed_by: currentApproverId,
+            reason: comment,
+            timestamp: approvedAt
+          });
+          sendEmail(
+            opts.requestorId,
+            `Reimbursement Claim Approved - ${claimNumber}`,
+            `Your reimbursement claim of PHP ${opts.amount} has been Approved by ${approverName} and routed to Finance.`,
+            undefined,
+            { timestamp: approvedAt }
+          );
+
+          if (opts.status !== ClaimStatus.APPROVED) {
+            statusHistories.push({
+              id: uuidv4(),
+              claim_id: claimId,
+              old_status: ClaimStatus.APPROVED,
+              new_status: ClaimStatus.PROCESSING,
+              changed_by: 'u3',
+              timestamp: processedAt
+            });
+            sendEmail(
+              opts.requestorId,
+              `Reimbursement Processing Initiated - ${claimNumber}`,
+              `Finance has begun preparing disbursement for your approved claim of PHP ${opts.amount}.`,
+              undefined,
+              { timestamp: processedAt }
+            );
+
+            if (opts.status !== ClaimStatus.PROCESSING) {
+              if (opts.status === ClaimStatus.READY_FOR_CLAIM) {
+                statusHistories.push({
+                  id: uuidv4(),
+                  claim_id: claimId,
+                  old_status: ClaimStatus.PROCESSING,
+                  new_status: ClaimStatus.READY_FOR_CLAIM,
+                  changed_by: 'u3',
+                  reason: 'Disbursement prepared; release code generated.',
+                  timestamp: processedAt
+                });
+                sendEmail(
+                  opts.requestorId,
+                  `Reimbursement Ready to Claim - ${claimNumber}`,
+                  `Your reimbursement of PHP ${opts.amount} is ready. Please view your claim details to retrieve your release code and claim your funds.`,
+                  undefined,
+                  { timestamp: processedAt }
+                );
+              } else if (opts.status === ClaimStatus.COMPLETED) {
+                statusHistories.push({
+                  id: uuidv4(),
+                  claim_id: claimId,
+                  old_status: ClaimStatus.PROCESSING,
+                  new_status: ClaimStatus.COMPLETED,
+                  changed_by: 'u3',
+                  reason: 'Funds successfully released to Requestor.',
+                  timestamp: processedAt
+                });
+                sendEmail(
+                  opts.requestorId,
+                  `Reimbursement Completed - ${claimNumber}`,
+                  `Your reimbursement of PHP ${opts.amount} has been successfully paid out via ${claim.payment_method || 'GCash'}.`,
+                  undefined,
+                  { timestamp: processedAt }
+                );
+              }
+            }
+          }
+        }
+      }
+
+      return claim;
+    };
+
+    // Standard live-workflow seed records
+    // 1. Claim 1: Draft - Alice Requestor
+    const mom1 = mkMom('u1', 'Ayala Land Inc', MomStatus.COMPLETED, 3);
+    const claim1Id = uuidv4();
+    const claim1Number = nextClaimNumber();
+    mom1.claim_id = claim1Id;
+    claims.push({
+      id: claim1Id,
+      claim_number: claim1Number,
+      requestor_id: 'u1',
+      current_approver_id: 'u2',
+      original_approver_id: 'u2',
+      mom_id: mom1.id,
+      status: ClaimStatus.DRAFT,
+      total_amount: 3200.00,
+      expense_category: 'Client Meals',
+      receipt_url: '/receipt_placeholder.png',
+      remarks: 'Dinner meeting with Ayala Land procurement team to discuss Q3 targets.',
+      supporting_documents: 'Ayala_Agenda_v1.pdf',
+      created_at: rDate(2),
+      updated_at: rDate(2)
+    });
+    expenses.push({
+      id: uuidv4(),
+      claim_id: claim1Id,
+      expense_date: mom1.meeting_date,
+      vendor: 'Max Restaurant',
+      category: 'Client Meals',
+      amount: 3200.00,
+      payment_method: 'Cash',
+      business_purpose: 'Group dinner with Ayala Land procurement staff.',
+      receipt_url: '/receipt_placeholder.png'
+    });
+    statusHistories.push({
+      id: uuidv4(),
+      claim_id: claim1Id,
+      old_status: '',
+      new_status: ClaimStatus.DRAFT,
+      changed_by: 'u1',
+      timestamp: rDate(2)
+    });
+
+    // 2. Claim 2: Pending Approval - Alice Requestor
+    const mom2 = mkMom('u1', 'SM Prime Holdings', MomStatus.COMPLETED, 4);
+    mkClaim({
+      requestorId: 'u1',
+      approverId: 'u2',
+      mom: mom2,
+      status: ClaimStatus.PENDING_APPROVAL,
+      category: 'Travel',
+      amount: 4500.00,
+      createdDaysAgo: 3
+    });
+
+    // 3. Claim 3: Returned for Revision - Eve Requestor
+    const mom3 = mkMom('u5', 'JG Summit', MomStatus.COMPLETED, 6);
+    mkClaim({
+      requestorId: 'u5',
+      approverId: 'u2',
+      mom: mom3,
+      status: ClaimStatus.RETURNED,
+      category: 'Accommodation',
+      amount: 8500.00,
+      createdDaysAgo: 5,
+      approvedDaysAgo: 4
+    });
+
+    // 4. Claim 4: Approved (Routed to Finance) - Eve Requestor
+    const mom4 = mkMom('u5', 'Aboitiz Equity', MomStatus.COMPLETED, 5);
+    mkClaim({
+      requestorId: 'u5',
+      approverId: 'u2',
+      mom: mom4,
+      status: ClaimStatus.APPROVED,
+      category: 'Transportation',
+      amount: 1500.00,
+      createdDaysAgo: 4,
+      approvedDaysAgo: 3
+    });
+
+    // 5. Claim 5: Processing (In Finance Queue) - Frank Requestor
+    const mom5 = mkMom('u6', 'San Miguel Corp', MomStatus.COMPLETED, 7);
+    mkClaim({
+      requestorId: 'u6',
+      approverId: 'u2',
+      mom: mom5,
+      status: ClaimStatus.PROCESSING,
+      category: 'Client Meals',
+      amount: 6200.00,
+      createdDaysAgo: 6,
+      approvedDaysAgo: 5,
+      processedDaysAgo: 4
+    });
+
+    // 6. Claim 6: Ready for Claim (Awaiting Code Entry) - Frank Requestor
+    const mom6 = mkMom('u6', 'Megaworld Corp', MomStatus.COMPLETED, 8);
+    mkClaim({
+      requestorId: 'u6',
+      approverId: 'u2',
+      mom: mom6,
+      status: ClaimStatus.READY_FOR_CLAIM,
+      category: 'Client Meals',
+      amount: 4800.00,
+      createdDaysAgo: 7,
+      approvedDaysAgo: 6,
+      processedDaysAgo: 5,
+      releaseCode: 'CLAIM99'
+    });
+
+    // 7. Claim 7: Completed (Paid Out) - Frank Requestor
+    const mom7 = mkMom('u6', 'Robinsons Land', MomStatus.COMPLETED, 10);
+    mkClaim({
+      requestorId: 'u6',
+      approverId: 'u2',
+      mom: mom7,
+      status: ClaimStatus.COMPLETED,
+      category: 'Travel',
+      amount: 12500.00,
+      createdDaysAgo: 9,
+      approvedDaysAgo: 8,
+      processedDaysAgo: 7,
+      releaseCode: 'PAID777',
+      paymentMethod: 'Bank Transfer'
+    });
+
+    // 8. Claim 8: Rejected - Alice Requestor
+    const mom8 = mkMom('u1', 'BDO Unibank', MomStatus.COMPLETED, 12);
+    mkClaim({
+      requestorId: 'u1',
+      approverId: 'u2',
+      mom: mom8,
+      status: ClaimStatus.REJECTED,
+      category: 'Entertainment',
+      amount: 25000.00,
+      createdDaysAgo: 11,
+      approvedDaysAgo: 10
+    });
+
+    // Standalone MOMs
+    mkMom('u1', 'Ayala Land Inc', MomStatus.DRAFT, 2);
+    mkMom('u5', 'Metrobank', MomStatus.COMPLETED, 1);
+
+    // Cash Advance & Liquidation Seed Records helpers
+    const addCaHistoryWithTimestamp = (caId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string, timestamp?: string) => {
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: '',
+        cash_advance_id: caId,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: changedBy,
+        reason,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    };
+
+    const addLiqHistoryWithTimestamp = (liqId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string, timestamp?: string) => {
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: '',
+        liquidation_id: liqId,
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: changedBy,
+        reason,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    };
+
+    // 1. Standalone Cash Advances
+    const ca1Id = uuidv4();
+    cashAdvances.push({
+      id: ca1Id,
+      requestorId: 'u1',
+      amount: 3500.00,
+      purpose: 'Client Lunch - Rockwell',
+      approverId: 'u2',
+      status: CashAdvanceStatus.DRAFT
+    });
+    addCaHistoryWithTimestamp(ca1Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(1));
+
+    const ca2Id = uuidv4();
+    cashAdvances.push({
+      id: ca2Id,
+      requestorId: 'u5',
+      amount: 5000.00,
+      purpose: 'Travel to Cebu',
+      approverId: 'u2',
+      status: CashAdvanceStatus.SUBMITTED
+    });
+    addCaHistoryWithTimestamp(ca2Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(3));
+    addCaHistoryWithTimestamp(ca2Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval', rDate(2));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca2Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 5000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Travel to Cebu`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
+
+    const ca3Id = uuidv4();
+    cashAdvances.push({
+      id: ca3Id,
+      requestorId: 'u6',
+      amount: 7500.00,
+      purpose: 'Client Entertainment - BGC',
+      approverId: 'u2',
+      status: CashAdvanceStatus.APPROVED
+    });
+    addCaHistoryWithTimestamp(ca3Id, '', CashAdvanceStatus.DRAFT, 'u6', 'Draft created', rDate(4));
+    addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u6', 'Submitted for Approval', rDate(3));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca3Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 7500 has been submitted by Frank Requestor for your approval.\n\nPurpose: Client Entertainment - BGC`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+    addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(2));
+    sendEmail(
+      'u6',
+      `Cash Advance Request Approved - CADV-${ca3Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 7500 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
+
+    const ca4Id = uuidv4();
+    cashAdvances.push({
+      id: ca4Id,
+      requestorId: 'u11',
+      amount: 12000.00,
+      purpose: 'Team Building Advance',
+      approverId: 'u10',
+      status: CashAdvanceStatus.REJECTED
+    });
+    addCaHistoryWithTimestamp(ca4Id, '', CashAdvanceStatus.DRAFT, 'u11', 'Draft created', rDate(5));
+    addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u11', 'Submitted for Approval', rDate(4));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca4Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 12000 has been submitted by Kyle Requestor for your approval.\n\nPurpose: Team Building Advance`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.REJECTED, 'u10', 'Rejected due to budget constraints', rDate(3));
+    sendEmail(
+      'u11',
+      `Cash Advance Request Rejected - CADV-${ca4Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Mid-Level Approver.\n\nComment: Rejected due to budget constraints`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+
+    const ca5Id = uuidv4();
+    cashAdvances.push({
+      id: ca5Id,
+      requestorId: 'u12',
+      amount: 6000.00,
+      purpose: 'Field surveys',
+      approverId: 'u10',
+      status: CashAdvanceStatus.RELEASED,
+      releasedBy: 'u3',
+      releaseDate: rDate(2),
+      releaseReference: 'REF-LIAM-CA'
+    });
+    addCaHistoryWithTimestamp(ca5Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(5));
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(4));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca5Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field surveys`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u10', 'Approved', rDate(3));
+    sendEmail(
+      'u12',
+      `Cash Advance Request Approved - CADV-${ca5Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+    addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(2));
+    sendEmail(
+      'u12',
+      `Cash Advance Released - CADV-${ca5Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(2) }
+    );
+
+    // 2. Cash Advances with Liquidations in different stages
+    const ca6Id = uuidv4();
+    cashAdvances.push({
+      id: ca6Id,
+      requestorId: 'u12',
+      amount: 6000.00,
+      purpose: 'Field survey Liam',
+      approverId: 'u10',
+      status: CashAdvanceStatus.RELEASED,
+      releasedBy: 'u3',
+      releaseDate: rDate(3),
+      releaseReference: 'REF-LIAM-SURVEY'
+    });
+    addCaHistoryWithTimestamp(ca6Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(6));
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(5));
+    sendEmail(
+      'u10',
+      `Cash Advance Request Submitted - CADV-${ca6Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field survey Liam`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u10', 'Approved', rDate(4));
+    sendEmail(
+      'u12',
+      `Cash Advance Request Approved - CADV-${ca6Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(3));
+    sendEmail(
+      'u12',
+      `Cash Advance Released - CADV-${ca6Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+
+    const liq1Id = uuidv4();
+    liquidations.push({
+      id: liq1Id,
+      cashAdvanceId: ca6Id,
+      requestorId: 'u12',
+      totalSpent: 0,
+      varianceAmount: -6000.00,
+      varianceType: LiquidationVarianceType.REFUND_DUE,
+      status: LiquidationStatus.DRAFT
+    });
+    addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u12', 'Liquidation Started', rDate(2));
+    addLiqHistoryWithTimestamp(liq1Id, '', LiquidationStatus.DRAFT, 'u12', 'Draft Liquidation started', rDate(2));
+
+    // Submitted Liquidation
+    const ca7Id = uuidv4();
+    const ca7Mom = mkMom('u1', 'Maxs Restaurant Corp', MomStatus.COMPLETED, 4);
+    cashAdvances.push({
+      id: ca7Id,
+      requestorId: 'u1',
+      amount: 5000.00,
+      purpose: "Max's Group Lunch",
+      momId: ca7Mom.id,
+      approverId: 'u2',
+      status: CashAdvanceStatus.RELEASED,
+      releasedBy: 'u3',
+      releaseDate: rDate(4),
+      releaseReference: 'REF-ALICE-MAXS'
+    });
+    addCaHistoryWithTimestamp(ca7Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(7));
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u1', 'Submitted for Approval', rDate(6));
+    sendEmail(
+      'u2',
+      `Cash Advance Request Submitted - CADV-${ca7Id.substring(0,6)}`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Max's Group Lunch`,
+      undefined,
+      { timestamp: rDate(6) }
+    );
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, 'u2', 'Approved', rDate(5));
+    sendEmail(
+      'u1',
+      `Cash Advance Request Approved - CADV-${ca7Id.substring(0,6)}`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      undefined,
+      { timestamp: rDate(5) }
+    );
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(4));
+    sendEmail(
+      'u1',
+      `Cash Advance Released - CADV-${ca7Id.substring(0,6)}`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
+      undefined,
+      { timestamp: rDate(4) }
+    );
+
+    const liq2Id = uuidv4();
+    liquidations.push({
+      id: liq2Id,
+      cashAdvanceId: ca7Id,
+      requestorId: 'u1',
+      totalSpent: 5000.00,
+      varianceAmount: 0.00,
+      varianceType: LiquidationVarianceType.SETTLED,
+      status: LiquidationStatus.SUBMITTED
+    });
+    liquidationLineItems.push({
+      id: uuidv4(),
+      liquidationId: liq2Id,
+      expense_date: ca7Mom.meeting_date,
+      vendor: "Max's Restaurant",
+      category: 'Client Meals',
+      amount: 5000.00,
+      payment_method: 'Cash',
+      business_purpose: 'Lunch meeting with Maxs executive team',
+      receipt_url: '/receipt_placeholder.png'
+    });
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Started', rDate(3));
+    addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u1', 'Liquidation Submitted', rDate(3));
+    addLiqHistoryWithTimestamp(liq2Id, '', LiquidationStatus.DRAFT, 'u1', 'Draft Liquidation started', rDate(3));
+    addLiqHistoryWithTimestamp(liq2Id, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, 'u1', 'Liquidation submitted for review', rDate(3));
+    sendEmail(
+      'u2',
+      `Liquidation Submitted - LIQ-${liq2Id.substring(0,6)}`,
+      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
+      undefined,
+      { timestamp: rDate(3) }
+    );
+
+    // --- Additional seeds for other departments ---
+    const mkMomAndClaim = (reqId: string, appId: string, category: string, amt: number, status: ClaimStatus, daysAgo: number) => {
+      const momId = uuidv4();
+      const mom = {
+        id: momId,
+        requestor_id: reqId,
+        client_name: 'Internal / Partner',
+        contact_person: 'Partner Contact',
+        meeting_date: rDate(daysAgo),
+        minutes_source: MinutesSource.TEMPLATE,
+        meeting_type: 'In-person',
+        purpose: 'Departmental sync',
+        discussion: 'Regular departmental meeting.',
+        action_items: 'None',
+        status: MomStatus.COMPLETED,
+        created_at: rDate(daysAgo)
+      };
+      moms.push(mom);
+      mkClaim({
+        requestorId: reqId,
+        approverId: appId,
+        mom,
+        status,
+        category,
+        amount: amt,
+        createdDaysAgo: daysAgo,
+        approvedDaysAgo: daysAgo > 2 ? daysAgo - 1 : undefined,
+        processedDaysAgo: daysAgo > 3 ? daysAgo - 2 : undefined
+      });
+    };
+
+    const mkCa = (reqId: string, appId: string, amt: number, purpose: string, status: CashAdvanceStatus, days: number) => {
+      const caId = uuidv4();
+      const ca: CashAdvance = {
+        id: caId,
+        requestorId: reqId,
+        amount: amt,
+        purpose,
+        approverId: appId,
+        status,
+      };
+      cashAdvances.push(ca);
+
+      const reqUser = users.find(u => u.id === reqId);
+      const reqName = reqUser?.name || 'Requestor';
+      const appUser = users.find(u => u.id === appId);
+      const appName = appUser?.name || 'Approver';
+
+      const createdDate = rDate(days + 1);
+      const actionDate = rDate(days);
+
+      addCaHistoryWithTimestamp(caId, '', CashAdvanceStatus.DRAFT, reqId, 'Draft created', createdDate);
+
+      if (status !== CashAdvanceStatus.DRAFT) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, reqId, 'Submitted for Approval', createdDate);
+        
+        const subSubject = `Cash Advance Request Submitted - CADV-${caId.substring(0,6)}`;
+        const subBody = `A Cash Advance request for PHP ${amt} has been submitted by ${reqName} for your approval.\n\nPurpose: ${purpose}`;
+        sendEmail(appId, subSubject, subBody, undefined, { timestamp: createdDate });
+      }
+
+      if (status === CashAdvanceStatus.APPROVED || status === CashAdvanceStatus.RELEASED) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, appId, 'Approved', actionDate);
+
+        const appSubject = `Cash Advance Request Approved - CADV-${caId.substring(0,6)}`;
+        const appBody = `Your Cash Advance request for PHP ${amt} has been Approved by ${appName}.`;
+        sendEmail(reqId, appSubject, appBody, undefined, { timestamp: actionDate });
+      } else if (status === CashAdvanceStatus.REJECTED) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.REJECTED, appId, 'Rejected due to policy limit', actionDate);
+
+        const rejSubject = `Cash Advance Request Rejected - CADV-${caId.substring(0,6)}`;
+        const rejBody = `Your Cash Advance request for PHP ${amt} has been Rejected by ${appName}.\n\nComment: Rejected due to policy limit`;
+        sendEmail(reqId, rejSubject, rejBody, undefined, { timestamp: actionDate });
+      }
+
+      if (status === CashAdvanceStatus.RELEASED) {
+        ca.releasedBy = 'u3';
+        ca.releaseDate = actionDate;
+        ca.releaseReference = `REF-${reqId.toUpperCase()}-${caId.substring(0,4).toUpperCase()}`;
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', actionDate);
+
+        const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
+        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+        sendEmail(reqId, relSubject, relBody, undefined, { timestamp: actionDate });
+      }
+    };
+
+    // Standard items
+    mkMomAndClaim('u13', 'u14', 'Marketing Materials', 15000, ClaimStatus.COMPLETED, 15);
+    mkMomAndClaim('u13', 'u14', 'Event Hosting', 25000, ClaimStatus.PENDING_APPROVAL, 2);
+    mkMomAndClaim('u15', 'u16', 'Software Licenses', 8500, ClaimStatus.PROCESSING, 5);
+    mkMomAndClaim('u15', 'u16', 'Cloud Hosting', 12000, ClaimStatus.COMPLETED, 20);
+    mkMomAndClaim('u15', 'u16', 'Team Lunch', 4500, ClaimStatus.REJECTED, 3);
+    mkMomAndClaim('u17', 'u18', 'Office Supplies', 6000, ClaimStatus.READY_FOR_CLAIM, 7);
+    mkMomAndClaim('u17', 'u18', 'Equipment Repair', 9500, ClaimStatus.COMPLETED, 12);
+
+    mkCa('u13', 'u14', 10000, 'Upcoming Expo', CashAdvanceStatus.APPROVED, 3);
+    mkCa('u15', 'u16', 5000, 'Server Migration Overtime Food', CashAdvanceStatus.RELEASED, 4);
+    mkCa('u17', 'u18', 20000, 'Facility Maintenance Deposit', CashAdvanceStatus.SUBMITTED, 1);
+
+    // ==========================================
+    // HISTORICAL BACKFILL FOR THE PAST 12 MONTHS
+    // ==========================================
+    const departments = [
+      {
+        name: 'Sales',
+        requestors: ['u1', 'u5', 'u6', 'u11', 'u12'],
+        approvers: ['u2', 'u7', 'u8', 'u10'],
+        categories: ['Client Meals', 'Travel', 'Accommodation', 'Transportation'],
+        vendors: ['Max Restaurant', 'Grab', 'Makati Diamond Residences', 'Mary Grace Cafe', 'Globe Telecom'],
+        clients: ['SM Prime Holdings', 'PLDT Inc', 'Jollibee Foods Corp', 'Bank of the Philippine Islands', 'Globe Telecom', 'San Miguel Corporation', 'Meralco', 'BDO Unibank']
+      },
+      {
+        name: 'Marketing',
+        requestors: ['u13'],
+        approvers: ['u14'],
+        categories: ['Marketing Materials', 'Event Hosting', 'Advertising', 'Client Meals'],
+        vendors: ['Print Central', 'Hotel Del Rio', 'Facebook Ads', 'Google Ads', 'Starbucks'],
+        clients: ['Creative Agency', 'Partner Promo Group', 'Media Corp']
+      },
+      {
+        name: 'Engineering',
+        requestors: ['u15'],
+        approvers: ['u16'],
+        categories: ['Software Licenses', 'Cloud Hosting', 'Team Lunch', 'Technical Training'],
+        vendors: ['Amazon Web Services', 'Microsoft Azure', 'Atlassian', 'JetBrains', 'GrabFood'],
+        clients: ['Internal Operations', 'Beta Testing Corp', 'DevOps Consultants']
+      },
+      {
+        name: 'Operations',
+        requestors: ['u17'],
+        approvers: ['u18'],
+        categories: ['Office Supplies', 'Equipment Repair', 'Courier Services', 'Utility Bills'],
+        vendors: ['National Bookstore', 'Lalamove', 'Meralco Office', 'PLDT Enterprise', 'Tech Support PH'],
+        clients: ['Headquarters', 'Cebu Branch Office', 'Manila Warehouse']
+      }
+    ];
+
+    const getDaysAgo = (year: number, month: number, day: number) => {
+      const target = new Date(year, month - 1, day, 12, 0, 0);
+      const now = new Date();
+      const nowNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+      const diffMs = nowNoon.getTime() - target.getTime();
+      return Math.round(diffMs / (1000 * 60 * 60 * 24));
+    };
+
+    const mkHistoricalCa = (
+      reqId: string,
+      appId: string,
+      amt: number,
+      purpose: string,
+      status: CashAdvanceStatus,
+      daysAgoCreated: number,
+      isCompleted: boolean,
+      category: string,
+      vendor: string,
+      client: string
+    ) => {
+      const caId = uuidv4();
+      const ca: CashAdvance = {
+        id: caId,
+        requestorId: reqId,
+        amount: amt,
+        purpose,
+        approverId: appId,
+        status,
+      };
+      cashAdvances.push(ca);
+
+      const reqUser = users.find(u => u.id === reqId);
+      const reqName = reqUser?.name || 'Requestor';
+      const appUser = users.find(u => u.id === appId);
+      const appName = appUser?.name || 'Approver';
+
+      const createdDate = rDate(daysAgoCreated);
+      
+      // Draft
+      addCaHistoryWithTimestamp(caId, '', CashAdvanceStatus.DRAFT, reqId, 'Draft created', createdDate);
+
+      // Submitted
+      addCaHistoryWithTimestamp(caId, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, reqId, 'Submitted for Approval', createdDate);
+      const subSubject = `Cash Advance Request Submitted - CADV-${caId.substring(0,6)}`;
+      const subBody = `A Cash Advance request for PHP ${amt} has been submitted by ${reqName} for your approval.\n\nPurpose: ${purpose}`;
+      sendEmail(appId, subSubject, subBody, undefined, { timestamp: createdDate });
+
+      const approvedDaysAgo = daysAgoCreated - (1 + Math.floor(Math.random() * 2));
+      const approvedDate = rDate(approvedDaysAgo);
+
+      if (status === CashAdvanceStatus.REJECTED) {
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.REJECTED, appId, 'Rejected due to budget constraints', approvedDate);
+        const rejSubject = `Cash Advance Request Rejected - CADV-${caId.substring(0,6)}`;
+        const rejBody = `Your Cash Advance request for PHP ${amt} has been Rejected by ${appName}.\n\nComment: Rejected due to budget constraints`;
+        sendEmail(reqId, rejSubject, rejBody, undefined, { timestamp: approvedDate });
+        return;
+      }
+
+      // Approved
+      addCaHistoryWithTimestamp(caId, CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED, appId, 'Approved', approvedDate);
+      const appSubject = `Cash Advance Request Approved - CADV-${caId.substring(0,6)}`;
+      const appBody = `Your Cash Advance request for PHP ${amt} has been Approved by ${appName}.`;
+      sendEmail(reqId, appSubject, appBody, undefined, { timestamp: approvedDate });
+
+      // Released
+      const releasedDaysAgo = approvedDaysAgo - (1 + Math.floor(Math.random() * 2));
+      const releasedDate = rDate(releasedDaysAgo);
+      
+      ca.releasedBy = 'u3';
+      ca.releaseDate = releasedDate;
+      ca.releaseReference = `REF-${reqId.toUpperCase()}-${caId.substring(0,4).toUpperCase()}`;
+      addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', releasedDate);
+
+      const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
+      const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+      sendEmail(reqId, relSubject, relBody, undefined, { timestamp: releasedDate });
+
+      // Liquidation
+      if (status === CashAdvanceStatus.LIQUIDATED) {
+        const liqStartedDaysAgo = releasedDaysAgo - (1 + Math.floor(Math.random() * 2));
+        const liqStartedDate = rDate(liqStartedDaysAgo);
+
+        const liqSubmittedDaysAgo = liqStartedDaysAgo - (1 + Math.floor(Math.random() * 2));
+        const liqSubmittedDate = rDate(liqSubmittedDaysAgo);
+
+        const liqClosedDaysAgo = liqSubmittedDaysAgo - (1 + Math.floor(Math.random() * 2));
+        const liqClosedDate = rDate(liqClosedDaysAgo);
+
+        const liqId = uuidv4();
+        const totalSpent = amt;
+        
+        liquidations.push({
+          id: liqId,
+          cashAdvanceId: caId,
+          requestorId: reqId,
+          totalSpent,
+          varianceAmount: 0.00,
+          varianceType: LiquidationVarianceType.SETTLED,
+          status: LiquidationStatus.CLOSED
+        });
+
+        liquidationLineItems.push({
+          id: uuidv4(),
+          liquidationId: liqId,
+          expense_date: liqStartedDate.split('T')[0],
+          vendor,
+          category,
+          amount: totalSpent,
+          payment_method: 'Cash',
+          business_purpose: `Liquidation of CADV-${caId.substring(0, 6)}: ${purpose}`,
+          receipt_url: '/receipt_placeholder.png'
+        });
+
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, reqId, 'Liquidation Started', liqStartedDate);
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, reqId, 'Liquidation Submitted', liqSubmittedDate);
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, appId, 'Liquidation Reviewed', liqClosedDate);
+        addCaHistoryWithTimestamp(caId, CashAdvanceStatus.RELEASED, CashAdvanceStatus.LIQUIDATED, 'u3', 'Closed (Refund Collected)', liqClosedDate);
+
+        addLiqHistoryWithTimestamp(liqId, '', LiquidationStatus.DRAFT, reqId, 'Draft Liquidation started', liqStartedDate);
+        addLiqHistoryWithTimestamp(liqId, LiquidationStatus.DRAFT, LiquidationStatus.SUBMITTED, reqId, 'Liquidation submitted for review', liqSubmittedDate);
+        
+        const liqSubSubject = `Liquidation Submitted - LIQ-${liqId.substring(0,6)}`;
+        const liqSubBody = `A Liquidation report has been submitted by ${reqName} for Cash Advance CADV-${caId.substring(0,6)}.\n\nTotal Spent: PHP ${totalSpent}\nVariance: PHP 0 (SETTLED)`;
+        sendEmail(appId, liqSubSubject, liqSubBody, undefined, { timestamp: liqSubmittedDate });
+
+        addLiqHistoryWithTimestamp(liqId, LiquidationStatus.SUBMITTED, LiquidationStatus.CLOSED, appId, 'Approved and Closed.', liqClosedDate);
+        
+        const liqCloSubject = `Liquidation Closed (Refund Collected) - LIQ-${liqId.substring(0,6)}`;
+        const liqCloBody = `Your Liquidation has been marked as Closed. Custodian Carol Custodian has verified collection of your refund.`;
+        sendEmail(reqId, liqCloSubject, liqCloBody, undefined, { timestamp: liqClosedDate });
+      }
+    };
+
+    const now = new Date();
+    const deptStates = departments.map(d => ({
+      ...d,
+      reqIdx: 0,
+      appIdx: 0,
+      totalItems: 0
+    }));
+
+    for (let monthOffset = 12; monthOffset >= 1; monthOffset--) {
+      const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - monthOffset, 15);
+      const year = targetMonthDate.getFullYear();
+      const month = targetMonthDate.getMonth() + 1;
+
+      for (const ds of deptStates) {
+        const count = 8 + Math.floor(Math.random() * 4); // 8, 9, 10, or 11
+        for (let i = 0; i < count; i++) {
+          const createdDay = 1 + Math.floor(Math.random() * 28);
+          const daysAgoCreated = getDaysAgo(year, month, createdDay);
+
+          if (daysAgoCreated <= 20) {
+            continue;
+          }
+
+          ds.totalItems++;
+
+          // Deterministically assign 1 out of 7 items to Approver (approx 14.3%)
+          const isApproverSubmitter = (ds.totalItems % 7 === 0);
+
+          // Deterministically make every 4th item a Cash Advance, otherwise Claim (75% Claim, 25% CADV)
+          const isClaim = (ds.totalItems % 4 !== 0);
+          
+          const isCompleted = Math.random() < 0.85;
+
+          let reqId: string;
+          let appId: string;
+
+          if (isApproverSubmitter) {
+            reqId = ds.approvers[ds.appIdx % ds.approvers.length];
+            ds.appIdx++;
+
+            const reqUser = users.find(u => u.id === reqId);
+            appId = reqUser?.reports_to || 'u19';
+          } else {
+            reqId = ds.requestors[ds.reqIdx % ds.requestors.length];
+            ds.reqIdx++;
+
+            const reqUser = users.find(u => u.id === reqId);
+            appId = reqUser?.reports_to || ds.approvers[0];
+          }
+
+          const category = ds.categories[Math.floor(Math.random() * ds.categories.length)];
+          const vendor = ds.vendors[Math.floor(Math.random() * ds.vendors.length)];
+          const client = ds.clients[Math.floor(Math.random() * ds.clients.length)];
+
+          let amount = 1000 + Math.floor(Math.random() * 15000);
+          if (category.includes('Hosting') || category.includes('Materials') || category.includes('Repair')) {
+            amount += 10000 + Math.floor(Math.random() * 20000);
+          }
+
+          if (isClaim) {
+            const momDaysAgo = daysAgoCreated + 1;
+            const mom = mkMom(reqId, client, MomStatus.COMPLETED, momDaysAgo);
+
+            const approvedDaysAgo = daysAgoCreated - (1 + Math.floor(Math.random() * 2));
+            const processedDaysAgo = approvedDaysAgo - (1 + Math.floor(Math.random() * 2));
+            const status = isCompleted ? ClaimStatus.COMPLETED : ClaimStatus.REJECTED;
+
+            mkClaim({
+              requestorId: reqId,
+              approverId: appId,
+              mom,
+              status,
+              category,
+              amount,
+              createdDaysAgo: daysAgoCreated,
+              approvedDaysAgo: isCompleted || status === ClaimStatus.REJECTED ? approvedDaysAgo : undefined,
+              processedDaysAgo: isCompleted ? processedDaysAgo : undefined,
+              releaseCode: isCompleted ? Math.random().toString(36).substring(2, 8).toUpperCase() : undefined,
+              paymentMethod: isCompleted ? (Math.random() < 0.5 ? 'GCash' : 'Bank Transfer') : undefined,
+              approvalComment: status === ClaimStatus.REJECTED ? 'Rejected: Budget exceeds departmental quota for this category.' : undefined
+            });
+          } else {
+            const status = isCompleted ? CashAdvanceStatus.LIQUIDATED : CashAdvanceStatus.REJECTED;
+            const purpose = `${category} for ${client}`;
+            mkHistoricalCa(reqId, appId, amount, purpose, status, daysAgoCreated, isCompleted, category, vendor, client);
+          }
+        }
+      }
+    }
 
     claimCounter = seedCounter;
 

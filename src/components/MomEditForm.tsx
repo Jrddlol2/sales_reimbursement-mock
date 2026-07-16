@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { Mom } from '../types';
-import { UploadCloud, X } from 'lucide-react';
+import { CloudArrowUp, X } from '@phosphor-icons/react';
 import { useToast } from './Toast';
 
 interface MomEditFormProps {
@@ -118,7 +118,7 @@ export const MomEditForm: React.FC<MomEditFormProps> = ({ mom, onSaved, onCancel
         <div className="flex items-center gap-2 flex-wrap">
           <input type="file" id="mom_replace_file" accept=".pdf,.doc,.docx" onChange={handleFileSelect} className="hidden" />
           <label htmlFor="mom_replace_file" className="cursor-pointer inline-flex items-center gap-1 border border-gray-300 rounded px-2 py-1 text-[10px] font-semibold text-gray-600 hover:border-brand hover:text-brand">
-            <UploadCloud className="w-3.5 h-3.5" /> Choose File
+            <CloudArrowUp className="w-3.5 h-3.5" /> Choose File
           </label>
           {fileName && (
             <span className="text-[10px] text-gray-600 truncate max-w-[160px] flex items-center gap-1 bg-gray-50 border border-gray-100 rounded px-2 py-1">
@@ -131,7 +131,7 @@ export const MomEditForm: React.FC<MomEditFormProps> = ({ mom, onSaved, onCancel
         </div>
       </div>
       <div className="flex gap-2 pt-2">
-        <button type="submit" disabled={saving} className="flex-1 bg-brand hover:bg-brand-hover text-white font-semibold py-1.5 rounded text-xs disabled:opacity-50 transition-colors">
+        <button type="submit" disabled={saving} className="corp-btn-primary">
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
         <button type="button" onClick={onCancel} className="px-3 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-xs font-semibold">

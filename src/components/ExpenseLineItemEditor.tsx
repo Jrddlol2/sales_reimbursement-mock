@@ -1,5 +1,6 @@
-import React from 'react';
-import { UploadCloud, X, AlertTriangle, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { CloudArrowUp, X, Warning, Trash, Sparkle } from '@phosphor-icons/react';
+import Tesseract from 'tesseract.js';
 
 export interface ExpenseItemState {
   id: string;
@@ -7,6 +8,7 @@ export interface ExpenseItemState {
   amount: string;
   receiptName: string;
   isDragOver?: boolean;
+  or_number?: string;
   // liquidation-specific fields
   expense_date?: string;
   vendor?: string;
@@ -26,6 +28,50 @@ interface ExpenseLineItemEditorProps {
   onChange: (field: keyof ExpenseItemState, value: any) => void;
 }
 
+const extractORNumberFromText = (text: string): string | null => {
+  const lines = text.split('\n');
+  
+  // Keywords to look for
+  const patterns = [
+    /(?:o\.?r\.?\s*(?:no\.?|#)?|official\s+receipt\s*(?:no\.?|#)?|sales\s+invoice\s*(?:no\.?|#)?|s\.?i\.?\s*(?:no\.?|#)?|invoice\s*(?:no\.?|#)?|receipt\s*(?:no\.?|#)?|inv\s*(?:no\.?|#)?)\s*[:#\-\s]*([A-Z0-9\-]{3,15})/i,
+    /or\s*[:#\-\s]*([A-Z0-9\-]{3,15})/i,
+    /inv(?:oice)?\s*[:#\-\s]*([A-Z0-9\-]{3,15})/i
+  ];
+
+  for (const line of lines) {
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match && match[1]) {
+        const clean = match[1].trim();
+        // Skip short matches or ones without digits
+        if (clean.length >= 3 && /[0-9]/.test(clean)) {
+          return clean;
+        }
+      }
+    }
+  }
+
+  // Fallbacks
+  const generalPatterns = [
+    /(?:OR|INV|SI)\s*[-#\s]*([0-9]{3,10})/i,
+    /([0-9]{5,10})/
+  ];
+
+  for (const line of lines) {
+    for (const pattern of generalPatterns) {
+      const match = line.match(pattern);
+      if (match && match[1]) {
+        const clean = match[1].trim();
+        if (clean.length >= 3) {
+          return clean;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
 export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   item,
   index,
@@ -36,18 +82,78 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   onRemove,
   onChange
 }) => {
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrHint, setOcrHint] = useState<string | null>(null);
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     onChange('isDragOver', false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onChange('receiptName', e.dataTransfer.files[0].name);
+      const file = e.dataTransfer.files[0];
+      onChange('receiptName', file.name);
+      setLocalFile(file);
+      setOcrHint(null);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onChange('receiptName', e.target.files[0].name);
+      const file = e.target.files[0];
+      onChange('receiptName', file.name);
+      setLocalFile(file);
+      setOcrHint(null);
     }
+  };
+
+  const runOCR = async () => {
+    if (!localFile) return;
+    setIsOcrRunning(true);
+    setOcrProgress(0);
+    setOcrHint(null);
+
+    try {
+      if (!localFile.type.startsWith('image/')) {
+        setOcrHint('OCR only supports image files (PNG, JPG, etc.).');
+        setIsOcrRunning(false);
+        return;
+      }
+
+      const result = await Tesseract.recognize(
+        localFile,
+        'eng',
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          }
+        }
+      );
+
+      const text = result.data.text;
+      console.log('OCR Raw Text:', text);
+      const detected = extractORNumberFromText(text);
+
+      if (detected) {
+        onChange('or_number', detected);
+        setOcrHint('✨ Auto-detected (please verify)');
+      } else {
+        setOcrHint('Could not find OR Number. Enter manually.');
+      }
+    } catch (err) {
+      console.error('OCR Error:', err);
+      setOcrHint('Failed to read image. Enter manually.');
+    } finally {
+      setIsOcrRunning(false);
+    }
+  };
+
+  const handleClearReceipt = () => {
+    onChange('receiptName', '');
+    setLocalFile(null);
+    setOcrHint(null);
   };
 
   return (
@@ -59,7 +165,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
           className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 rounded bg-white shadow-sm border border-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
           title="Remove expense"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash className="w-3.5 h-3.5" />
         </button>
       )}
 
@@ -127,13 +233,13 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
           </div>
           {item.amount && !isNaN(parseFloat(item.amount)) && parseFloat(item.amount) > 15000 && (
             <div className="mt-1 flex items-start gap-1 text-[10px] text-amber-700 font-semibold">
-              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
+              <Warning className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
               <span>Amounts over ₱15,000 require supplementary receipts and justification.</span>
             </div>
           )}
           {isDuplicate && (
             <div className="mt-1 flex items-start gap-1 text-[10px] text-amber-700 font-semibold">
-              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
+              <Warning className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
               <span>A previous claim shares the exact category and amount. Verify this isn't a duplicate.</span>
             </div>
           )}
@@ -171,8 +277,44 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
         </div>
       )}
 
-      {/* Attachments & Receipts */}
+      {/* Attachments, Receipts & OR Number */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label className="block text-[10px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
+            OR Number (Optional)
+          </label>
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="text"
+              placeholder="e.g. OR-12345, INV-987"
+              value={item.or_number || ''}
+              onChange={(e) => onChange('or_number', e.target.value)}
+              className="block w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none bg-white flex-1"
+            />
+            {localFile && localFile.type.startsWith('image/') && (
+              <button
+                type="button"
+                onClick={runOCR}
+                disabled={isOcrRunning}
+                className="shrink-0 bg-brand hover:bg-brand-hover disabled:bg-slate-300 text-white px-2.5 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-colors font-bold uppercase tracking-wider font-display"
+                title="Extract OR Number from uploaded receipt using OCR"
+              >
+                {isOcrRunning ? (
+                  <span className="inline-block animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <Sparkle className="w-3.5 h-3.5 text-white" />
+                )}
+                {isOcrRunning ? `${ocrProgress}%` : 'Scan'}
+              </button>
+            )}
+          </div>
+          {ocrHint && (
+            <p className={`text-[10px] mt-1 font-semibold ${ocrHint.includes('✨') ? 'text-green-600' : 'text-slate-500'}`}>
+              {ocrHint}
+            </p>
+          )}
+        </div>
+
         {mode === 'liquidation' ? (
           <div>
             <label className="block text-[10px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">Attachment Type *</label>
@@ -182,7 +324,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
               onChange={(e) => {
                 onChange('attachment_type', e.target.value);
                 if (e.target.value === 'No Official Receipt') {
-                  onChange('receiptName', '');
+                  handleClearReceipt();
                 }
               }}
               className="block w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none bg-white"
@@ -200,7 +342,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
 
         {/* File Drag-and-Drop & Browse */}
         {!(mode === 'liquidation' && item.attachment_type === 'No Official Receipt') && (
-          <div className="md:col-span-2 space-y-1">
+          <div className={`${mode === 'liquidation' ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
             <label className="block text-[10px] font-extrabold text-gray-700 uppercase tracking-wider mb-1">
               Upload {mode === 'liquidation' ? (item.attachment_type || 'Official Receipt') : 'Official Receipt'} *
             </label>
@@ -223,7 +365,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
                 className="hidden"
               />
               <label htmlFor={`receipt_file_field_${item.id}`} className="cursor-pointer flex items-center justify-center gap-1.5 text-gray-500 font-semibold">
-                <UploadCloud className="w-4 h-4 text-gray-400" />
+                <CloudArrowUp className="w-4 h-4 text-gray-400" />
                 <span>Drag & Drop or click to upload file</span>
               </label>
             </div>
@@ -232,8 +374,8 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
                 <span className="truncate max-w-[250px]">{item.receiptName}</span>
                 <button
                   type="button"
-                  onClick={() => onChange('receiptName', '')}
-                  className="text-red-500 hover:text-red-700"
+                  onClick={handleClearReceipt}
+                  className="text-red-500 hover:text-red-700 font-bold"
                 >
                   <X className="w-3 h-3" />
                 </button>

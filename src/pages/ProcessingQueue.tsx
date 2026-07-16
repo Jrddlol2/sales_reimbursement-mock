@@ -5,10 +5,10 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { Claim, ClaimStatus, User } from '../types';
 import { 
-  ChevronDown, ChevronRight, RefreshCw,
-  Key, Check, DollarSign, ExternalLink, Calendar, User as UserIcon,
-  Tag, Info, Landmark, HelpCircle, FileText, Inbox, FolderOpen, AlertCircle, Activity, Clock
-} from 'lucide-react';
+  CaretDown, CaretRight, ArrowsClockwise,
+  Key, Check, CurrencyDollar, ArrowSquareOut, Calendar, User as UserIcon,
+  Tag, Info, Bank, Question, FileText, Tray, FolderOpen, WarningCircle, Pulse, Clock
+} from '@phosphor-icons/react';
 import { KPITile } from '../components/KPITile';
 import { formatPHP, getClaimNumber, getApproverInfo } from '../utils';
 import { ClaimMomSummary } from '../components/ClaimMomSummary';
@@ -222,34 +222,28 @@ export const ProcessingQueue: React.FC = () => {
       </div>
 
       {/* Metrics Cards */}
-      <div className="flex flex-row gap-4 mb-6">
-        <div className="flex-1">
-          <KPITile
-            label="Missing Receipts"
-            value={missingReceiptsCount}
-            description={filterMissingReceipts ? "Claims without receipts. (Filtered)" : "Claims without receipts. (Click to filter)"}
-            icon={AlertCircle}
-            onClick={() => setFilterMissingReceipts(!filterMissingReceipts)}
-            isActive={filterMissingReceipts}
-          />
-        </div>
-        <div className="flex-1">
-          <KPITile
-            label="Total Pending Disbursement"
-            value={<div className="flex flex-col"><span className="text-lg font-extrabold text-slate-900 font-display">{formatPHP(totalAmountProcessing)} <span className="text-[10px] font-normal text-slate-500 uppercase tracking-wider font-sans">Processing</span></span></div>}
-            subValue={<span className="text-sm font-extrabold text-brand font-display">{formatPHP(totalAmountReady)} <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-sans">Ready</span></span>}
-            description="Value of claims awaiting disbursement."
-            icon={Activity}
-          />
-        </div>
-        <div className="flex-1">
-          <KPITile
-            label="Oldest In Processing"
-            value={<span>{oldestProcessingDays} <span className="text-xs font-semibold text-slate-500 font-sans">d</span></span>}
-            description="Longest waiting claim in Processing status."
-            icon={Clock}
-          />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <KPITile
+          label="Missing Receipts"
+          value={missingReceiptsCount}
+          description={filterMissingReceipts ? "Claims without receipts. (Filtered)" : "Claims without receipts. (Click to filter)"}
+          icon={WarningCircle}
+          onClick={() => setFilterMissingReceipts(!filterMissingReceipts)}
+          isActive={filterMissingReceipts}
+        />
+        <KPITile
+          label="Total Pending Disbursement"
+          value={<div className="flex flex-col"><span className="text-lg font-extrabold text-slate-900 font-display">{formatPHP(totalAmountProcessing)} <span className="text-[10px] font-normal text-slate-500 uppercase tracking-wider font-sans">Processing</span></span></div>}
+          subValue={<span className="text-sm font-extrabold text-brand font-display">{formatPHP(totalAmountReady)} <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-sans">Ready</span></span>}
+          description="Value of claims awaiting disbursement."
+          icon={Pulse}
+        />
+        <KPITile
+          label="Oldest In Processing"
+          value={<span>{oldestProcessingDays} <span className="text-xs font-semibold text-slate-500 font-sans">d</span></span>}
+          description="Longest waiting claim in Processing status."
+          icon={Clock}
+        />
       </div>
 
       {/* Navigation tabs */}
@@ -283,9 +277,9 @@ export const ProcessingQueue: React.FC = () => {
       {tab === 'cadv' ? (
         <div className="space-y-6">
           {/* Approved Cash Advances awaiting release */}
-          <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+          <div className="corp-card flex flex-col overflow-hidden">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Cash Advances Awaiting Funds Release</h3>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Cash Advances Awaiting Funds Release</h3>
             </div>
             <div className="divide-y divide-slate-100">
               {approvedAdvances.length === 0 ? (
@@ -322,7 +316,7 @@ export const ProcessingQueue: React.FC = () => {
                         />
                         <button
                           onClick={() => handleReleaseAdvance(ca.id)}
-                          className="bg-brand hover:bg-brand-hover text-white px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider w-full sm:w-auto text-center"
+                          className="corp-btn-primary px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider w-full sm:w-auto text-center"
                         >
                           Release Cash Funds
                         </button>
@@ -335,9 +329,9 @@ export const ProcessingQueue: React.FC = () => {
           </div>
 
           {/* Reviewed Liquidations awaiting refund collection */}
-          <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+          <div className="corp-card flex flex-col overflow-hidden">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Liquidation Refunds to Collect</h3>
+              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Liquidation Refunds to Collect</h3>
             </div>
             <div className="divide-y divide-slate-100">
               {reviewedLiqs.length === 0 ? (
@@ -361,7 +355,7 @@ export const ProcessingQueue: React.FC = () => {
                             {ca ? (
                               <Link 
                                 to={`/cash-advances/${ca.id}`}
-                                className="font-bold text-indigo-700 hover:underline"
+                                className="font-bold text-brand hover:underline"
                               >
                                 CADV-{ca.id.substring(0,6).toUpperCase()}
                               </Link>
@@ -400,185 +394,327 @@ export const ProcessingQueue: React.FC = () => {
         </div>
       ) : tab === 'queue' ? (
         /* Queue View */
-        <div className="bg-white border border-slate-200 rounded shadow-sm overflow-hidden">
+        <div className="corp-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim / Requestor</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
-                  <th className="px-4 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Aging</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {pendingClaims.length === 0 ? (
+            {/* Desktop Table View */}
+            <div className="hidden sm:block">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                          <Inbox className="w-5 h-5" />
-                        </div>
-                        <p className="text-sm font-bold text-gray-700">All Clear!</p>
-                        <p className="text-xs text-gray-400 max-w-sm mx-auto">There are no approved reimbursement claims currently awaiting disbursement or processing.</p>
-                      </div>
-                    </td>
+                    <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim / Requestor</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Aging</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Actions</th>
                   </tr>
-                ) : (
-                  pendingClaims.map(claim => {
-                    const isExpanded = expandedId === claim.id;
-                    const agingDays = getAgingDays(claim);
-                    const aging = getAgingBadge(agingDays);
-                    const claimNumber = getClaimNumber(claim);
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {pendingClaims.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                            <Tray className="w-5 h-5" />
+                          </div>
+                          <p className="text-sm font-bold text-gray-700">All Clear!</p>
+                          <p className="text-xs text-gray-400 max-w-sm mx-auto">There are no approved reimbursement claims currently awaiting disbursement or processing.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pendingClaims.map(claim => {
+                      const isExpanded = expandedId === claim.id;
+                      const agingDays = getAgingDays(claim);
+                      const aging = getAgingBadge(agingDays);
+                      const claimNumber = getClaimNumber(claim);
 
-                    return (
-                      <React.Fragment key={claim.id}>
-                        {/* Table row */}
-                        <tr 
-                          onClick={() => toggleExpand(claim)}
-                          className="hover:bg-blue-50/20 transition-colors cursor-pointer"
-                        >
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-                              <div>
-                                <span className="font-mono text-xs font-bold text-gray-800 block">{claimNumber}</span>
-                                <span className="text-sm font-bold text-gray-900 block">{claim.requestor?.name}</span>
-                                <span className="text-[10px] text-gray-500 block">
-                                  {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
-                            <div>{claim.expense_category || 'Meals'}</div>
-                            {claim.sourceLiquidationId && (
-                              <div className="mt-1">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                  Auto-generated from Cash Advance Shortfall
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-right font-bold text-gray-900 text-sm">
-                            {formatPHP(claim.total_amount)}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.color}`}>
-                              {aging.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-bold">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); toggleExpand(claim); }}
-                              className="text-brand hover:text-brand-hover"
-                            >
-                              {isExpanded ? 'Close' : 'Review & Disburse'}
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* Expandable row */}
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={5} className="bg-gray-50 border-t border-b border-gray-100 px-8 py-6">
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
-                                
-                                {/* Column 1: Details and Audit */}
-                                <div className="space-y-4">
-                                  {/* MOM Details */}
-                                  <div className="bg-white border border-gray-200 rounded p-4">
-                                    <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2">Attached Minutes of Meeting</span>
-                                    <ClaimMomSummary mom={claim.mom} compact />
-                                  </div>
-
-                                  {/* Approval Information */}
-                                  <div className="bg-white border border-gray-200 rounded p-4">
-                                    <ClaimApprovalInfo claim={claim} users={users} compact />
-                                  </div>
-
-                                  {/* Activity Timeline */}
-                                  <div className="bg-white border border-gray-200 rounded p-4">
-                                    <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2">Activity Timeline</span>
-                                    <ClaimActivityTimeline history={claim.history} />
-                                  </div>
-
-                                  {/* Line items / receipts */}
-                                  <div className="bg-white border border-gray-200 rounded overflow-hidden">
-                                    <ClaimLineItems expenses={claim.expenses} totalAmount={claim.total_amount} fallbackReceiptUrl={claim.receipt_url} />
-                                  </div>
-                                </div>
-
-                                {/* Column 2: Disbursement Input */}
-                                <div className="bg-white border border-brand rounded p-5 space-y-4">
-                                  <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-blue-100 pb-2">
-                                    Generate Claim Code
+                      return (
+                        <React.Fragment key={claim.id}>
+                          {/* Table row */}
+                          <tr 
+                            onClick={() => toggleExpand(claim)}
+                            className={`transition-colors cursor-pointer ${isExpanded ? 'bg-brand/10' : 'hover:bg-brand/5'}`}
+                          >
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? <CaretDown className="w-4 h-4 text-gray-400 shrink-0" /> : <CaretRight className="w-4 h-4 text-gray-400 shrink-0" />}
+                                <div>
+                                  <span className="font-mono text-xs font-bold text-gray-800 block">{claimNumber}</span>
+                                  <span className="text-sm font-bold text-gray-900 block">{claim.requestor?.name}</span>
+                                  <span className="text-[10px] text-gray-500 block">
+                                    {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
                                   </span>
-
-                                  {/* Payment method select */}
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Payment Channel</label>
-                                    <select
-                                      value={paymentMethod}
-                                      onChange={e => setPaymentMethod(e.target.value)}
-                                      className="block w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-bold text-gray-800"
-                                    >
-                                      <option value="Cash">Cash Release</option>
-                                      <option value="GCash">GCash E-Wallet</option>
-                                      <option value="Bank Transfer">Bank Transfer</option>
-                                    </select>
-                                  </div>
-
-                                  {/* Claim Code generator block */}
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Disbursement Claim Code</label>
-                                    <div className="flex gap-2">
-                                      <input 
-                                        type="text" 
-                                        value={customClaimCode}
-                                        onChange={e => setCustomClaimCode(e.target.value.toUpperCase())}
-                                        placeholder="e.g. SL8X9B"
-                                        className="flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-mono font-bold uppercase text-gray-800 tracking-widest"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleGenerateCode(claim.id)}
-                                        className="px-3 py-1.5 border border-gray-300 hover:bg-gray-50 text-xs font-bold text-gray-700 rounded flex items-center gap-1 shrink-0"
-                                      >
-                                        <RefreshCw className="w-3.5 h-3.5" /> Auto Code
-                                      </button>
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 mt-1 leading-normal">
-                                      This unique code is required by the employee to claim their cash funds.
-                                    </p>
-                                  </div>
-
-                                  {/* Action mark */}
-                                  <div className="pt-4 border-t border-gray-100">
-                                    <button
-                                      type="button"
-                                      disabled={isProcessingAction}
-                                      onClick={() => handleMarkReadyForClaim(claim.id)}
-                                      className="w-full bg-brand hover:bg-brand-hover text-white text-xs font-bold py-2 px-4 rounded shadow-sm flex items-center justify-center gap-1 disabled:opacity-50"
-                                    >
-                                      <Check className="w-4 h-4" /> 
-                                      {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready for Claim'}
-                                    </button>
-                                  </div>
-
                                 </div>
-
                               </div>
                             </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                              <div>{claim.expense_category || 'Meals'}</div>
+                              {claim.sourceLiquidationId && (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                    Auto-generated from Cash Advance Shortfall
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-right font-bold text-gray-900 text-sm">
+                              {formatPHP(claim.total_amount)}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-center">
+                              <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.color}`}>
+                                {aging.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-bold">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(claim); }}
+                                className="text-brand hover:text-brand-hover"
+                              >
+                                {isExpanded ? 'Close' : 'Review & Disburse'}
+                              </button>
+                            </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+
+                          {/* Expandable row */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={5} className="bg-gray-50 border-t border-b border-gray-100 px-8 py-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+                                  
+                                  {/* Column 1: Details and Audit */}
+                                  <div className="space-y-4">
+                                    {/* MOM Details */}
+                                    <div className="bg-white border border-gray-200 rounded p-4">
+                                      <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2">Attached Minutes of Meeting</span>
+                                      <ClaimMomSummary mom={claim.mom} compact />
+                                    </div>
+
+                                    {/* Approval Information */}
+                                    <div className="bg-white border border-gray-200 rounded p-4">
+                                      <ClaimApprovalInfo claim={claim} users={users} compact />
+                                    </div>
+
+                                    {/* Pulse Timeline */}
+                                    <div className="bg-white border border-gray-200 rounded p-4">
+                                      <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2">Pulse Timeline</span>
+                                      <ClaimActivityTimeline history={claim.history} />
+                                    </div>
+
+                                    {/* Line items / receipts */}
+                                    <div className="bg-white border border-gray-200 rounded overflow-hidden">
+                                      <ClaimLineItems expenses={claim.expenses} totalAmount={claim.total_amount} fallbackReceiptUrl={claim.receipt_url} />
+                                    </div>
+                                  </div>
+
+                                  {/* Column 2: Disbursement Input */}
+                                  <div className="bg-white border border-brand rounded p-5 space-y-4">
+                                    <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-blue-100 pb-2">
+                                      Generate Claim Code
+                                    </span>
+
+                                    {/* Payment method select */}
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Payment Channel</label>
+                                      <select
+                                        value={paymentMethod}
+                                        onChange={e => setPaymentMethod(e.target.value)}
+                                        className="block w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-bold text-gray-800"
+                                      >
+                                        <option value="Cash">Cash Release</option>
+                                        <option value="GCash">GCash E-Wallet</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                      </select>
+                                    </div>
+
+                                    {/* Claim Code generator block */}
+                                    <div>
+                                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Disbursement Claim Code</label>
+                                      <div className="flex gap-2">
+                                        <input 
+                                          type="text" 
+                                          value={customClaimCode}
+                                          onChange={e => setCustomClaimCode(e.target.value.toUpperCase())}
+                                          placeholder="e.g. SL8X9B"
+                                          className="flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-mono font-bold uppercase text-gray-800 tracking-widest text-slate-800 bg-white"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleGenerateCode(claim.id)}
+                                          className="px-3 py-1.5 border border-gray-300 hover:bg-brand/5 text-xs font-bold text-gray-700 rounded flex items-center gap-1 shrink-0"
+                                        >
+                                          <ArrowsClockwise className="w-3.5 h-3.5" /> Auto Code
+                                        </button>
+                                      </div>
+                                      <p className="text-[10px] text-gray-400 mt-1 leading-normal">
+                                        This unique code is required by the employee to claim their cash funds.
+                                      </p>
+                                    </div>
+
+                                    {/* Action mark */}
+                                    <div className="pt-4 border-t border-gray-100">
+                                      <button
+                                        type="button"
+                                        disabled={isProcessingAction}
+                                        onClick={() => handleMarkReadyForClaim(claim.id)}
+                                        className="corp-btn-primary"
+                                      >
+                                        <Check className="w-4 h-4" /> 
+                                        {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready for Claim'}
+                                      </button>
+                                    </div>
+
+                                  </div>
+
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Card View */}
+            <div className="sm:hidden flex flex-col divide-y divide-slate-100">
+              {pendingClaims.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                      <Tray className="w-5 h-5" />
+                    </div>
+                    <p className="text-sm font-bold text-gray-700">All Clear!</p>
+                    <p className="text-xs text-gray-400 max-w-sm mx-auto">There are no approved reimbursement claims currently awaiting disbursement or processing.</p>
+                  </div>
+                </div>
+              ) : (
+                pendingClaims.map(claim => {
+                  const isExpanded = expandedId === claim.id;
+                  const agingDays = getAgingDays(claim);
+                  const aging = getAgingBadge(agingDays);
+                  const claimNumber = getClaimNumber(claim);
+
+                  return (
+                    <div key={claim.id} className="flex flex-col">
+                      <div 
+                        onClick={() => toggleExpand(claim)}
+                        className={`p-4 hover:bg-slate-50 cursor-pointer flex flex-col gap-2 transition-colors ${isExpanded ? 'bg-brand/5 font-semibold' : ''}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-brand text-xs">{claimNumber}</span>
+                          <span className={`px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full border ${aging.color}`}>
+                            {aging.label}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                          <div>
+                            <span className="text-slate-400 font-medium mr-1">Claimant:</span>
+                            <span className="font-bold text-slate-900">{claim.requestor?.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                            <span className="font-extrabold text-slate-900">{formatPHP(claim.total_amount)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-slate-400 font-medium mr-1">Category:</span>
+                            <span className="font-semibold text-slate-800">{claim.expense_category || 'Meals'}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-1 text-brand font-bold text-xs items-center gap-0.5">
+                          <span>{isExpanded ? 'Collapse' : 'Review & Disburse'}</span>
+                          {isExpanded ? <CaretDown size={12} weight="bold" /> : <CaretRight size={12} weight="bold" />}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="bg-slate-50 border-t border-b border-slate-100 p-4 space-y-4">
+                          <div className="space-y-4">
+                            {/* MOM Details */}
+                            <div className="bg-white border border-gray-200 rounded p-4">
+                              <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2 font-display">Attached Minutes of Meeting</span>
+                              <ClaimMomSummary mom={claim.mom} compact />
+                            </div>
+
+                            {/* Approval Information */}
+                            <div className="bg-white border border-gray-200 rounded p-4">
+                              <ClaimApprovalInfo claim={claim} users={users} compact />
+                            </div>
+
+                            {/* Pulse Timeline */}
+                            <div className="bg-white border border-gray-200 rounded p-4">
+                              <span className="text-[10px] text-brand font-bold uppercase tracking-wider block mb-2 font-display">Pulse Timeline</span>
+                              <ClaimActivityTimeline history={claim.history} />
+                            </div>
+
+                            {/* Line items / receipts */}
+                            <div className="bg-white border border-gray-200 rounded overflow-hidden">
+                              <ClaimLineItems expenses={claim.expenses} totalAmount={claim.total_amount} fallbackReceiptUrl={claim.receipt_url} />
+                            </div>
+                          </div>
+
+                          {/* Disbursement Input */}
+                          <div className="bg-white border border-brand rounded p-4 space-y-4">
+                            <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-blue-100 pb-2 font-display">
+                              Generate Claim Code
+                            </span>
+
+                            {/* Payment method select */}
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Payment Channel</label>
+                              <select
+                                value={paymentMethod}
+                                onChange={e => setPaymentMethod(e.target.value)}
+                                className="block w-full border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-bold text-gray-800 bg-white"
+                              >
+                                <option value="Cash">Cash Release</option>
+                                <option value="GCash">GCash E-Wallet</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                              </select>
+                            </div>
+
+                            {/* Claim Code generator block */}
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Disbursement Claim Code</label>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  value={customClaimCode}
+                                  onChange={e => setCustomClaimCode(e.target.value.toUpperCase())}
+                                  placeholder="e.g. SL8X9B"
+                                  className="flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none font-mono font-bold uppercase text-gray-800 tracking-widest text-slate-800 bg-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerateCode(claim.id)}
+                                  className="px-3 py-1.5 border border-gray-300 hover:bg-brand/5 text-xs font-bold text-gray-700 rounded flex items-center gap-1 shrink-0 bg-white"
+                                >
+                                  <ArrowsClockwise className="w-3.5 h-3.5" /> Auto Code
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Action mark */}
+                            <div className="pt-4 border-t border-gray-100">
+                              <button
+                                type="button"
+                                disabled={isProcessingAction}
+                                onClick={() => handleMarkReadyForClaim(claim.id)}
+                                className="w-full corp-btn-primary py-2 flex items-center justify-center gap-1.5 text-xs"
+                              >
+                                <Check className="w-4 h-4" /> 
+                                {isProcessingAction ? 'Dispatching Notification...' : 'Finalize & Mark Ready for Claim'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       ) : (
@@ -631,76 +767,143 @@ export const ProcessingQueue: React.FC = () => {
           </div>
 
           {/* Table history */}
-          <div className="bg-white border border-slate-200 rounded shadow-sm overflow-hidden">
+          <div className="corp-card overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim Code / ID</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Employee</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Disbursement Method</th>
-                    <th className="px-4 py-2.5 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Status</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Processed Time</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
-                  {filteredHistory.length === 0 ? (
+              {/* Desktop View */}
+              <div className="hidden md:block">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <td colSpan={7} className="px-4 py-12 text-center">
-                        <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                            <FolderOpen className="w-5 h-5" />
-                          </div>
-                          <p className="text-sm font-bold text-gray-700">No History Found</p>
-                          <p className="text-xs text-gray-400 max-w-sm mx-auto">No processed or historical claims found matching the current selected filters.</p>
-                        </div>
-                      </td>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim Code / ID</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Employee</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
+                      <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Disbursement Method</th>
+                      <th className="px-4 py-2.5 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Status</th>
+                      <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Processed Time</th>
                     </tr>
-                  ) : (
-                    filteredHistory.map(claim => {
-                      const claimNumber = getClaimNumber(claim);
-                      const isClaimed = claim.status === ClaimStatus.COMPLETED;
-                      
-                      // Match filter claimant name
-                      if (filterRequestor && claim.requestor?.name && !claim.requestor.name.toLowerCase().includes(filterRequestor.toLowerCase())) {
-                        return null;
-                      }
-
-                      return (
-                        <tr key={claim.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="font-mono text-xs font-bold text-gray-900 block">{claimNumber}</span>
-                            <span className="text-[10px] text-gray-400 font-bold font-mono uppercase">CODE: {claim.release_code || '—'}</span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="text-xs text-gray-800 font-bold">{claim.requestor?.name}</div>
-                            <div className="text-[10px] text-gray-500">
-                              {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {filteredHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-12 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                              <FolderOpen className="w-5 h-5" />
                             </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{claim.expense_category}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-900 text-xs">{formatPHP(claim.total_amount)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600 font-bold">{claim.payment_method || 'Cash'}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center">
-                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
-                              isClaimed 
-                                ? 'bg-green-50 border-green-200 text-green-700' 
-                                : 'bg-blue-50 border-blue-200 text-blue-700'
-                            }`}>
-                              {isClaimed ? 'Completed (Claimed)' : 'Ready for Claim'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-[10px] text-gray-500">
-                            {claim.processing_date ? format(new Date(claim.processing_date), 'MMM d, yyyy h:mm a') : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            <p className="text-sm font-bold text-gray-700">No History Found</p>
+                            <p className="text-xs text-gray-400 max-w-sm mx-auto">No processed or historical claims found matching the current selected filters.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredHistory.map(claim => {
+                        const claimNumber = getClaimNumber(claim);
+                        const isClaimed = claim.status === ClaimStatus.COMPLETED;
+                        
+                        // Match filter claimant name
+                        if (filterRequestor && claim.requestor?.name && !claim.requestor.name.toLowerCase().includes(filterRequestor.toLowerCase())) {
+                          return null;
+                        }
+
+                        return (
+                          <tr key={claim.id} className="hover:bg-brand/5 transition-colors">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="font-mono text-xs font-bold text-gray-900 block">{claimNumber}</span>
+                              <span className="text-[10px] text-gray-400 font-bold font-mono uppercase">CODE: {claim.release_code || '—'}</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <div className="text-xs text-gray-800 font-bold">{claim.requestor?.name}</div>
+                              <div className="text-[10px] text-gray-500">
+                                {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{claim.expense_category}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-900 text-xs">{formatPHP(claim.total_amount)}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600 font-bold">{claim.payment_method || 'Cash'}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                                isClaimed 
+                                  ? 'bg-green-50 border-green-200 text-green-700' 
+                                  : 'bg-blue-50 border-blue-200 text-blue-700'
+                              }`}>
+                                {isClaimed ? 'Completed (Claimed)' : 'Ready for Claim'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-[10px] text-gray-500">
+                              {claim.processing_date ? format(new Date(claim.processing_date), 'MMM d, yyyy h:mm a') : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden flex flex-col divide-y divide-slate-100">
+                {filteredHistory.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-gray-500">
+                    <div className="flex flex-col items-center justify-center space-y-2 py-4">
+                      <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
+                        <FolderOpen className="w-5 h-5" />
+                      </div>
+                      <p className="text-sm font-bold text-gray-700">No History Found</p>
+                      <p className="text-xs text-gray-400 max-w-sm mx-auto">No processed or historical claims found matching the current selected filters.</p>
+                    </div>
+                  </div>
+                ) : (
+                  filteredHistory.map(claim => {
+                    const claimNumber = getClaimNumber(claim);
+                    const isClaimed = claim.status === ClaimStatus.COMPLETED;
+                    
+                    // Match filter claimant name
+                    if (filterRequestor && claim.requestor?.name && !claim.requestor.name.toLowerCase().includes(filterRequestor.toLowerCase())) {
+                      return null;
+                    }
+
+                    return (
+                      <div key={claim.id} className="p-4 hover:bg-slate-50 flex flex-col gap-2 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-mono font-bold text-brand text-xs block">{claimNumber}</span>
+                            <span className="text-[10px] text-gray-400 font-bold font-mono uppercase">CODE: {claim.release_code || '—'}</span>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                            isClaimed 
+                              ? 'bg-green-50 border-green-200 text-green-700' 
+                              : 'bg-blue-50 border-blue-200 text-blue-700'
+                          }`}>
+                            {isClaimed ? 'Claimed' : 'Ready'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                          <div>
+                            <span className="text-slate-400 font-medium mr-1">Employee:</span>
+                            <span className="font-bold text-slate-900">{claim.requestor?.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                            <span className="font-extrabold text-slate-900">{formatPHP(claim.total_amount)}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-medium mr-1">Category:</span>
+                            <span className="font-semibold text-slate-800">{claim.expense_category}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 font-medium mr-1">Channel:</span>
+                            <span className="font-bold text-slate-800">{claim.payment_method || 'Cash'}</span>
+                          </div>
+                          <div className="col-span-2 text-[10px] text-slate-400">
+                            Processed: {claim.processing_date ? format(new Date(claim.processing_date), 'MMM d, yyyy h:mm a') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>

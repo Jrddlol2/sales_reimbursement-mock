@@ -7,7 +7,23 @@ import { Liquidation, LiquidationStatus, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
-import { ArrowLeft, DollarSign, Calendar, FileText, User as UserIcon, HelpCircle } from 'lucide-react';
+import { ArrowLeft, CurrencyDollar, Calendar, FileText, User as UserIcon, Question } from '@phosphor-icons/react';
+import { StatusBadge } from '../components/StatusBadge';
+import { DetailHeader } from '../components/DetailHeader';
+import { SummaryCard } from '../components/SummaryCard';
+import { Comments, CommentEntry } from '../components/Comments';
+
+const historyToComments = (history: any[]): CommentEntry[] =>
+  (history || [])
+    .filter(h => h.reason)
+    .map(h => ({
+      id: h.id,
+      author: h.changedBy?.name || h.changed_by,
+      role: h.changedBy?.role,
+      body: h.reason,
+      timestamp: h.timestamp,
+      decision: h.new_status,
+    }));
 
 interface LiquidationDetailProps {
   id?: string;
@@ -81,43 +97,16 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase font-display tracking-wider">Liquidation Report</span>
-            <h2 className="text-lg font-extrabold text-slate-950 font-mono tracking-wider uppercase mt-0.5">LIQ-{liq.id.substring(0, 6).toUpperCase()}</h2>
-          </div>
-          <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-              liq.status === LiquidationStatus.DRAFT ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-              liq.status === LiquidationStatus.SUBMITTED ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-              liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-              'bg-green-50 text-green-700 border border-green-200'
-            }`}>
-              {liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : liq.status}
-            </span>
-          </div>
-        </div>
+        <DetailHeader
+          eyebrow="Liquidation Report"
+          title={`LIQ-${liq.id.substring(0, 6).toUpperCase()}`}
+          status={<StatusBadge status={liq.status} label={liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : undefined} />}
+        />
 
-        {/* Info Grid */}
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-slate-100 pb-6">
+          {/* SUMMARY */}
+          <SummaryCard title="Summary">
             <div>
-              <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Total Spent Listed</span>
-              <span className="text-slate-800 text-xl font-extrabold font-display block mt-1">{formatPHP(liq.totalSpent)}</span>
-            </div>
-
-            <div>
-              <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Variance Result</span>
-              <span className={`text-xl font-extrabold font-display block mt-1 ${liq.varianceAmount === 0 ? 'text-green-600' : liq.varianceAmount < 0 ? 'text-amber-600' : 'text-indigo-600'}`}>
-                {liq.varianceAmount === 0 
-                  ? 'Settled (₱0.00)' 
-                  : liq.varianceAmount < 0 
-                    ? `Refund Due: ${formatPHP(Math.abs(liq.varianceAmount))}`
-                    : `Reimbursement Due: ${formatPHP(liq.varianceAmount)}`}
-              </span>
-            </div>
-
-            <div className="sm:col-span-2">
               <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Submitted By</span>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
@@ -126,41 +115,65 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
                 <span className="text-xs font-bold text-slate-800">{liq.requestor?.name || 'Loading...'}</span>
               </div>
             </div>
-          </div>
+          </SummaryCard>
 
-          {/* Line Items List */}
-          {liq.lineItems && liq.lineItems.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-extrabold uppercase text-slate-800 tracking-wider font-display border-b border-slate-100 pb-2">Expenses Claims</h4>
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <ClaimLineItems expenses={liq.lineItems} totalAmount={liq.totalSpent} />
+          {/* FINANCIAL INFORMATION */}
+          <SummaryCard title="Financial Information">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+              <div>
+                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Total Spent Listed</span>
+                <span className="text-slate-800 text-xl font-extrabold font-display block mt-1">{formatPHP(liq.totalSpent)}</span>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Variance Result</span>
+                <span className={`text-xl font-extrabold font-display block mt-1 ${liq.varianceAmount === 0 ? 'text-green-600' : liq.varianceAmount < 0 ? 'text-amber-600' : 'text-indigo-600'}`}>
+                  {liq.varianceAmount === 0
+                    ? 'Settled (₱0.00)'
+                    : liq.varianceAmount < 0
+                      ? `Refund Due: ${formatPHP(Math.abs(liq.varianceAmount))}`
+                      : `Reimbursement Due: ${formatPHP(liq.varianceAmount)}`}
+                </span>
               </div>
             </div>
+          </SummaryCard>
+
+          {/* ATTACHMENTS */}
+          {liq.lineItems && liq.lineItems.length > 0 && (
+            <SummaryCard title="Attachments" bodyClassName="p-0">
+              <ClaimLineItems expenses={liq.lineItems} totalAmount={liq.totalSpent} />
+            </SummaryCard>
           )}
 
           {/* Cross Navigation Link */}
           {liq.cashAdvanceId && (
-            <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-              <div className="space-y-1">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Source Cash Advance</span>
+            <SummaryCard title="Source Cash Advance">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <p className="text-xs text-slate-700 font-bold">
                   CADV-{liq.cashAdvanceId.substring(0,6).toUpperCase()} requested for: "{linkedCa?.purpose || 'Business Expense'}"
                 </p>
+                <Link
+                  to={`/cash-advances/${liq.cashAdvanceId}`}
+                  className="bg-brand text-white text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider font-display hover:bg-brand-hover shadow-sm transition-all text-center inline-block shrink-0"
+                >
+                  View Cash Advance
+                </Link>
               </div>
-              <Link
-                to={`/cash-advances/${liq.cashAdvanceId}`}
-                className="bg-brand text-white text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider font-display hover:bg-brand-hover shadow-sm transition-all text-center inline-block shrink-0"
-              >
-                View Cash Advance
-              </Link>
-            </div>
+            </SummaryCard>
           )}
 
-          {/* Activity Timeline */}
-          <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-extrabold uppercase text-slate-800 tracking-wider font-display border-b border-slate-100 pb-2">Activity History Timeline</h4>
+          {/* COMMENTS */}
+          <SummaryCard title="Comments">
+            <Comments
+              comments={historyToComments(liq.history)}
+              emptyText="No reviewer remarks have been recorded on this liquidation yet."
+            />
+          </SummaryCard>
+
+          {/* AUDIT HISTORY */}
+          <SummaryCard title="Audit History">
             <ClaimActivityTimeline history={liq.history} />
-          </div>
+          </SummaryCard>
         </div>
 
         {/* Footer */}

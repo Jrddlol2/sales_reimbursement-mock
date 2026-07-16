@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paperclip } from 'lucide-react';
+import { Paperclip } from '@phosphor-icons/react';
 import { formatPHP } from '../utils';
 
 interface ExpenseLike {
@@ -11,6 +11,7 @@ interface ExpenseLike {
   business_purpose: string;
   receipt_url?: string;
   attachment_type?: string;
+  or_number?: string;
 }
 
 interface ClaimLineItemsProps {
@@ -33,7 +34,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
           <tr>
             <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Vendor / Purpose</th>
             <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
-            <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Receipt</th>
+            <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Receipt / OR No.</th>
             <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
           </tr>
         </thead>
@@ -47,19 +48,33 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
               <td className="px-4 py-3 text-slate-600 font-medium">{exp.category}</td>
               <td className="px-4 py-3">
                 {exp.receipt_url && exp.receipt_url !== 'No Official Receipt' ? (
-                  onPreviewReceipt ? (
-                    <button type="button" onClick={() => onPreviewReceipt(exp.receipt_url!)} className="text-brand hover:underline inline-flex items-center gap-1 font-semibold">
-                      <Paperclip className="w-3 h-3" /> View {exp.attachment_type || 'Receipt'}
-                    </button>
-                  ) : (
-                    <a href={exp.receipt_url} target="_blank" rel="noreferrer" className="text-brand hover:underline inline-flex items-center gap-1 font-semibold">
-                      <Paperclip className="w-3 h-3" /> View {exp.attachment_type || 'Receipt'}
-                    </a>
-                  )
+                  <div className="flex flex-col gap-1 items-start">
+                    {onPreviewReceipt ? (
+                      <button type="button" onClick={() => onPreviewReceipt(exp.receipt_url!)} className="text-brand hover:text-brand-hover hover:underline inline-flex items-center gap-1 font-semibold text-left">
+                        <Paperclip className="w-3 h-3" /> View {exp.attachment_type || 'Receipt'}
+                      </button>
+                    ) : (
+                      <a href={exp.receipt_url} target="_blank" rel="noreferrer" className="text-brand hover:text-brand-hover hover:underline inline-flex items-center gap-1 font-semibold text-left">
+                        <Paperclip className="w-3 h-3" /> View {exp.attachment_type || 'Receipt'}
+                      </a>
+                    )}
+                    {exp.or_number && (
+                      <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-mono">
+                        OR: {exp.or_number}
+                      </span>
+                    )}
+                  </div>
                 ) : (
-                  <span className="text-slate-400 italic">
-                    {exp.attachment_type === 'No Official Receipt' || exp.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'None'}
-                  </span>
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className="text-slate-400 italic">
+                      {exp.attachment_type === 'No Official Receipt' || exp.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'None'}
+                    </span>
+                    {exp.or_number && (
+                      <span className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-mono">
+                        OR: {exp.or_number}
+                      </span>
+                    )}
+                  </div>
                 )}
               </td>
               <td className="px-4 py-3 text-right font-extrabold text-slate-950 font-display">{formatPHP(exp.amount)}</td>

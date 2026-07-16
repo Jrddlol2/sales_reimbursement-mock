@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, UserRole } from '../types';
 import { useAuth } from '../components/AuthContext';
 import { getStatusColor } from '../utils';
 import { 
-  FileText, Plus, Send, CheckCircle2, Calendar, Clock, MapPin, 
-  User, Mail, ArrowRight, BookOpen, CheckSquare, Edit, Eye, 
-  UploadCloud, X, ArrowLeft, Download
-} from 'lucide-react';
+  FileText, Plus, PaperPlaneRight, CheckCircle, Calendar, Clock, MapPin, 
+  User, Envelope, ArrowRight, BookOpen, CheckSquare, Pencil, Eye, 
+  CloudArrowUp, X, ArrowLeft, Download
+} from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
@@ -41,6 +42,13 @@ export const Moms: React.FC = () => {
 
   // Preview State
   const [previewMom, setPreviewMom] = useState<Mom | null>(null);
+
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | MomStatus>('All');
+  const [sourceFilter, setSourceFilter] = useState<'All' | MinutesSource>('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const fetchMoms = async () => {
     try {
@@ -344,6 +352,31 @@ export const Moms: React.FC = () => {
     }
   };
 
+  // Filter and search computation (AND logic)
+  const filteredMoms = moms.filter(mom => {
+    // 1. Search by client / contact person
+    const matchesSearch = searchTerm === '' || 
+      (mom.client && mom.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (mom.contact_person && mom.contact_person.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // 2. Filter by status
+    const matchesStatus = statusFilter === 'All' || mom.status === statusFilter;
+
+    // 3. Filter by source
+    const matchesSource = sourceFilter === 'All' || mom.minutes_source === sourceFilter;
+
+    // 4. Filter by date range
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && mom.meeting_date >= startDate;
+    }
+    if (endDate) {
+      matchesDate = matchesDate && mom.meeting_date <= endDate;
+    }
+
+    return matchesSearch && matchesStatus && matchesSource && matchesDate;
+  });
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8" id="moms_root_container">
       {/* Header section */}
@@ -357,7 +390,7 @@ export const Moms: React.FC = () => {
         {!!user?.reports_to && creationStep === 'none' && (
           <button
             onClick={handleCreateNew}
-            className="mt-4 md:mt-0 inline-flex items-center justify-center bg-brand hover:bg-brand-hover text-white px-4 py-2 text-xs font-bold rounded shadow-sm transition-all gap-2 uppercase tracking-wider font-display"
+            className="corp-btn-primary"
             id="btn_create_new_mom"
           >
             <Plus className="w-4 h-4" /> Create Minutes of Meeting
@@ -402,7 +435,7 @@ export const Moms: React.FC = () => {
                 id="btn_choose_upload_mom"
                 className="text-left border-2 border-gray-200 hover:border-brand rounded-lg p-6 space-y-2 transition-colors"
               >
-                <UploadCloud className="w-8 h-8 text-brand" />
+                <CloudArrowUp className="w-8 h-8 text-brand" />
                 <h3 className="font-semibold text-gray-900 text-sm">Upload Existing Minutes</h3>
                 <p className="text-xs text-gray-500">Already have a document (Word, exported from Teams/Zoom, etc.)? Upload it and fill in key details.</p>
               </button>
@@ -421,7 +454,7 @@ export const Moms: React.FC = () => {
             <form onSubmit={handleSaveUploadDraft} className="p-6 space-y-6 max-w-2xl mx-auto">
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                 <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-                  <UploadCloud className="w-5 h-5 text-brand" />
+                  <CloudArrowUp className="w-5 h-5 text-brand" />
                   Upload Existing Minutes
                 </h2>
                 <button
@@ -570,7 +603,7 @@ export const Moms: React.FC = () => {
                     className="hidden"
                   />
                   <label htmlFor="mom_upload_doc_file" className="cursor-pointer space-y-1 block">
-                    <UploadCloud className="w-8 h-8 text-gray-400 mx-auto" />
+                    <CloudArrowUp className="w-8 h-8 text-gray-400 mx-auto" />
                     <p className="text-xs text-gray-600">Drag & Drop the existing MOM PDF/Word doc here, or <span className="text-brand font-semibold">Browse</span></p>
                     <p className="text-[10px] text-gray-400">Supports PDF, DOC, DOCX up to 10MB. File contents are not parsed — the fields above are stored as searchable metadata.</p>
                   </label>
@@ -602,9 +635,9 @@ export const Moms: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleUploadSubmitAndSend}
-                  className="px-5 py-2 bg-brand hover:bg-brand-hover text-white text-sm font-medium rounded shadow-sm inline-flex items-center gap-1.5"
+                  className="corp-btn-primary"
                 >
-                  <Send className="w-4 h-4" /> Finalize & Send
+                  <PaperPlaneRight className="w-4 h-4" /> Finalize & Send
                 </button>
               </div>
             </form>
@@ -785,7 +818,7 @@ export const Moms: React.FC = () => {
                     className="hidden"
                   />
                   <label htmlFor="mom_doc_file" className="cursor-pointer space-y-1 block">
-                    <UploadCloud className="w-8 h-8 text-gray-400 mx-auto" />
+                    <CloudArrowUp className="w-8 h-8 text-gray-400 mx-auto" />
                     <p className="text-xs text-gray-600">Drag & Drop signed MOM PDF/Word doc here, or <span className="text-brand font-semibold">Browse</span></p>
                     <p className="text-[10px] text-gray-400">Supports PDF, DOC, DOCX up to 10MB</p>
                   </label>
@@ -818,9 +851,9 @@ export const Moms: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleFormSubmitAndSend}
-                  className="px-5 py-2 bg-brand hover:bg-brand-hover text-white text-sm font-medium rounded shadow-sm inline-flex items-center gap-1.5"
+                  className="corp-btn-primary"
                 >
-                  <Send className="w-4 h-4" /> Finalize & Send
+                  <PaperPlaneRight className="w-4 h-4" /> Finalize & Send
                 </button>
               </div>
             </form>
@@ -830,8 +863,10 @@ export const Moms: React.FC = () => {
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Live Corporate Memo Preview</h3>
               <div className="bg-white border border-gray-200 shadow-sm p-8 font-sans text-gray-900 rounded space-y-6">
                 <div className="text-center border-b-2 border-gray-900 pb-4">
-                  <h1 className="text-lg font-bold tracking-widest uppercase">PHILIPPINE OFFICE LOGISTICS, INC.</h1>
-                  <p className="text-[10px] tracking-wider text-gray-500 uppercase">Sales & Account Management Division</p>
+                  <h1 className="text-lg font-bold tracking-widest uppercase">MICROGENESIS</h1>
+                  <p className="text-[10px] tracking-wider text-gray-500 uppercase">
+                    {user?.job_title ? `${user.job_title} • ` : ''}{user?.department || 'Sales'} Department
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs text-gray-800 pb-4 border-b border-gray-100">
@@ -903,86 +938,188 @@ export const Moms: React.FC = () => {
                   Reimbursements require a Completed MOM to be attached. Document your client meeting now to begin.
                 </p>
                 {!!user?.reports_to && (
-                  <button onClick={handleCreateNew} className="bg-brand hover:bg-brand-hover text-white text-xs font-semibold px-4 py-2 rounded">
+                  <button onClick={handleCreateNew} className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded">
                     Create MOM
                   </button>
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="moms_grid">
-                {moms.map(mom => (
-                  <div key={mom.id} className="bg-white border border-gray-200 rounded p-5 flex flex-col justify-between hover:border-gray-300 shadow-sm transition-all space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${
-                            mom.status === MomStatus.COMPLETED
-                              ? 'bg-green-50 text-green-700 border-green-200'
-                              : 'bg-gray-100 text-gray-700 border-gray-200'
-                          }`}>
-                            {mom.status}
-                          </span>
-                          {mom.minutes_source === MinutesSource.UPLOADED && (
-                            <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 flex items-center gap-1">
-                              <UploadCloud className="w-3 h-3" /> Uploaded
-                            </span>
+              <div className="space-y-6">
+                {/* Filter controls */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-4">
+                  {/* Search input */}
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Search</label>
+                    <input
+                      type="text"
+                      placeholder="Search company or contact..."
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      className="corp-input w-full text-xs"
+                    />
+                  </div>
+
+                  {/* Status Select */}
+                  <div className="w-full md:w-40">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={e => setStatusFilter(e.target.value as any)}
+                      className="corp-input w-full text-xs"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value={MomStatus.DRAFT}>{MomStatus.DRAFT}</option>
+                      <option value={MomStatus.COMPLETED}>{MomStatus.COMPLETED}</option>
+                    </select>
+                  </div>
+
+                  {/* Source Select */}
+                  <div className="w-full md:w-40">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Source</label>
+                    <select
+                      value={sourceFilter}
+                      onChange={e => setSourceFilter(e.target.value as any)}
+                      className="corp-input w-full text-xs"
+                    >
+                      <option value="All">All Sources</option>
+                      <option value={MinutesSource.TEMPLATE}>Template</option>
+                      <option value={MinutesSource.UPLOADED}>Uploaded</option>
+                    </select>
+                  </div>
+
+                  {/* From Date */}
+                  <div className="w-full md:w-44">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">From Date</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="corp-input w-full text-xs"
+                    />
+                  </div>
+
+                  {/* To Date */}
+                  <div className="w-full md:w-44">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">To Date</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={e => setEndDate(e.target.value)}
+                      className="corp-input w-full text-xs"
+                    />
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  {(searchTerm || statusFilter !== 'All' || sourceFilter !== 'All' || startDate || endDate) && (
+                    <div className="pt-4 md:pt-0 self-end">
+                      <button
+                        onClick={() => {
+                          setSearchTerm('');
+                          setStatusFilter('All');
+                          setSourceFilter('All');
+                          setStartDate('');
+                          setEndDate('');
+                        }}
+                        className="text-xs font-semibold text-brand hover:underline"
+                      >
+                        Clear Filters
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {filteredMoms.length === 0 ? (
+                  <div className="bg-white border border-gray-200 p-12 text-center rounded">
+                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">No Matching Meeting Minutes Found</h3>
+                    <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+                      No documents match your active search terms, status, source, or date range filters. Try clearing some filters.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="moms_grid">
+                    {filteredMoms.map(mom => (
+                      <div key={mom.id} className="bg-white border border-gray-200 rounded p-5 flex flex-col justify-between hover:border-gray-300 shadow-sm transition-all space-y-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${
+                                mom.status === MomStatus.COMPLETED
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-gray-100 text-gray-700 border-gray-200'
+                              }`}>
+                                {mom.status}
+                              </span>
+                              {mom.minutes_source === MinutesSource.UPLOADED && (
+                                <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 flex items-center gap-1">
+                                  <CloudArrowUp className="w-3 h-3" /> Uploaded
+                                </span>
+                              )}
+                            </div>
+                            {mom.claim_id && (
+                              <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+                                <CheckSquare className="w-3 h-3" /> Linked to Claim
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-base leading-snug">{mom.client || 'Untitled Client'}</h3>
+                            <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{mom.purpose || 'No purpose listed'}</p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-xs text-gray-600">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                              <span>{mom.meeting_date}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="truncate">{mom.contact_person || 'No Contact'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setPreviewMom(mom)}
+                              className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+                              title="Preview Transcript"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Preview
+                            </button>
+                            <Link
+                              to={`/moms/${mom.id}`}
+                              className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+                              title="View Full Details"
+                            >
+                              <ArrowRight className="w-3.5 h-3.5" /> Details
+                            </Link>
+                            {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && mom.minutes_source !== MinutesSource.UPLOADED && (
+                              <button
+                                onClick={() => handleEdit(mom)}
+                                className="p-1.5 text-gray-500 hover:text-brand rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> Edit
+                              </button>
+                            )}
+                          </div>
+
+                          {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && (
+                            <button
+                              onClick={() => handleSendAndComplete(mom.id)}
+                              className="corp-btn-primary text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1 shadow-sm"
+                            >
+                              <PaperPlaneRight className="w-3 h-3" /> Send MOM
+                            </button>
                           )}
                         </div>
-                        {mom.claim_id && (
-                          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 flex items-center gap-1">
-                            <CheckSquare className="w-3 h-3" /> Linked to Claim
-                          </span>
-                        )}
                       </div>
-
-                      <div>
-                        <h3 className="font-bold text-gray-900 text-base leading-snug">{mom.client || 'Untitled Client'}</h3>
-                        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{mom.purpose || 'No purpose listed'}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 text-xs text-gray-600">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{mom.meeting_date}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="truncate">{mom.contact_person || 'No Contact'}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setPreviewMom(mom)}
-                          className="p-1.5 text-gray-500 hover:text-gray-800 rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
-                          title="Preview Transcript"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Preview
-                        </button>
-                        {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && mom.minutes_source !== MinutesSource.UPLOADED && (
-                          <button
-                            onClick={() => handleEdit(mom)}
-                            className="p-1.5 text-gray-500 hover:text-brand rounded hover:bg-gray-50 border border-gray-200 flex items-center gap-1 text-xs font-semibold"
-                            title="Edit"
-                          >
-                            <Edit className="w-3.5 h-3.5" /> Edit
-                          </button>
-                        )}
-                      </div>
-
-                      {mom.status === MomStatus.DRAFT && user?.id === mom.requestor_id && (
-                        <button
-                          onClick={() => handleSendAndComplete(mom.id)}
-                          className="bg-brand hover:bg-brand-hover text-white text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1 shadow-sm"
-                        >
-                          <Send className="w-3 h-3" /> Send MOM
-                        </button>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </motion.div>
@@ -1084,8 +1221,10 @@ export const Moms: React.FC = () => {
                 /* Modal Body / Transcript Content */
                 <div className="p-8 max-h-[600px] overflow-y-auto space-y-6">
                   <div className="text-center border-b-2 border-gray-900 pb-4">
-                    <h1 className="text-xl font-bold tracking-widest uppercase">PHILIPPINE OFFICE LOGISTICS, INC.</h1>
-                    <p className="text-xs tracking-wider text-gray-500 uppercase">Sales & Account Management Division</p>
+                    <h1 className="text-xl font-bold tracking-widest uppercase">MICROGENESIS</h1>
+                    <p className="text-xs tracking-wider text-gray-500 uppercase">
+                      {previewMom.prepared_by_job_title ? `${previewMom.prepared_by_job_title} • ` : ''}{previewMom.prepared_by_department || 'Sales'} Department
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs text-gray-800 pb-4 border-b border-gray-200">
@@ -1160,12 +1299,12 @@ export const Moms: React.FC = () => {
                       onClick={() => { const m = previewMom; setPreviewMom(null); handleEdit(m); }}
                       className="border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs font-semibold px-4 py-2 rounded flex items-center gap-1.5"
                     >
-                      <Edit className="w-3.5 h-3.5" /> Open Editor
+                      <Pencil className="w-3.5 h-3.5" /> Open Editor
                     </button>
                 )}
                 <button
                   onClick={() => setPreviewMom(null)}
-                  className="bg-brand hover:bg-brand-hover text-white text-xs font-semibold px-4 py-2 rounded"
+                  className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded"
                 >
                   Close Transcript
                 </button>

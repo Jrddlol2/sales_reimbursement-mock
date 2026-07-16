@@ -15,8 +15,8 @@ import { ExpenseLineItemEditor } from './ExpenseLineItemEditor';
 import { ClaimActivityTimeline } from './ClaimActivityTimeline';
 import { formatPHP, getStatusColor, getClaimNumber } from '../utils';
 import { 
-  Plus, Trash2, UploadCloud, X, AlertCircle, FileText, Check, ArrowLeft, Send, Sparkles, Search
-} from 'lucide-react';
+  Plus, Trash, CloudArrowUp, X, WarningCircle, FileText, Check, ArrowLeft, PaperPlaneRight, Sparkle, MagnifyingGlass
+} from '@phosphor-icons/react';
 
 interface LocalLineItem {
   id: string;
@@ -28,6 +28,7 @@ interface LocalLineItem {
   business_purpose: string;
   receiptName: string;
   attachment_type: string;
+  or_number?: string;
   isDragOver?: boolean;
 }
 
@@ -213,7 +214,8 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           payment_method: item.payment_method,
           business_purpose: item.business_purpose,
           receiptName: item.receipt_url && item.receipt_url !== 'No Official Receipt' ? item.receipt_url.split('/').pop() || '' : '',
-          attachment_type: item.attachment_type || (item.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'Official Receipt')
+          attachment_type: item.attachment_type || (item.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'Official Receipt'),
+          or_number: item.or_number || ''
         })));
       } else {
         setLiqLineItems([
@@ -226,7 +228,8 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             payment_method: 'Cash',
             business_purpose: '',
             receiptName: '',
-            attachment_type: 'Official Receipt'
+            attachment_type: 'Official Receipt',
+            or_number: ''
           }
         ]);
       }
@@ -247,7 +250,8 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         payment_method: 'Cash',
         business_purpose: '',
         receiptName: '',
-        attachment_type: 'Official Receipt'
+        attachment_type: 'Official Receipt',
+        or_number: ''
       }
     ]);
   };
@@ -327,7 +331,8 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             payment_method: item.payment_method,
             business_purpose: item.business_purpose,
             receipt_url: item.attachment_type === 'No Official Receipt' ? 'No Official Receipt' : `/uploads/${item.receiptName}`,
-            attachment_type: item.attachment_type
+            attachment_type: item.attachment_type,
+            or_number: item.or_number || undefined
           })
         });
       }
@@ -504,7 +509,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
       }
     }
 
-    // 3. Search Query
+    // 3. MagnifyingGlass Query
     if (ledgerSearch.trim()) {
       const q = ledgerSearch.toLowerCase();
       const idStr = item.type === 'Reimbursement' 
@@ -553,7 +558,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             onClick={handleQuickFillLiquidation}
             className="inline-flex items-center text-xs font-bold text-brand bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 uppercase font-display tracking-wider"
           >
-            <Sparkles className="w-3.5 h-3.5 mr-1" /> Quick Fill Draft
+            <Sparkle className="w-3.5 h-3.5 mr-1" /> Quick Fill Draft
           </button>
         </div>
 
@@ -619,9 +624,9 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             <button
               onClick={() => handleSaveOrSubmitLiquidation(true)}
               disabled={submittingLiquidation}
-              className="bg-brand text-white text-xs px-5 py-2 rounded font-bold hover:bg-brand-hover shadow-sm transition-colors uppercase tracking-wider font-display inline-flex items-center gap-1.5"
+              className="corp-btn-primary"
             >
-              <Send className="w-3.5 h-3.5" /> Submit Liquidation
+              <PaperPlaneRight className="w-3.5 h-3.5" /> Submit Liquidation
             </button>
           </div>
         </div>
@@ -666,7 +671,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
 
         return (
           <div className="bg-amber-50 border border-amber-200 rounded p-4 flex gap-2.5 items-start animate-fade-in shadow-sm">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <WarningCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-800 leading-normal font-semibold">
               <span className="block font-bold uppercase tracking-wider text-[10px] text-amber-900 mb-0.5">Active Cash Advance Notice</span>
               You already have an active Cash Advance that has not been liquidated (CADV-{activeAdv.id.substring(0,6).toUpperCase()}).
@@ -684,7 +689,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
       {userClaims.some(c => c.status === ClaimStatus.READY_FOR_CLAIM) && (
         <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3 shadow-sm animate-fade-in">
           <div className="flex items-start gap-2.5">
-            <AlertCircle className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+            <WarningCircle className="w-5 h-5 text-brand shrink-0 mt-0.5" />
             <div>
               <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider mb-0.5">Action Required: Ready for Claim</h3>
               <p className="text-xs text-slate-700 leading-normal font-semibold">
@@ -797,7 +802,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
               <button
                 type="submit"
                 disabled={submittingAdvance || userAdvances.some(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)}
-                className="bg-brand text-white text-xs px-5 py-2 rounded font-bold hover:bg-brand-hover shadow-sm uppercase tracking-wider font-display disabled:bg-slate-300 disabled:cursor-not-allowed"
+                className="corp-btn-primary"
               >
                 Submit Request
               </button>
@@ -808,7 +813,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         <div className="flex justify-end gap-3">
           <Link 
             to="/claims/new"
-            className="bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded text-xs font-bold shadow-sm transition-all uppercase tracking-wider font-display flex items-center gap-1.5"
+            className="corp-btn-primary px-4 py-2 rounded text-xs font-bold shadow-sm transition-all uppercase tracking-wider font-display flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" /> New Reimbursement
           </Link>
@@ -822,9 +827,9 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
       )}
 
       {/* Unified request history ledger table */}
-      <div className="bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
+      <div className="corp-card flex flex-col overflow-hidden">
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display">Your Requests & History Ledger</h3>
+          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Your Requests & History Ledger</h3>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-grow max-w-xl justify-end">
             <div className="relative flex-grow">
               <input
@@ -834,7 +839,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                 onChange={e => setLedgerSearch(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded text-xs px-2.5 py-1.5 pl-8 focus:border-brand focus:outline-none"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <MagnifyingGlass className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
             </div>
 
             <select
@@ -891,7 +896,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         <div className="flex gap-2 pt-2">
                           <Link
                             to="/claims/new"
-                            className="bg-brand text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase font-display"
+                            className="corp-btn-primary text-[10px] px-3 py-1.5"
                           >
                             Submit Claim
                           </Link>
@@ -918,7 +923,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                   const liq = ca ? liquidations.find(l => l.cashAdvanceId === ca.id) : null;
 
                   return (
-                    <tr key={item.uniqueId} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={item.uniqueId} className="hover:bg-brand/5 transition-colors">
                       {/* ID / Date */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {isClaim && claim ? (
@@ -931,7 +936,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         ) : ca ? (
                           <Link 
                             to={`/cash-advances/${ca.id}`}
-                            className="font-mono text-xs font-bold text-indigo-700 hover:underline block"
+                            className="font-mono text-xs font-bold text-brand hover:underline block"
                           >
                             CADV-{ca.id.substring(0, 6).toUpperCase()}
                           </Link>
@@ -946,7 +951,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                           isClaim 
                             ? 'bg-blue-50 text-blue-700 border-blue-150' 
-                            : 'bg-indigo-50 text-indigo-700 border-indigo-150'
+                            : 'bg-indigo-50 text-brand border-indigo-150'
                         }`}>
                           {item.type}
                         </span>
@@ -979,7 +984,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         {isClaim && claim?.sourceLiquidationId ? (
                           <Link 
                             to={`/liquidations/${claim.sourceLiquidationId}`}
-                            className="inline-flex items-center gap-1 text-[10px] text-indigo-700 hover:underline font-bold"
+                            className="inline-flex items-center gap-1 text-[10px] text-brand hover:underline font-bold"
                           >
                             <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-150">
                               Shortfall Claim
@@ -993,7 +998,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                             >
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 liq.status === LiquidationStatus.DRAFT ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                liq.status === LiquidationStatus.SUBMITTED ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                liq.status === LiquidationStatus.SUBMITTED ? 'bg-indigo-50 text-brand border border-indigo-200' :
                                 liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'bg-rose-50 text-rose-700 border border-rose-200' :
                                 'bg-green-50 text-green-700 border border-green-200'
                               }`}>
@@ -1020,7 +1025,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                           ca ? (
                             ca.status === CashAdvanceStatus.DRAFT ? 'bg-gray-100 text-gray-700 border border-gray-200' :
                             ca.status === CashAdvanceStatus.SUBMITTED ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                            ca.status === CashAdvanceStatus.APPROVED ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                            ca.status === CashAdvanceStatus.APPROVED ? 'bg-indigo-100 text-brand border border-indigo-200' :
                             ca.status === CashAdvanceStatus.REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' :
                             ca.status === CashAdvanceStatus.RELEASED ? 'bg-green-100 text-green-700 border border-green-200' :
                             'bg-slate-100 text-slate-500 border border-slate-200'
@@ -1082,7 +1087,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         {!isClaim && ca && ca.status === CashAdvanceStatus.DRAFT && (
                           <button
                             onClick={() => handleActionOnAdvance(ca.id, 'submit')}
-                            className="bg-brand text-white px-2.5 py-1 rounded text-[10px] hover:bg-brand-hover uppercase font-display shadow-sm"
+                            className="corp-btn-primary text-[10px] px-2.5 py-1"
                           >
                             Submit
                           </button>

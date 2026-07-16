@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
-import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
+import { CheckCircle, XCircle, Info, X } from '@phosphor-icons/react';
 
 type ToastKind = 'success' | 'error' | 'info';
 
@@ -7,6 +7,7 @@ interface ToastItem {
   id: number;
   kind: ToastKind;
   message: string;
+  isExiting?: boolean;
 }
 
 interface ToastContextType {
@@ -18,7 +19,7 @@ interface ToastContextType {
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 const STYLES: Record<ToastKind, { icon: React.ElementType; border: string; iconColor: string }> = {
-  success: { icon: CheckCircle2, border: 'border-l-green-500', iconColor: 'text-green-600' },
+  success: { icon: CheckCircle, border: 'border-l-green-500', iconColor: 'text-green-600' },
   error: { icon: XCircle, border: 'border-l-red-500', iconColor: 'text-red-600' },
   info: { icon: Info, border: 'border-l-[brand]', iconColor: 'text-brand' },
 };
@@ -29,7 +30,17 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const dismiss = useCallback((id: number) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts(prev => {
+      const existing = prev.find(t => t.id === id);
+      if (!existing || existing.isExiting) return prev;
+
+      // Schedule actual removal after exit animation completes
+      setTimeout(() => {
+        setToasts(current => current.filter(t => t.id !== id));
+      }, 200);
+
+      return prev.map(t => (t.id === id ? { ...t, isExiting: true } : t));
+    });
   }, []);
 
   const push = useCallback((kind: ToastKind, message: string) => {
@@ -54,7 +65,9 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto bg-white border border-gray-200 border-l-4 ${style.border} rounded shadow-lg px-4 py-3 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2`}
+              className={`pointer-events-auto bg-white border border-gray-200 border-l-4 ${style.border} rounded shadow-lg px-4 py-3 flex items-start gap-2.5 ${
+                t.isExiting ? 'animate-toast-out' : 'animate-toast-in'
+              }`}
             >
               <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${style.iconColor}`} />
               <p className="text-sm text-gray-800 flex-1 leading-snug">{t.message}</p>

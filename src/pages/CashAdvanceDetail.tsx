@@ -3,10 +3,26 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
-import { CashAdvance, CashAdvanceStatus, Mom, User, UserRole } from '../types';
+import { CashAdvance, Mom, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
-import { ArrowLeft, Clock, Calendar, FileText, User as UserIcon, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, FileText, User as UserIcon, Link as LinkIcon } from '@phosphor-icons/react';
+import { StatusBadge } from '../components/StatusBadge';
+import { DetailHeader } from '../components/DetailHeader';
+import { SummaryCard } from '../components/SummaryCard';
+import { Comments, CommentEntry } from '../components/Comments';
+
+const historyToComments = (history: any[]): CommentEntry[] =>
+  (history || [])
+    .filter(h => h.reason)
+    .map(h => ({
+      id: h.id,
+      author: h.changedBy?.name || h.changed_by,
+      role: h.changedBy?.role,
+      body: h.reason,
+      timestamp: h.timestamp,
+      decision: h.new_status,
+    }));
 
 interface CashAdvanceDetailProps {
   id?: string;
@@ -84,59 +100,24 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <span className="text-[10px] text-slate-400 font-extrabold uppercase font-display tracking-wider">Cash Advance Request</span>
-            <h2 className="text-lg font-extrabold text-slate-950 font-mono tracking-wider uppercase mt-0.5">CADV-{ca.id.substring(0, 6).toUpperCase()}</h2>
-          </div>
-          <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-              ca.status === CashAdvanceStatus.DRAFT ? 'bg-gray-100 text-gray-700' :
-              ca.status === CashAdvanceStatus.SUBMITTED ? 'bg-blue-100 text-blue-700' :
-              ca.status === CashAdvanceStatus.APPROVED ? 'bg-indigo-100 text-indigo-700' :
-              ca.status === CashAdvanceStatus.REJECTED ? 'bg-rose-100 text-rose-700' :
-              ca.status === CashAdvanceStatus.RELEASED ? 'bg-green-100 text-green-700' :
-              'bg-slate-100 text-slate-500'
-            }`}>
-              {ca.status}
-            </span>
-          </div>
-        </div>
+        <DetailHeader
+          eyebrow="Cash Advance Request"
+          title={`CADV-${ca.id.substring(0, 6).toUpperCase()}`}
+          status={<StatusBadge status={ca.status} />}
+        />
 
-        {/* Info Grid */}
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-slate-100 pb-6">
-            <div className="space-y-4">
-              <div>
-                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Amount Requested</span>
-                <span className="text-slate-900 text-2xl font-black font-display">{formatPHP(ca.amount)}</span>
-              </div>
-              
+          {/* SUMMARY */}
+          <SummaryCard title="Summary">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
               <div>
                 <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Requestor</span>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
                     <UserIcon className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs font-bold text-slate-800">{ca.requestor?.name || 'Loading...'}</span>
+                  <span className="font-bold text-slate-800">{ca.requestor?.name || 'Loading...'}</span>
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Linked Meeting (MOM)</span>
-                {linkedMom ? (
-                  <Link
-                    to="/moms"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:underline mt-1"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    {linkedMom.client} - {linkedMom.purpose}
-                  </Link>
-                ) : (
-                  <span className="text-xs font-medium text-slate-500 block mt-1">None</span>
-                )}
               </div>
 
               <div>
@@ -145,44 +126,73 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
                   <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-600 border border-indigo-100">
                     <UserIcon className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs font-bold text-slate-800">{ca.approver?.name || 'Loading...'}</span>
+                  <span className="font-bold text-slate-800">{ca.approver?.name || 'Loading...'}</span>
                 </div>
               </div>
-            </div>
 
-            <div className="col-span-1 sm:col-span-2">
-              <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display mb-1">Business Purpose</span>
-              <p className="text-slate-700 text-xs font-medium bg-slate-50 border border-slate-100 rounded p-3 leading-relaxed whitespace-pre-wrap">
-                {ca.purpose}
-              </p>
+              <div className="col-span-1 sm:col-span-2">
+                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Linked Meeting (MOM)</span>
+                {linkedMom ? (
+                  <Link
+                    to={`/moms/${linkedMom.id}`}
+                    className="inline-flex items-center gap-1.5 font-bold text-brand hover:underline mt-1"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    {linkedMom.client} - {linkedMom.purpose}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-slate-500 block mt-1">None</span>
+                )}
+              </div>
+
+              <div className="col-span-1 sm:col-span-2">
+                <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display mb-1">Business Purpose</span>
+                <p className="text-slate-700 font-medium bg-slate-50 border border-brand/10 rounded p-3 leading-relaxed whitespace-pre-wrap">
+                  {ca.purpose}
+                </p>
+              </div>
             </div>
-          </div>
+          </SummaryCard>
+
+          {/* FINANCIAL INFORMATION */}
+          <SummaryCard title="Financial Information">
+            <div>
+              <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Amount Requested</span>
+              <span className="text-slate-900 text-2xl font-black font-display">{formatPHP(ca.amount)}</span>
+            </div>
+          </SummaryCard>
 
           {/* Cross Navigation Link */}
-          <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-            <div className="space-y-1">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Linked Liquidation</span>
+          <SummaryCard title="Linked Liquidation">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <p className="text-xs text-slate-700 font-bold">
-                {linkedLiq 
+                {linkedLiq
                   ? `Liquidation report (LIQ-${linkedLiq.id.substring(0,6).toUpperCase()}) is currently in ${linkedLiq.status} stage.`
                   : 'No liquidation report has been filed yet for this released advance.'}
               </p>
+              {linkedLiq && (
+                <Link
+                  to={`/liquidations/${linkedLiq.id}`}
+                  className="bg-brand text-white text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider font-display hover:bg-brand-hover shadow-sm transition-all text-center inline-block shrink-0"
+                >
+                  Open Liquidation
+                </Link>
+              )}
             </div>
-            {linkedLiq && (
-              <Link
-                to={`/liquidations/${linkedLiq.id}`}
-                className="bg-brand text-white text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider font-display hover:bg-brand-hover shadow-sm transition-all text-center inline-block shrink-0"
-              >
-                Open Liquidation
-              </Link>
-            )}
-          </div>
+          </SummaryCard>
 
-          {/* Activity Timeline */}
-          <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-extrabold uppercase text-slate-800 tracking-wider font-display border-b border-slate-100 pb-2">Activity History Timeline</h4>
+          {/* COMMENTS */}
+          <SummaryCard title="Comments">
+            <Comments
+              comments={historyToComments(ca.history)}
+              emptyText="No approver or custodian remarks have been recorded on this cash advance yet."
+            />
+          </SummaryCard>
+
+          {/* AUDIT HISTORY */}
+          <SummaryCard title="Audit History">
             <ClaimActivityTimeline history={ca.history} />
-          </div>
+          </SummaryCard>
         </div>
 
         {/* Footer */}

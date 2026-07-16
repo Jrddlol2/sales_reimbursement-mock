@@ -1,12 +1,12 @@
 import React from 'react';
-import { LucideIcon } from 'lucide-react';
+import { Icon } from '@phosphor-icons/react';
 
 interface KPITileProps {
   label: string;
   value: React.ReactNode;
   subValue?: React.ReactNode;
   description: string;
-  icon: LucideIcon;
+  icon: Icon;
   onClick?: () => void;
   isActive?: boolean;
 }

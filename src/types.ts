@@ -45,6 +45,8 @@ export interface Mom {
   agreements?: string;
   action_items?: string;
   prepared_by?: string;
+  prepared_by_department?: string;
+  prepared_by_job_title?: string;
   summary?: string;
   file_url?: string;
   file_name?: string;
@@ -93,6 +95,7 @@ export interface ExpenseLineItem {
   payment_method: string;
   business_purpose: string;
   receipt_url?: string;
+  or_number?: string;
 }
 
 export interface ClientMeetingDetails {
@@ -221,4 +224,5 @@ export interface LiquidationLineItem {
   business_purpose: string;
   receipt_url?: string;
   attachment_type?: string;
+  or_number?: string;
 }

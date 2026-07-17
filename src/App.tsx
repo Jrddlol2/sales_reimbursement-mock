@@ -23,11 +23,15 @@ import { CashAdvanceDetail } from './pages/CashAdvanceDetail';
 import { LiquidationDetail } from './pages/LiquidationDetail';
 import { Calendar } from './pages/Calendar';
 import { Settings } from './pages/Settings';
+import { AdminReporting } from './pages/AdminReporting';
+import { HistoricalImport } from './components/HistoricalImport';
 import { SystemEmails } from './pages/SystemEmails';
 import { Receipts as ReceiptArchive } from './pages/ReceiptArchive';
 import { UserAccounts } from './pages/UserAccounts';
 import { CompanyDirectory } from './pages/CompanyDirectory';
 import { Moms } from './pages/Moms';
+import { Support } from "./pages/Support";
+import { SupportDetail } from "./pages/SupportDetail";
 import { MomDetail } from './pages/MomDetail';
 import { ScenarioGuide } from './pages/ScenarioGuide';
 import { DebugRoleSwitcher } from './DebugRoleSwitcher';
@@ -117,7 +121,10 @@ export default function App() {
                   <Route path="emails" element={<SystemEmails />} />
                   <Route path="moms" element={<Moms />} />
                   <Route path="moms/:id" element={<MomDetail />} />
+                  <Route path="support" element={<Support />} />
+                  <Route path="support/:id" element={<SupportDetail />} />
                   <Route path="settings" element={<Settings />} />
+                  <Route path="settings/import" element={<HistoricalImport />} />
                   <Route path="scenarios" element={<ScenarioGuide />} />
                 </Route>
               </Routes>

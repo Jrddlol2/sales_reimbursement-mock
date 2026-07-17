@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Printer, createPortal } from 'react-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { ClaimStatus, UserRole, ReviewMeetingStatus } from '../types';
 import {
   FileText, CheckCircle, Question, Warning,
   MapPin, Calendar, Clock, CurrencyDollar, Shield, Check, Info, ArrowRight,
-  PencilSimple, Download, ArrowCounterClockwise
+  PencilSimple, Download, ArrowCounterClockwise, Lifebuoy
 } from '@phosphor-icons/react';
 import { formatPHP, getClaimNumber, getStatusDisplayLabel } from '../utils';
 import { MomEditForm } from '../components/MomEditForm';
@@ -199,13 +199,9 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                 <span className="text-slate-300 font-mono text-xs">{previewFile.name}</span>
                 <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">{previewFile.type}</span>
               </div>
-              <div className="flex-1 bg-slate-900 flex items-center justify-center p-4 relative">
-                {previewFile.url.endsWith('.pdf') ? (
-                  <div className="text-slate-500 text-sm flex flex-col items-center">
-                    <FileText className="w-12 h-12 mb-3 opacity-50" />
-                    PDF Viewer Placeholder
-                    <span className="text-xs text-slate-600 mt-2">{previewFile.name}</span>
-                  </div>
+              <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative">
+                {previewFile.url.toLowerCase().endsWith('.pdf') ? (
+                  <iframe src={previewFile.url} className="w-full h-full border-0" title={previewFile.name} />
                 ) : (
                   <img src={previewFile.url} alt={previewFile.name} className="max-w-full max-h-full object-contain drop-shadow-xl" onError={(e) => {
                     (e.target as any).style.display = 'none';
@@ -237,6 +233,19 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
             onClose={onClose}
             actions={
               <>
+                
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 print:hidden"
+                >
+                  <Printer className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                  Print Summary
+                </button>
+                <Link to={`/support?new=true&entityType=Claim&entityId=${claim?.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 print:hidden">
+
+                  <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                  Request Help
+                </Link>
                 {claim && claim.receipt_url && (
                   <button
                     onClick={() => setPreviewFile(previewFile?.type === 'receipt' ? null : { type: 'receipt', url: claim.receipt_url, name: claim.receipt_url.split('/').pop() || 'Receipt' })}

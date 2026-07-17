@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus, ReviewMeetingStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
@@ -14,6 +14,7 @@ import { useConfirm } from '../components/ConfirmModal';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 
 export const ApprovalQueue: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
@@ -21,7 +22,8 @@ export const ApprovalQueue: React.FC = () => {
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'inbox' | 'meetings' | 'history' | 'cadv'>('inbox');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<'inbox' | 'meetings' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'inbox');
 
   // Cash Advance / Liquidation states
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
@@ -307,7 +309,7 @@ export const ApprovalQueue: React.FC = () => {
       {/* Navigation tabs */}
       <div className="flex gap-1 border-b border-slate-200">
         <button 
-          onClick={() => setTab('inbox')} 
+          onClick={() => { setTab('inbox'); searchParams.set('tab', 'inbox'); setSearchParams(searchParams); }} 
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'inbox' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -315,7 +317,7 @@ export const ApprovalQueue: React.FC = () => {
           Pending ({inboxClaims.length})
         </button>
         <button
-          onClick={() => setTab('meetings')}
+          onClick={() => { setTab('meetings'); searchParams.set('tab', 'meetings'); setSearchParams(searchParams); }}
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'meetings' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -323,7 +325,7 @@ export const ApprovalQueue: React.FC = () => {
           Review Meetings ({pendingMeetingConfirmations.length})
         </button>
         <button
-          onClick={() => setTab('history')}
+          onClick={() => { setTab('history'); searchParams.set('tab', 'history'); setSearchParams(searchParams); }}
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'history' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -331,7 +333,7 @@ export const ApprovalQueue: React.FC = () => {
           Decision History ({decisionHistoryItems.length})
         </button>
         <button 
-          onClick={() => setTab('cadv')} 
+          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }} 
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'cadv' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -866,15 +868,23 @@ export const ApprovalQueue: React.FC = () => {
           </div>
           <div className="px-6 pb-6 h-48 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={requestorData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#475569" }} width={90} />
+              <BarChart data={requestorData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <XAxis
+                  dataKey="name"
+                  type="category"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: "#475569" }}
+                  tickFormatter={(name: string) => name.split(' ')[0]}
+                  interval={0}
+                />
+                <YAxis type="number" hide />
                 <Tooltip
                   cursor={{ fill: "#f1f5f9" }}
                   formatter={(value: number) => formatPHP(value)}
                   contentStyle={{ fontSize: "11px", borderRadius: "4px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}
                 />
-                <Bar dataKey="value" radius={[0, 2, 2, 0]} barSize={18}>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={32}>
                   {requestorData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#cbd5e1"} />
                   ))}

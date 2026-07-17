@@ -98,7 +98,7 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
       reference: `CADV-${c.id.substring(0, 6)}`,
       type: 'Cash Advance',
       status: c.status,
-      amount: c.requestedAmount,
+      amount: c.amount,
       date: c.createdAt,
       path: `/cash-advances/${c.id}`
     })),
@@ -107,7 +107,7 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
       reference: `LIQ-${l.id.substring(0, 6)}`,
       type: 'Liquidation',
       status: l.status,
-      amount: l.totalExpenses,
+      amount: l.totalSpent,
       date: l.createdAt,
       path: `/liquidations/${l.id}`
     }))

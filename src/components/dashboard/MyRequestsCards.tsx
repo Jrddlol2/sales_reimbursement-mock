@@ -62,6 +62,8 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           icon={Tray}
           variant="warning"
           description="Awaiting approval"
+          actionLabel="View Pending"
+          actionPath="/history?status=Pending Approval"
         />
         <KPICard
           title="Approved"
@@ -69,6 +71,8 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           icon={CheckCircle}
           variant="success"
           description="In processing"
+          actionLabel="View Processing"
+          actionPath="/history?status=Processing"
         />
         <KPICard
           title="Completed"
@@ -76,13 +80,17 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           icon={Receipt}
           variant="success"
           description="Finalized"
+          actionLabel="View Completed"
+          actionPath="/history?status=Completed"
         />
         <KPICard 
-          title="Rejected" 
-          value={rejected - returned} 
-          icon={ReceiptX} 
+          title="Rejected"
+          value={rejected - returned}
+          icon={ReceiptX}
           variant="danger"
           description="Declined requests"
+          actionLabel="View Rejected"
+          actionPath="/history?status=Rejected"
         />
       </div>
     </div>

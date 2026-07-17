@@ -96,7 +96,7 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       reference: `CADV-${c.id.substring(0, 6)}`,
       type: 'Release Cash Advance',
       status: c.status,
-      amount: c.requestedAmount,
+      amount: c.amount,
       date: c.createdAt,
       path: '/processing'
     })),

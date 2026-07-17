@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { Mom, MomStatus, User, ClaimStatus } from '../types';
@@ -8,19 +8,54 @@ import {
   Question, Calendar, ShieldCheck, ArrowLeft, Bank, Check, Plus, Trash
 } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
-import { formatPHP } from '../utils';
+import { formatPHP, uploadFile } from '../utils';
 import { useToast } from '../components/Toast';
 import { ExpenseLineItemEditor } from '../components/ExpenseLineItemEditor';
-import { MomQuickCreateModal } from '../components/MomQuickCreateModal';
 
 interface LineItem {
   id: string;
   category: string;
   amount: string;
   receiptName: string;
+  receiptUrl?: string;
   isDragOver?: boolean;
   or_number?: string;
 }
+
+
+const CLAIM_TEMPLATES = [
+  {
+    name: 'Client Meeting (Dinner)',
+    icon: Sparkle,
+    data: {
+      expense_category: 'Client Meals',
+      remarks: 'Client dinner meeting to discuss Q3 initiatives',
+      lineItems: [{ category: 'Client Meals', amount: '2500' }]
+    }
+  },
+  {
+    name: 'Sales Visit (Out of Town)',
+    icon: Sparkle,
+    data: {
+      expense_category: 'Travel',
+      remarks: 'Out of town sales visit and partner alignment',
+      lineItems: [
+        { category: 'Travel', amount: '5000' },
+        { category: 'Accommodation', amount: '3500' },
+        { category: 'Transportation', amount: '1200' }
+      ]
+    }
+  },
+  {
+    name: 'Local Transport',
+    icon: Sparkle,
+    data: {
+      expense_category: 'Transportation',
+      remarks: 'Taxi fare for on-site client presentation',
+      lineItems: [{ category: 'Transportation', amount: '600' }]
+    }
+  }
+];
 
 const REIMBURSEMENT_CATEGORIES = [
   { value: 'Client Meals', label: 'Client Meals' },
@@ -31,6 +66,8 @@ const REIMBURSEMENT_CATEGORIES = [
 
 export const SubmitClaim: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const duplicateData = (location.state as any)?.duplicateData;
   const { id: resubmitClaimId } = useParams();
   const isResubmit = !!resubmitClaimId;
   const { user } = useAuth();
@@ -55,11 +92,11 @@ export const SubmitClaim: React.FC = () => {
     { id: Math.random().toString(), category: '', amount: '', receiptName: '', or_number: '' }
   ]);
 
-  const [showMomCreateModal, setShowMomCreateModal] = useState(false);
   const [pastClaims, setPastClaims] = useState<any[]>([]);
   const [requestType, setRequestType] = useState<'reimbursement' | 'cash_advance'>('reimbursement');
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advancePurpose, setAdvancePurpose] = useState('');
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
   const [advanceMomId, setAdvanceMomId] = useState('');
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
   const [submittingAdvance, setSubmittingAdvance] = useState(false);
@@ -69,6 +106,77 @@ export const SubmitClaim: React.FC = () => {
     return sum + (isNaN(parsed) ? 0 : parsed);
   }, 0);
 
+  
+  const AUTOSAVE_KEY = 'reimbursement_draft_v1';
+  
+
+  // Unsaved changes & autosave & duplicate
+  useEffect(() => {
+    if (isResubmit) return; // Don't autosave/load on resubmission
+    
+    // Load duplicate data if available
+    if (duplicateData) {
+      if (duplicateData.mom_id) setSelectedMomId(duplicateData.mom_id);
+      if (duplicateData.remarks) setRemarks(duplicateData.remarks + ' (Copy)');
+      if (duplicateData.expenses) {
+        setLineItems(duplicateData.expenses.map((e: any) => ({
+          id: Math.random().toString(),
+          category: e.category,
+          amount: String(e.amount),
+          receiptName: '',
+          or_number: e.or_number || ''
+        })));
+      }
+      toast.info('Claim details duplicated.');
+      // Clear history state to avoid re-duplicating on reload
+      window.history.replaceState({}, document.title);
+      return;
+    }
+    
+    // Load draft on mount
+    try {
+      const draftStr = localStorage.getItem(AUTOSAVE_KEY);
+      if (draftStr) {
+        const draft = JSON.parse(draftStr);
+        if (draft.requestType) setRequestType(draft.requestType);
+        if (draft.selectedMomId) setSelectedMomId(draft.selectedMomId);
+        if (draft.remarks) setRemarks(draft.remarks);
+        if (draft.meetingDate) setMeetingDate(draft.meetingDate);
+        if (draft.meetingTime) setMeetingTime(draft.meetingTime);
+        if (draft.lineItems && draft.lineItems.length > 0) setLineItems(draft.lineItems);
+        if (draft.advanceAmount) setAdvanceAmount(draft.advanceAmount);
+        if (draft.advancePurpose) setAdvancePurpose(draft.advancePurpose);
+        toast.info('Loaded your unsaved draft.');
+      }
+    } catch (e) {
+      console.error('Failed to parse draft', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isResubmit || loading) return;
+    
+    const draft = {
+      requestType, selectedMomId, remarks, meetingDate, meetingTime, lineItems, advanceAmount, advancePurpose
+    };
+    const hasData = remarks || advancePurpose || (lineItems.length > 0 && lineItems[0].amount);
+    
+    if (hasData) {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+    }
+    
+    // Before unload warning
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasData) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [requestType, selectedMomId, remarks, meetingDate, meetingTime, lineItems, advanceAmount, advancePurpose, isResubmit, loading]);
+  
   const hasMeetingConflict = !!meetingDate && !!meetingTime && approverSlots.some(
     slot => slot.meeting_date === meetingDate && slot.meeting_time === meetingTime
   );
@@ -169,24 +277,28 @@ export const SubmitClaim: React.FC = () => {
     setSupportingDocs('SOW_Draft_v1.pdf');
   };
 
-  const handleMomCreated = (mom: Mom) => {
-    setMoms(prev => [...prev, mom]);
-    setSelectedMomId(mom.id);
-    setShowMomCreateModal(false);
+  const handleUploadFile = async (file: File, id: string) => {
+    try {
+      toast.info('Uploading receipt...');
+      const url = await uploadFile(file);
+      setLineItems(items => items.map(item => item.id === id ? { ...item, receiptName: file.name, receiptUrl: url } : item));
+      toast.success('Receipt uploaded');
+    } catch (err: any) {
+      toast.error('Upload failed: ' + err.message);
+    }
   };
 
   const handleFileDrop = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     setLineItems(items => items.map(item => item.id === id ? { ...item, isDragOver: false } : item));
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setLineItems(items => items.map(item => item.id === id ? { ...item, receiptName: e.dataTransfer.files[0].name } : item));
+      handleUploadFile(e.dataTransfer.files[0], id);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
     if (e.target.files && e.target.files.length > 0) {
-      const name = e.target.files[0].name;
-      setLineItems(items => items.map(item => item.id === id ? { ...item, receiptName: name } : item));
+      handleUploadFile(e.target.files[0], id);
     }
   };
 
@@ -231,7 +343,7 @@ export const SubmitClaim: React.FC = () => {
       const payloadLineItems = lineItems.map(item => ({
         category: item.category,
         amount: parseFloat(item.amount),
-        receipt_url: `/uploads/${item.receiptName}`,
+        receipt_url: item.receiptUrl || `/uploads/${item.receiptName}`,
         or_number: item.or_number || undefined
       }));
 
@@ -530,13 +642,12 @@ export const SubmitClaim: React.FC = () => {
                 </p>
               </div>
               <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setShowMomCreateModal(true)}
+                <Link
+                  to="/moms?create=true"
                   className="corp-btn-primary"
                 >
                   <Plus className="w-4 h-4" /> Create New MOM
-                </button>
+                </Link>
                 <Link
                   to="/moms"
                   className="inline-flex items-center justify-center text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-300 hover:bg-slate-50 px-4 py-2 rounded uppercase tracking-wider font-display"
@@ -572,13 +683,12 @@ export const SubmitClaim: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowMomCreateModal(true)}
+                      <Link
+                        to="/moms?create=true"
                         className="inline-flex items-center justify-center gap-1 text-xs font-bold text-brand bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded whitespace-nowrap shrink-0"
                       >
                         <Plus className="w-4 h-4" /> Create New MOM
-                      </button>
+                      </Link>
                     </div>
                     <p className="text-[10px] text-gray-400 mt-1">
                       Only Completed MOMs verified and dispatched to clients are listed here.
@@ -606,7 +716,7 @@ export const SubmitClaim: React.FC = () => {
                           item={item}
                           index={index}
                           mode="standard"
-                          categories={REIMBURSEMENT_CATEGORIES}
+                          categories={expenseCategories.length > 0 ? expenseCategories : REIMBURSEMENT_CATEGORIES}
                           showRemove={lineItems.length > 1}
                           isDuplicate={!!isDuplicate}
                           onRemove={() => removeLineItem(item.id)}
@@ -746,13 +856,6 @@ export const SubmitClaim: React.FC = () => {
             </form>
           )}
         </>
-      )}
-
-      {showMomCreateModal && (
-        <MomQuickCreateModal
-          onClose={() => setShowMomCreateModal(false)}
-          onCreated={handleMomCreated}
-        />
       )}
     </div>
   );

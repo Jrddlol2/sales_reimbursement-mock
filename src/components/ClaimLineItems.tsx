@@ -152,21 +152,9 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                 className="bg-white rounded-lg shadow-2xl overflow-hidden max-w-4xl w-full h-[80vh] flex flex-col md:flex-row relative z-10 border border-slate-200"
               >
                 {/* Image Section */}
-                <div className="flex-1 bg-slate-900 flex items-center justify-center p-6 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
+                <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                   {previewExpense.receipt_url.toLowerCase().endsWith('.pdf') ? (
-                    <div className="text-slate-400 text-sm flex flex-col items-center">
-                      <FilePdf className="w-16 h-16 mb-3 text-red-500" />
-                      <span className="font-semibold text-slate-200">PDF Document</span>
-                      <span className="text-xs text-slate-500 mt-1">{previewExpense.receipt_url.split('/').pop()}</span>
-                      <a
-                        href={previewExpense.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-4 bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded text-xs font-bold"
-                      >
-                        Download PDF
-                      </a>
-                    </div>
+                    <iframe src={previewExpense.receipt_url} className="w-full h-full border-0" title="PDF Document" />
                   ) : (
                     <img
                       src={previewExpense.receipt_url}
@@ -327,21 +315,9 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                 className="bg-white rounded-lg shadow-2xl overflow-hidden max-w-4xl w-full h-[80vh] flex flex-col md:flex-row relative z-10 border border-slate-200"
               >
                 {/* Image Section */}
-                <div className="flex-1 bg-slate-900 flex items-center justify-center p-6 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
+                <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                   {previewExpense.receipt_url?.toLowerCase().endsWith('.pdf') ? (
-                    <div className="text-slate-400 text-sm flex flex-col items-center">
-                      <FilePdf className="w-16 h-16 mb-3 text-red-500" />
-                      <span className="font-semibold text-slate-200">PDF Document</span>
-                      <span className="text-xs text-slate-500 mt-1">{previewExpense.receipt_url.split('/').pop()}</span>
-                      <a
-                        href={previewExpense.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-4 bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded text-xs font-bold"
-                      >
-                        Download PDF
-                      </a>
-                    </div>
+                    <iframe src={previewExpense.receipt_url} className="w-full h-full border-0" title="PDF Document" />
                   ) : (
                     <img
                       src={previewExpense.receipt_url}

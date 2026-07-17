@@ -100,7 +100,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
       reference: `CADV-${c.id.substring(0, 6)}`,
       type: 'Cash Advance Approval',
       status: c.status,
-      amount: c.requestedAmount,
+      amount: c.amount,
       date: c.createdAt,
       path: '/approvals'
     })),
@@ -109,7 +109,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
       reference: `LIQ-${l.id.substring(0, 6)}`,
       type: 'Liquidation Review',
       status: l.status,
-      amount: l.totalExpenses,
+      amount: l.totalSpent,
       date: l.createdAt,
       path: '/approvals'
     }))
@@ -141,7 +141,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
             variant={pendingTotal > 0 ? "action" : "success"}
             description={pendingTotal > 0 ? "Waiting for your review" : "All caught up!"}
             actionLabel={pendingTotal > 0 ? "Review Requests" : undefined}
-            actionPath={pendingTotal > 0 ? "/approvals" : undefined}
+            actionPath={pendingTotal > 0 ? "/approvals?tab=inbox" : undefined}
           />
           <KPICard 
             title="Reimbursements" 
@@ -150,6 +150,8 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
             variant="info"
             description="Reimbursement claims"
             additionalContext={pendingClaims.length > 0 ? "Needs approval" : "No pending reimbursements"}
+            actionLabel={pendingClaims.length > 0 ? "View Claims" : undefined}
+            actionPath={pendingClaims.length > 0 ? "/approvals?tab=inbox" : undefined}
           />
           <KPICard 
             title="Cash Advances" 
@@ -158,6 +160,8 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
             variant="info"
             description="Cash advance requests"
             additionalContext={pendingCadvs.length > 0 ? "Needs approval" : "No pending cash advances"}
+            actionLabel={pendingCadvs.length > 0 ? "View CADVs" : undefined}
+            actionPath={pendingCadvs.length > 0 ? "/approvals?tab=cadv" : undefined}
           />
           <KPICard 
             title="Liquidations" 
@@ -166,6 +170,8 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
             variant="info"
             description="Liquidation reviews"
             additionalContext={pendingLiqs.length > 0 ? "Needs approval" : "No pending liquidations"}
+            actionLabel={pendingLiqs.length > 0 ? "View Liquidations" : undefined}
+            actionPath={pendingLiqs.length > 0 ? "/approvals?tab=inbox" : undefined}
           />
         </div>
       </div>

@@ -1,12 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
-import { CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import Papa from 'papaparse';
+import { DownloadSimple, CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { getStatusColor, getClaimNumber } from '../utils';
+
+const PAGE_SIZE = 25;
 
 export const AuditLog: React.FC = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+
+  const handleExport = () => {
+    if (history.length === 0) return;
+    const csv = Papa.unparse(history.map((log) => ({
+      Timestamp: new Date(log.timestamp).toLocaleString(),
+      'Reference ID': log.claim ? (log.claim.claim_number || log.claim.id.substring(0,8)) : log.targetUser ? log.targetUser.name : log.claim_id.substring(0,8),
+      'Old Status': log.old_status,
+      'New Status': log.new_status,
+      'Changed By': log.user ? log.user.name : log.changed_by,
+      'Reason': log.reason || ''
+    })));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'audit_log.csv';
+    link.click();
+  };
+
 
   useEffect(() => {
     apiFetch('/api/history').then(data => {
@@ -14,6 +36,10 @@ export const AuditLog: React.FC = () => {
       setLoading(false);
     });
   }, []);
+
+  const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedHistory = history.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -43,10 +69,22 @@ export const AuditLog: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Audit Log</h2>
-        <p className="mt-1 text-xs text-slate-500">Immutable record of all status changes across Reimbursement claims, Cash Advances, and Liquidations.</p>
+      
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Audit Log</h2>
+          <p className="mt-1 text-xs text-slate-500">Immutable record of all status changes across Reimbursement claims, Cash Advances, and Liquidations.</p>
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={history.length === 0}
+          className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+        >
+          <DownloadSimple className="w-4 h-4" />
+          Export CSV
+        </button>
       </div>
+
 
       <div className="corp-card flex flex-col overflow-hidden">
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
@@ -77,7 +115,7 @@ export const AuditLog: React.FC = () => {
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</td>
                   </tr>
-                ) : history.map((log: any) => (
+                ) : pagedHistory.map((log: any) => (
                   <tr key={log.id} className="hover:bg-brand/5 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap text-[10px] text-slate-500 font-mono">
                       {new Date(log.timestamp).toLocaleString()}
@@ -123,7 +161,7 @@ export const AuditLog: React.FC = () => {
           <div className="sm:hidden flex flex-col divide-y divide-slate-100">
             {history.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</div>
-            ) : history.map((log: any) => (
+            ) : pagedHistory.map((log: any) => (
               <div key={log.id} className="p-4 hover:bg-brand/5 flex flex-col gap-2.5 transition-colors">
                 <div className="flex items-center justify-between text-[10px]">
                   <span className="text-slate-500 font-mono">{new Date(log.timestamp).toLocaleString()}</span>
@@ -166,23 +204,31 @@ export const AuditLog: React.FC = () => {
           </div>
         </div>
         
-        {/* Pagination visually represented */}
+        {/* Pagination */}
         <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between sm:px-6">
           <div className="flex-1 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-slate-500">
-                Showing <span className="font-extrabold text-slate-900">1</span> to <span className="font-extrabold text-slate-900">{history.length}</span> of <span className="font-extrabold text-slate-900">{history.length}</span> results
+                Showing <span className="font-extrabold text-slate-900">{history.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-extrabold text-slate-900">{Math.min(currentPage * PAGE_SIZE, history.length)}</span> of <span className="font-extrabold text-slate-900">{history.length}</span> results
               </p>
             </div>
             <div>
               <nav className="relative z-0 inline-flex rounded shadow-sm -space-x-px" aria-label="Pagination">
-                <button className="relative inline-flex items-center px-2 py-1.5 rounded-l border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-1.5 rounded-l border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                >
                   <CaretLeft className="h-3.5 w-3.5" />
                 </button>
                 <button className="relative inline-flex items-center px-3 py-1.5 border border-slate-300 bg-white text-xs font-extrabold text-blue-600 font-display">
-                  1
+                  {currentPage} / {totalPages}
                 </button>
-                <button className="relative inline-flex items-center px-2 py-1.5 rounded-r border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-1.5 rounded-r border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+                >
                   <CaretRight className="h-3.5 w-3.5" />
                 </button>
               </nav>

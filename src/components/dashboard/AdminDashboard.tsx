@@ -78,10 +78,26 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
   // --- EXECUTIVE KPIs & DATA ---
   const completedClaims = claims.filter(c => c.status === ClaimStatus.COMPLETED);
   const totalReimbursed = completedClaims.reduce((acc, c) => acc + c.total_amount, 0);
-  const totalCadvs = cadvs.filter(c => c.status === CashAdvanceStatus.RELEASED || c.status === CashAdvanceStatus.LIQUIDATED).reduce((acc, c) => acc + c.requestedAmount, 0);
+  const approvedClaims = claims.filter(c => [ClaimStatus.COMPLETED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM].includes(c.status) && c.history && c.history.some(h => h.new_status === ClaimStatus.PROCESSING));
+  const avgApprovalTimeHours = approvedClaims.length ? Math.round(approvedClaims.reduce((acc, c) => {
+    const submittedDate = new Date(c.created_at);
+    const approvedEvent = c.history?.find(h => h.new_status === ClaimStatus.PROCESSING);
+    const approvedDate = approvedEvent ? new Date(approvedEvent.timestamp) : new Date();
+    return acc + Math.max(0, (approvedDate.getTime() - submittedDate.getTime()) / (1000 * 60 * 60));
+  }, 0) / approvedClaims.length) : 0;
+  const submittedTodayCount = claims.filter(c => new Date(c.created_at).toDateString() === new Date().toDateString()).length;
+  const totalCadvs = cadvs.filter(c => c.status === CashAdvanceStatus.RELEASED || c.status === CashAdvanceStatus.LIQUIDATED).reduce((acc, c) => acc + c.amount, 0);
   
   const activeRequests = claims.filter(c => [ClaimStatus.PENDING_APPROVAL, ClaimStatus.PROCESSING].includes(c.status)).length 
     + cadvs.filter(c => [CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.APPROVED].includes(c.status)).length;
+
+  const topExpenseCategoriesData = () => {
+    const categories: Record<string, number> = {};
+    completedClaims.forEach(c => {
+      categories[c.category] = (categories[c.category] || 0) + c.total_amount;
+    });
+    return Object.entries(categories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+  };
 
   const departmentData = () => {
     const deps: Record<string, number> = {};
@@ -173,13 +189,18 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <KPICard title="Total Reimbursements" value={formatPHP(totalReimbursed)} icon={FileText} colorClass="text-indigo-600 bg-white" />
+            <KPICard title="Avg Approval Time" value={`${avgApprovalTimeHours}h`} description="average approval time" icon={Clock} colorClass="text-purple-600 bg-white" />
+            <KPICard title="Submitted Today" value={submittedTodayCount} description="requests submitted today" icon={FileText} colorClass="text-emerald-600 bg-white" />
             <KPICard title="Total Cash Advances" value={formatPHP(totalCadvs)} icon={FileText} colorClass="text-emerald-600 bg-white" />
             <KPICard title="Active Requests" value={activeRequests} icon={Clock} colorClass="text-amber-600 bg-white" />
             <KPICard title="Completed Requests" value={completedClaims.length} icon={CheckCircle} colorClass="text-blue-600 bg-white" />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <AnalyticsCard title="Enterprise Expense Trend">
               <SimpleLineChart data={monthlyExpenseData()} dataKey="Amount" name="Expenses (PHP)" />
+            </AnalyticsCard>
+            <AnalyticsCard title="Top Expense Categories">
+              <DonutChart data={topExpenseCategoriesData()} centerCaption="Spend" />
             </AnalyticsCard>
             <AnalyticsCard title="Requests by Department">
               <SimpleBarChart data={departmentData()} dataKey="count" color="#2563eb" name="Requests" />
@@ -214,9 +235,6 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
           </div>
         </>
       )}
-
-      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={todayHistory.length} />
-      <MyRecentSubmissionsTable user={user} claims={claims} cadvs={cadvs} liqs={liqs} />
     </div>
   );
 };

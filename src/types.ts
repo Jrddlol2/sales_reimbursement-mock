@@ -135,9 +135,18 @@ export interface Claim {
   processed_by?: string;
   processing_date?: string;
   sourceLiquidationId?: string;
+  import_batch_id?: string;
   created_at: string;
   updated_at: string;
   reviewMeeting?: ReviewMeeting; // enriched by GET /api/claims and GET /api/claims/:id
+}
+
+export interface ImportBatch {
+  id: string;
+  admin_id: string;
+  filename: string;
+  total_records: number;
+  imported_at: string;
 }
 
 export interface Approval {
@@ -198,6 +207,8 @@ export interface CashAdvance {
   releaseDate?: string;
   releaseReference?: string;
   status: CashAdvanceStatus;
+  reminderSent?: boolean;
+  createdAt?: string;
 }
 
 export enum LiquidationVarianceType {
@@ -222,6 +233,41 @@ export interface Liquidation {
   varianceAmount: number;
   varianceType: LiquidationVarianceType;
   status: LiquidationStatus;
+  createdAt?: string;
+}
+
+export enum SupportRequestPriority {
+  LOW = 'Low',
+  MEDIUM = 'Medium',
+  HIGH = 'High',
+}
+
+export enum SupportRequestStatus {
+  OPEN = 'Open',
+  IN_PROGRESS = 'In Progress',
+  RESOLVED = 'Resolved',
+}
+
+export interface SupportRequestMessage {
+  id: string;
+  request_id: string;
+  sender_id: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface SupportRequest {
+  id: string;
+  requestor_id: string;
+  subject: string;
+  description: string;
+  related_entity_type?: 'Claim' | 'CashAdvance' | 'Liquidation' | 'MOM';
+  related_entity_id?: string;
+  priority: SupportRequestPriority;
+  status: SupportRequestStatus;
+  assigned_admin_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LiquidationLineItem {

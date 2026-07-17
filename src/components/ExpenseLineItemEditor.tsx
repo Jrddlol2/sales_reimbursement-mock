@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { CloudArrowUp, X, Warning, Trash, Sparkle } from '@phosphor-icons/react';
 import Tesseract from 'tesseract.js';
 import { ReceiptThumbnail } from './ReceiptThumbnail';
+import { uploadFile } from '../utils';
 
 export interface ExpenseItemState {
   id: string;
   category: string;
   amount: string;
   receiptName: string;
+  receiptUrl?: string;
   isDragOver?: boolean;
   or_number?: string;
   // liquidation-specific fields
@@ -102,12 +104,22 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrHint, setOcrHint] = useState<string | null>(null);
 
+  const handleUploadFile = async (file: File) => {
+    try {
+      const url = await uploadFile(file);
+      onChange('receiptName', file.name);
+      onChange('receiptUrl', url);
+    } catch (err: any) {
+      console.error('File upload failed', err);
+    }
+  };
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     onChange('isDragOver', false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      onChange('receiptName', file.name);
+      handleUploadFile(file);
       setLocalFile(file);
       setOcrHint(null);
     }
@@ -116,7 +128,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      onChange('receiptName', file.name);
+      handleUploadFile(file);
       setLocalFile(file);
       setOcrHint(null);
     }

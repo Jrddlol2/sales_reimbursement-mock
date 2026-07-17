@@ -5,7 +5,9 @@ import { formatPHP, getStatusDisplayLabel } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { ClockCounterClockwise, CaretRight, Funnel } from '@phosphor-icons/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import Papa from 'papaparse';
+import { DownloadSimple } from '@phosphor-icons/react';
 
 interface UnifiedActivityItem {
   id: string;
@@ -25,8 +27,9 @@ export const TransactionHistory: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Filters state
-  const [selectedType, setSelectedType] = useState<'All' | 'Reimbursement' | 'Cash Advance' | 'Liquidation'>('All');
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedType, setSelectedType] = useState<'All' | 'Reimbursement' | 'Cash Advance' | 'Liquidation'>((searchParams.get('type') as any) || 'All');
+  const [selectedStatus, setSelectedStatus] = useState<string>(searchParams.get('status') || 'All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -57,7 +60,7 @@ export const TransactionHistory: React.FC = () => {
             reference: `CADV-${c.id.substring(0, 6)}`,
             type: 'Cash Advance' as const,
             status: c.status,
-            amount: c.requestedAmount || c.amount || 0,
+            amount: c.amount || 0,
             date: c.createdAt || c.releaseDate || '',
             path: `/cash-advances/${c.id}`
           })),
@@ -144,6 +147,23 @@ export const TransactionHistory: React.FC = () => {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedItems = filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+  
+  const handleExport = () => {
+    if (filteredItems.length === 0) return;
+    const csv = Papa.unparse(filteredItems.map(item => ({
+      Reference: item.reference,
+      Type: item.type,
+      Status: item.status,
+      Amount: item.amount,
+      Date: item.date ? item.date.substring(0, 10) : ''
+    })));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'transaction_history.csv';
+    link.click();
+  };
+
   const types: Array<'All' | 'Reimbursement' | 'Cash Advance' | 'Liquidation'> = [
     'All',
     'Reimbursement',
@@ -196,6 +216,8 @@ export const TransactionHistory: React.FC = () => {
               value={selectedStatus}
               onChange={e => {
                 setSelectedStatus(e.target.value);
+                searchParams.set('status', e.target.value);
+                setSearchParams(searchParams);
                 setCurrentPage(1);
               }}
               className="block w-full md:w-48 border border-gray-300 rounded px-3 py-1.5 text-xs focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-700"
@@ -242,6 +264,7 @@ export const TransactionHistory: React.FC = () => {
             />
           </div>
 
+          
           {(startDate || endDate) && (
             <button
               onClick={() => {
@@ -254,6 +277,17 @@ export const TransactionHistory: React.FC = () => {
               Clear Dates
             </button>
           )}
+          
+          <div className="flex-1"></div>
+          <button
+            onClick={handleExport}
+            disabled={filteredItems.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <DownloadSimple className="w-4 h-4" />
+            Export CSV
+          </button>
+
         </div>
       </div>
 

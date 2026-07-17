@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { format, differenceInCalendarDays, differenceInHours } from 'date-fns';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
@@ -25,7 +25,8 @@ export const ProcessingQueue: React.FC = () => {
   const [claims, setClaims] = useState<ClaimWithDetails[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'queue' | 'history' | 'cadv'>('queue');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<'queue' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'queue');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Cash Advance / Liquidation states
@@ -249,7 +250,7 @@ export const ProcessingQueue: React.FC = () => {
       {/* Navigation tabs */}
       <div className="flex gap-1 border-b border-slate-200">
         <button 
-          onClick={() => setTab('queue')} 
+          onClick={() => { setTab('queue'); searchParams.set('tab', 'queue'); setSearchParams(searchParams); }} 
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'queue' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -257,7 +258,7 @@ export const ProcessingQueue: React.FC = () => {
           Disbursement Queue ({pendingClaims.length})
         </button>
         <button 
-          onClick={() => setTab('history')} 
+          onClick={() => { setTab('history'); searchParams.set('tab', 'history'); setSearchParams(searchParams); }} 
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'history' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -265,7 +266,7 @@ export const ProcessingQueue: React.FC = () => {
           Disbursement History ({historyClaims.length})
         </button>
         <button 
-          onClick={() => setTab('cadv')} 
+          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }} 
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'cadv' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}

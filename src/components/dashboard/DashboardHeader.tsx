@@ -23,7 +23,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ user, summaryT
           {getGreeting()}, {user.name.split(' ')[0]}
         </h1>
         <div className="flex items-center space-x-3 text-sm text-slate-500 font-medium">
-          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">{user.role}</span>
+          <span className="px-2.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold">{user.role}</span>
           <span>&bull;</span>
           <span>{user.department}</span>
         </div>

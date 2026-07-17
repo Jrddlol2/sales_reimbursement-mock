@@ -1,5 +1,7 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -7,7 +9,7 @@ import {
   ExpenseLineItem, Approval, StatusHistory, Email,
   CashAdvance, CashAdvanceStatus, Liquidation, LiquidationStatus,
   LiquidationVarianceType, LiquidationLineItem,
-  ReviewMeeting, ReviewMeetingStatus, Company
+  ReviewMeeting, ReviewMeetingStatus, Company, SupportRequest, SupportRequestMessage, SupportRequestStatus, SupportRequestPriority, ImportBatch
 } from './src/types';
 
 const LIQUIDATION_DEADLINE_DAYS = 7;
@@ -23,6 +25,18 @@ let cashAdvances: CashAdvance[] = [];
 let liquidations: Liquidation[] = [];
 let liquidationLineItems: LiquidationLineItem[] = [];
 let reviewMeetings: ReviewMeeting[] = [];
+let importBatches: ImportBatch[] = [];
+let supportRequests: SupportRequest[] = [];
+let supportMessages: SupportRequestMessage[] = [];
+
+// System Settings (In-Memory)
+let systemSettings = {
+  expenseCategories: [
+    'Client Meals', 'Travel', 'Accommodation', 'Transportation',
+    'Office Supplies', 'Software Subscriptions', 'Training', 'Miscellaneous'
+  ],
+  highValueThreshold: 15000
+};
 
 let claimCounter = 123;
 
@@ -171,11 +185,34 @@ Business Support Management Assistant`;
 
 const users: User[] = buildDefaultUsers();
 
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+const upload = multer({ storage });
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
   app.use(express.json());
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+  app.post('/api/upload', upload.single('file'), (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    res.json({ url: `/uploads/${req.file.filename}` });
+  });
 
   // Helper to get current user from header (mock auth)
   const getUser = (req: express.Request) => {
@@ -252,8 +289,47 @@ async function startServer() {
     return false;
   };
 
+  // Given a manager's id, resolves who should actually act as approver right
+  // now: the manager themself, or their active delegate if a delegation
+  // window currently covers today. Mirrors logic already duplicated at claim
+  // submission and the approver-schedule endpoints; used where a claim's
+  // routing needs to be freshly re-resolved (e.g. on resubmit).
+  const resolveActiveApprover = (managerId: string): { currentApproverId: string; originalApproverId?: string } => {
+    const manager = users.find(u => u.id === managerId);
+    if (manager?.delegation) {
+      const now = new Date();
+      const start = new Date(manager.delegation.start_date);
+      const end = new Date(manager.delegation.end_date);
+      end.setHours(23, 59, 59, 999);
+      if (now >= start && now <= end) {
+        return { currentApproverId: manager.delegation.delegate_id, originalApproverId: manager.id };
+      }
+    }
+    return { currentApproverId: managerId };
+  };
+
   // Auth endpoints (Mock)
   app.get('/api/users', (req, res) => res.json(users));
+
+  // Admin settings endpoints
+  app.get('/api/admin/settings', (req, res) => {
+    res.json(systemSettings);
+  });
+
+  app.put('/api/admin/settings', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { expenseCategories, highValueThreshold } = req.body;
+    if (expenseCategories && Array.isArray(expenseCategories)) {
+      systemSettings.expenseCategories = expenseCategories;
+    }
+    if (typeof highValueThreshold === 'number') {
+      systemSettings.highValueThreshold = highValueThreshold;
+    }
+    res.json(systemSettings);
+  });
 
   // Admin: Update a user's role/department/job title/reporting manager.
   // Configuration action, deliberately separate from claim approval/processing
@@ -706,20 +782,20 @@ ${user.name}`;
     const user = getUser(req);
     if (!user || !user.reports_to) return res.status(403).json({ error: 'Forbidden: You must have a designated manager (reports_to) to submit.' });
     
-    const { mom_id, expense_category, total_amount, receipt_url, or_number, remarks, supporting_documents, line_items, meeting_date, meeting_time } = req.body;
+    const { mom_id, expense_category, total_amount, receipt_url, or_number, remarks, supporting_documents, line_items, meeting_date, meeting_time, is_draft } = req.body;
 
-    if (!mom_id) return res.status(400).json({ error: 'Minutes of Meeting (MOM) is required.' });
+    if (!is_draft && !mom_id) return res.status(400).json({ error: 'Minutes of Meeting (MOM) is required.' });
     const mom = moms.find(m => m.id === mom_id);
     if (!mom) return res.status(400).json({ error: 'Minutes of Meeting (MOM) not found.' });
 
-    if (mom.status !== MomStatus.COMPLETED) {
+    if (!is_draft && mom.status !== MomStatus.COMPLETED) {
       return res.status(400).json({ error: 'Cannot attach an incomplete or draft Minutes of Meeting.' });
     }
     if (mom.claim_id) {
       return res.status(400).json({ error: 'This Minutes of Meeting is already linked to another claim and cannot be reused.' });
     }
 
-    if (!meeting_date || !meeting_time) {
+    if (!is_draft && (!meeting_date || !meeting_time)) {
       return res.status(400).json({ error: 'A Review Meeting date and time must be scheduled with your Approver.' });
     }
 
@@ -730,7 +806,7 @@ ${user.name}`;
 
     if (line_items && Array.isArray(line_items) && line_items.length > 0) {
       for (const item of line_items) {
-        if (!item.category) return res.status(400).json({ error: 'Each expense must have a category.' });
+        if (!is_draft && !item.category) return res.status(400).json({ error: 'Each expense must have a category.' });
         const numericAmount = Number(item.amount);
         if (isNaN(numericAmount) || numericAmount <= 0) return res.status(400).json({ error: 'Each expense amount must be a valid number greater than zero.' });
         if (!item.receipt_url) return res.status(400).json({ error: 'Each expense must have a receipt.' });
@@ -837,7 +913,7 @@ ${user.name}`;
       supporting_documents,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      flagged_high_value: itemsToCreate.some(item => item.amount > 15000)
+      flagged_high_value: itemsToCreate.some(item => item.amount > systemSettings.highValueThreshold)
     };
 
     claims.push(claim);
@@ -1169,7 +1245,17 @@ Please log in to the system and confirm or decline this new time.`
     claim.supporting_documents = supporting_documents;
     claim.status = ClaimStatus.PENDING_APPROVAL;
     claim.updated_at = new Date().toISOString();
-    claim.flagged_high_value = itemsToCreate.some(item => item.amount > 15000);
+    claim.flagged_high_value = itemsToCreate.some(item => item.amount > systemSettings.highValueThreshold);
+
+    // Re-resolve the approver at resubmit time - a delegation window that
+    // was active at original submission may have ended by now (or a new
+    // one may have started), and the claim shouldn't route to a stale
+    // delegate/manager.
+    if (user.reports_to) {
+      const { currentApproverId, originalApproverId } = resolveActiveApprover(user.reports_to);
+      claim.current_approver_id = currentApproverId;
+      claim.original_approver_id = originalApproverId;
+    }
 
     addHistory(claim.id, oldStatus, ClaimStatus.PENDING_APPROVAL, user.id, 'Revised and resubmitted by requestor after being returned');
 
@@ -1657,7 +1743,8 @@ BSM Assistant | BSD - IT Security Business`;
       purpose,
       momId,
       approverId: user.reports_to,
-      status: CashAdvanceStatus.DRAFT
+      status: CashAdvanceStatus.DRAFT,
+      createdAt: new Date().toISOString()
     };
 
     cashAdvances.push(cashAdvance);
@@ -1672,6 +1759,10 @@ BSM Assistant | BSD - IT Security Business`;
 
     const ca = cashAdvances.find(c => c.id === req.params.id);
     if (!ca) return res.status(404).json({ error: 'Cash Advance not found' });
+
+    if (ca.requestorId !== user.id && user.role !== UserRole.ADMIN) {
+      return res.status(403).json({ error: 'You do not have permission to modify this Cash Advance.' });
+    }
 
     const { amount, purpose, momId } = req.body;
 
@@ -1765,6 +1856,11 @@ BSM Assistant | BSD - IT Security Business`;
 
     if (ca.approverId !== user.id) {
       return res.status(403).json({ error: 'You are not the designated approver for this Cash Advance.' });
+    }
+
+    // Segregation of duties: Requestors cannot approve their own Cash Advances
+    if (ca.requestorId === user.id) {
+      return res.status(403).json({ error: 'Segregation of Duties: You cannot approve your own Cash Advance.' });
     }
 
     if (ca.status !== CashAdvanceStatus.SUBMITTED) {
@@ -1924,7 +2020,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 0,
       varianceAmount: -ca.amount,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.DRAFT
+      status: LiquidationStatus.DRAFT,
+      createdAt: new Date().toISOString()
     };
 
     liquidations.push(liquidation);
@@ -2093,6 +2190,11 @@ BSM Assistant | BSD - IT Security Business`;
       return res.status(403).json({ error: 'You are not the designated approver/reviewer for this Liquidation.' });
     }
 
+    // Segregation of duties: Requestors cannot review their own Liquidations
+    if (l.requestorId === user.id) {
+      return res.status(403).json({ error: 'Segregation of Duties: You cannot review your own Liquidation.' });
+    }
+
     if (l.status !== LiquidationStatus.SUBMITTED) {
       return res.status(400).json({ error: 'Only Submitted Liquidations can be reviewed.' });
     }
@@ -2157,7 +2259,7 @@ BSM Assistant | BSD - IT Security Business`;
           sourceLiquidationId: l.id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          flagged_high_value: l.varianceAmount > 15000
+          flagged_high_value: l.varianceAmount > systemSettings.highValueThreshold
         };
 
         claims.push(shortFallClaim);
@@ -2252,11 +2354,26 @@ BSM Assistant | BSD - IT Security Business`;
     
     const { delegate_id, start_date, end_date } = req.body;
     const targetUser = users.find(u => u.id === user.id);
-    
+
     if (targetUser) {
       if (!delegate_id) {
         targetUser.delegation = undefined;
       } else {
+        if (delegate_id === user.id) {
+          return res.status(400).json({ error: 'You cannot delegate to yourself.' });
+        }
+        const delegate = users.find(u => u.id === delegate_id);
+        if (!delegate) {
+          return res.status(400).json({ error: 'Delegate must be an existing user.' });
+        }
+        const start = new Date(start_date);
+        const end = new Date(end_date);
+        if (!start_date || !end_date || isNaN(start.getTime()) || isNaN(end.getTime())) {
+          return res.status(400).json({ error: 'A valid start and end date are required.' });
+        }
+        if (start > end) {
+          return res.status(400).json({ error: 'Start date must be on or before the end date.' });
+        }
         targetUser.delegation = { delegate_id, start_date, end_date };
       }
     }
@@ -2273,7 +2390,12 @@ BSM Assistant | BSD - IT Security Business`;
     
     const claim = claims.find(c => c.id === req.params.id);
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
-    
+
+    const newApprover = users.find(u => u.id === new_approver_id);
+    if (!newApprover || newApprover.role !== UserRole.APPROVER) {
+      return res.status(400).json({ error: 'The new approver must be an existing user with the Approver role.' });
+    }
+
     const oldApproverId = claim.current_approver_id;
     const oldApproverName = users.find(u => u.id === oldApproverId)?.name || oldApproverId;
     const newApproverName = users.find(u => u.id === new_approver_id)?.name || new_approver_id;
@@ -4772,6 +4894,211 @@ BSM Assistant | BSD - IT Security Business`;
     claimCounter = 123;
 
     res.json({ success: true });
+  });
+
+  // Support Requests API
+  app.get('/api/support', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    let userRequests = supportRequests;
+    if (user.role !== UserRole.ADMIN) {
+      userRequests = supportRequests.filter(sr => sr.requestor_id === user.id);
+    }
+    
+    res.json(userRequests);
+  });
+
+  app.get('/api/support/:id', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const request = supportRequests.find(sr => sr.id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Not found' });
+    
+    if (user.role !== UserRole.ADMIN && request.requestor_id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const messages = supportMessages.filter(sm => sm.request_id === request.id)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+    res.json({ ...request, messages });
+  });
+
+  app.post('/api/support', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const { subject, description, related_entity_type, related_entity_id, priority } = req.body;
+    
+    const newRequest: SupportRequest = {
+      id: uuidv4(),
+      requestor_id: user.id,
+      subject,
+      description,
+      related_entity_type,
+      related_entity_id,
+      priority: priority || SupportRequestPriority.LOW,
+      status: SupportRequestStatus.OPEN,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    supportRequests.push(newRequest);
+    
+    // Notify Admins
+    const admins = users.filter(u => u.role === UserRole.ADMIN);
+    admins.forEach(admin => {
+      sendEmail(admin.id, user.name, `New Support Request: ${subject}`, `A new support request has been created by ${user.name}.\n\nPriority: ${newRequest.priority}\nSubject: ${subject}\nDescription: ${description}`);
+    });
+    
+    res.status(201).json(newRequest);
+  });
+
+  app.post('/api/support/:id/messages', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const request = supportRequests.find(sr => sr.id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Not found' });
+    
+    if (user.role !== UserRole.ADMIN && request.requestor_id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const { message } = req.body;
+    
+    const newMessage: SupportRequestMessage = {
+      id: uuidv4(),
+      request_id: request.id,
+      sender_id: user.id,
+      message,
+      timestamp: new Date().toISOString()
+    };
+    
+    supportMessages.push(newMessage);
+    request.updated_at = newMessage.timestamp;
+    
+    if (user.id === request.requestor_id) {
+      if (request.assigned_admin_id) {
+         sendEmail(request.assigned_admin_id, user.name, `New message on Support Request: ${request.subject}`, message);
+      }
+    } else {
+      sendEmail(request.requestor_id, user.name, `New message on Support Request: ${request.subject}`, message);
+    }
+    
+    res.status(201).json(newMessage);
+  });
+
+  app.put('/api/support/:id', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const request = supportRequests.find(sr => sr.id === req.params.id);
+    if (!request) return res.status(404).json({ error: 'Not found' });
+    
+    if (user.role !== UserRole.ADMIN && request.requestor_id !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    if (req.body.status) {
+      const oldStatus = request.status;
+      request.status = req.body.status;
+      if (oldStatus !== request.status && request.status === SupportRequestStatus.RESOLVED) {
+        sendEmail(request.requestor_id, 'System', `Support Request Resolved: ${request.subject}`, 'Your support request has been marked as resolved.');
+      }
+    }
+    
+    if (req.body.priority && user.role === UserRole.ADMIN) {
+      request.priority = req.body.priority;
+    }
+    
+    if (req.body.assigned_admin_id && user.role === UserRole.ADMIN) {
+      request.assigned_admin_id = req.body.assigned_admin_id;
+    }
+    
+    request.updated_at = new Date().toISOString();
+    
+    res.json(request);
+  });
+
+  app.get('/api/imports', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+    res.json(importBatches);
+  });
+
+  app.post('/api/imports', (req, res) => {
+    const user = getUser(req);
+    if (!user || user.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+    
+    const { filename, records } = req.body;
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: 'No valid records provided' });
+    }
+
+    const batchId = uuidv4();
+    const newBatch: ImportBatch = {
+      id: batchId,
+      admin_id: user.id,
+      filename,
+      total_records: records.length,
+      imported_at: new Date().toISOString()
+    };
+    importBatches.push(newBatch);
+
+    // Create claims
+    for (const record of records) {
+      const claimId = uuidv4();
+      
+      const newClaim: Claim = {
+        id: claimId,
+        claim_number: record.claim_number || `REIM-${claimCounter++}`,
+        requestor_id: record.requestor_id,
+        current_approver_id: user.id, // Or whoever, it's historical so doesn't matter much
+        mom_id: record.mom_id || '',
+        status: ClaimStatus.COMPLETED,
+        total_amount: record.total_amount,
+        expense_category: record.expense_category,
+        receipt_url: record.receipt_url || '',
+        remarks: record.remarks || '',
+        import_batch_id: batchId,
+        created_at: record.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      claims.push(newClaim);
+      
+      if (record.lineItems && Array.isArray(record.lineItems)) {
+        for (const li of record.lineItems) {
+          expenses.push({
+            id: uuidv4(),
+            claim_id: claimId,
+            expense_date: li.expense_date || new Date().toISOString().split('T')[0],
+            vendor: li.vendor || 'Unknown',
+            category: li.category || 'Other',
+            amount: li.amount || 0,
+            payment_method: li.payment_method || 'Corporate Card',
+            business_purpose: li.business_purpose || 'Historical data import',
+            receipt_url: li.receipt_url || '',
+            or_number: li.or_number || ''
+          });
+        }
+      }
+      
+      statusHistories.push({
+        id: uuidv4(),
+        claim_id: claimId,
+        old_status: 'Imported',
+        new_status: ClaimStatus.COMPLETED,
+        changed_by: user.id,
+        reason: `Migrated from historical records by ${user.name} (Batch ${batchId.substring(0,6)})`,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    res.status(201).json(newBatch);
   });
 
   // Vite middleware for development

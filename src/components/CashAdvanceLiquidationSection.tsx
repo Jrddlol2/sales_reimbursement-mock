@@ -27,6 +27,7 @@ interface LocalLineItem {
   payment_method: string;
   business_purpose: string;
   receiptName: string;
+  receiptUrl?: string;
   attachment_type: string;
   or_number?: string;
   isDragOver?: boolean;
@@ -214,6 +215,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           payment_method: item.payment_method,
           business_purpose: item.business_purpose,
           receiptName: item.receipt_url && item.receipt_url !== 'No Official Receipt' ? item.receipt_url.split('/').pop() || '' : '',
+          receiptUrl: item.receipt_url && item.receipt_url !== 'No Official Receipt' ? item.receipt_url : undefined,
           attachment_type: item.attachment_type || (item.receipt_url === 'No Official Receipt' ? 'No Official Receipt' : 'Official Receipt'),
           or_number: item.or_number || ''
         })));
@@ -330,7 +332,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             amount: parseFloat(item.amount),
             payment_method: item.payment_method,
             business_purpose: item.business_purpose,
-            receipt_url: item.attachment_type === 'No Official Receipt' ? 'No Official Receipt' : `/uploads/${item.receiptName}`,
+            receipt_url: item.attachment_type === 'No Official Receipt' ? 'No Official Receipt' : (item.receiptUrl || `/uploads/${item.receiptName}`),
             attachment_type: item.attachment_type,
             or_number: item.or_number || undefined
           })

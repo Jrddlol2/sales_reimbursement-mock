@@ -6,9 +6,10 @@ import { useToast } from '../components/Toast';
 import { CashAdvance, Mom, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
-import { ArrowLeft, Clock, Calendar, FileText, User as UserIcon, Link as LinkIcon } from '@phosphor-icons/react';
+import { ArrowLeft, Clock, Calendar, FileText, User as UserIcon, Link as LinkIcon, Lifebuoy } from '@phosphor-icons/react';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailHeader } from '../components/DetailHeader';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
 import { Comments, CommentEntry } from '../components/Comments';
 
@@ -69,13 +70,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
     }
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-slate-500 font-medium italic">
-        Reading cash advance database...
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton onBack={handleClose} />;
 
   if (!ca) {
     return (
@@ -104,6 +99,12 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
           eyebrow="Cash Advance Request"
           title={`CADV-${ca.id.substring(0, 6).toUpperCase()}`}
           status={<StatusBadge status={ca.status} />}
+          actions={
+             <Link to={`/support?new=true&entityType=CashAdvance&entityId=${ca.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
+                <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                Request Help
+             </Link>
+          }
         />
 
         <div className="p-6 space-y-6">

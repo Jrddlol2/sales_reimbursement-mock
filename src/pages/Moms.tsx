@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, UserRole, Company } from '../types';
 import { useAuth } from '../components/AuthContext';
-import { getStatusColor } from '../utils';
+import { getStatusColor, uploadFile } from '../utils';
 import { 
   FileText, Plus, PaperPlaneRight, CheckCircle, Calendar, Clock, MapPin, 
   User, Envelope, ArrowRight, BookOpen, CheckSquare, Pencil, Eye, 
@@ -15,6 +15,7 @@ import { useConfirm } from '../components/ConfirmModal';
 
 export const Moms: React.FC = () => {
   const { user } = useAuth();
+  const locationState = useLocation();
   const toast = useToast();
   const confirmAction = useConfirm();
   const [moms, setMoms] = useState<Mom[]>([]);
@@ -35,6 +36,7 @@ export const Moms: React.FC = () => {
   const [agreements, setAgreements] = useState('');
   const [actionItems, setActionItems] = useState('');
   const [fileName, setFileName] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [meetingType, setMeetingType] = useState('');
   const [participantsInternal, setParticipantsInternal] = useState('');
@@ -86,11 +88,19 @@ export const Moms: React.FC = () => {
     setAgreements('');
     setActionItems('');
     setFileName('');
+    setFileUrl('');
     setMeetingType('');
     setParticipantsInternal('');
     setParticipantsExternal('');
     setCreationStep('choice');
   };
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(locationState.search);
+    if (searchParams.get('create') === 'true') {
+      handleCreateNew();
+    }
+  }, [locationState.search]);
 
   const handleChooseTemplate = () => {
     setCreationStep('template');
@@ -116,6 +126,7 @@ export const Moms: React.FC = () => {
     setAgreements(mom.agreements || '');
     setActionItems(mom.action_items || '');
     setFileName(mom.file_name || '');
+    setFileUrl(mom.file_url || '');
     setMeetingType(mom.meeting_type || '');
     setParticipantsInternal(mom.participants_internal || '');
     setParticipantsExternal(mom.participants_external || '');
@@ -199,7 +210,7 @@ export const Moms: React.FC = () => {
         agreements,
         action_items: actionItems,
         file_name: fileName,
-        file_url: fileName ? `/uploads/${fileName}` : undefined,
+        file_url: fileUrl || undefined,
         status: MomStatus.DRAFT,
         minutes_source: MinutesSource.TEMPLATE
       };
@@ -259,7 +270,7 @@ export const Moms: React.FC = () => {
         agreements,
         action_items: actionItems,
         file_name: fileName,
-        file_url: fileName ? `/uploads/${fileName}` : undefined,
+        file_url: fileUrl || undefined,
         status: MomStatus.DRAFT,
         minutes_source: MinutesSource.TEMPLATE
       };
@@ -299,7 +310,7 @@ export const Moms: React.FC = () => {
     agreements,
     action_items: actionItems,
     file_name: fileName,
-    file_url: fileName ? `/uploads/${fileName}` : undefined,
+    file_url: fileUrl || undefined,
     status,
     minutes_source: MinutesSource.UPLOADED
   });
@@ -348,17 +359,29 @@ export const Moms: React.FC = () => {
   };
 
   // Mock file upload
+  const handleUploadFile = async (file: File) => {
+    try {
+      toast.info('Uploading file...');
+      const uploadedUrl = await uploadFile(file);
+      setFileName(file.name);
+      setFileUrl(uploadedUrl);
+      toast.success('File uploaded');
+    } catch (err: any) {
+      toast.error('Upload failed: ' + err.message);
+    }
+  };
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFileName(e.dataTransfer.files[0].name);
+      handleUploadFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFileName(e.target.files[0].name);
+      handleUploadFile(e.target.files[0]);
     }
   };
 
@@ -1513,7 +1536,7 @@ export const Moms: React.FC = () => {
                             <p className="text-[10px] text-gray-500">{previewMom.file_name}</p>
                           </div>
                         </div>
-                        <a href="#" onClick={(e) => { e.preventDefault(); toast.info('Downloading signed file: ' + previewMom.file_name); }} className="text-brand hover:text-brand-hover text-[10px] font-semibold flex items-center gap-1">
+                        <a href={previewMom.file_url || '#'} target="_blank" rel="noreferrer" onClick={(e) => { if(!previewMom.file_url) e.preventDefault(); }} className="text-brand hover:text-brand-hover text-[10px] font-semibold flex items-center gap-1">
                           <Download className="w-3.5 h-3.5" /> Download
                         </a>
                       </div>

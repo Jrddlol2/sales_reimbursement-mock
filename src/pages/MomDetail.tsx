@@ -3,9 +3,10 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../components/Toast';
 import { MinutesSource } from '../types';
-import { ArrowLeft, FileText, User as UserIcon } from '@phosphor-icons/react';
+import { ArrowLeft, FileText, User as UserIcon, Lifebuoy } from '@phosphor-icons/react';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailHeader } from '../components/DetailHeader';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
 import { Attachments } from '../components/Attachments';
 import { Comments } from '../components/Comments';
@@ -40,13 +41,7 @@ export const MomDetail: React.FC<MomDetailProps> = ({ id: propId, onClose }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-slate-500 font-medium italic">
-        Reading Minutes of Meeting database...
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton onBack={handleClose} />;
 
   if (!mom) {
     return (
@@ -74,6 +69,12 @@ export const MomDetail: React.FC<MomDetailProps> = ({ id: propId, onClose }) => 
           eyebrow={isUploaded ? 'Uploaded Minutes of Meeting' : 'Minutes of Meeting'}
           title={mom.client || 'Untitled Client'}
           status={<StatusBadge status={mom.status} />}
+          actions={
+             <Link to={`/support?new=true&entityType=MOM&entityId=${mom.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
+                <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                Request Help
+             </Link>
+          }
         />
 
         <div className="p-6 space-y-6">
@@ -152,7 +153,7 @@ export const MomDetail: React.FC<MomDetailProps> = ({ id: propId, onClose }) => 
                 id: 'mom-file',
                 name: isUploaded ? 'Uploaded Minutes Document' : 'Signed Supporting Document',
                 meta: mom.file_name,
-                onView: () => toast.info(`Downloading file: ${mom.file_name}`),
+                onView: () => mom.file_url ? window.open(mom.file_url, '_blank') : toast.info(`Downloading file: ${mom.file_name}`),
                 actionLabel: 'Download',
               }] : []}
               emptyText="No signed or uploaded document attached to this MOM."

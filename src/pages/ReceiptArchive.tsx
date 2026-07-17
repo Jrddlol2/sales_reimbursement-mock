@@ -23,6 +23,8 @@ import {
   FileText,
   Clock
 } from '@phosphor-icons/react';
+import Papa from 'papaparse';
+import { DownloadSimple } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ReceiptRecord {
@@ -65,6 +67,29 @@ export const Receipts: React.FC = () => {
 
   // Active Receipt Preview modal state
   const [previewItem, setPreviewItem] = useState<ReceiptRecord | null>(null);
+
+  const handleExport = () => {
+    if (filteredReceipts.length === 0) return;
+    const csv = Papa.unparse(filteredReceipts.map(r => ({
+      'Receipt URL': r.receipt_url,
+      'OR Number': r.or_number,
+      'Vendor': r.vendor,
+      'Amount': r.amount,
+      'Date': r.expense_date,
+      'Category': r.category,
+      'Purpose': r.business_purpose,
+      'Requestor': r.requestor_name,
+      'Department': r.requestor_department,
+      'Parent Type': r.parentType,
+      'Parent Number': r.parentNumber
+    })));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'receipt_archive.csv';
+    link.click();
+  };
+
 
   useEffect(() => {
     // Only Admin can access
@@ -294,6 +319,7 @@ export const Receipts: React.FC = () => {
             <span className="text-xs text-slate-500 font-medium">
               Found <strong className="text-slate-900">{filteredReceipts.length}</strong> matching records
             </span>
+            
             {(generalSearch || vendorSearch || orSearch || selectedDepartment !== 'All' || startDate || endDate) && (
               <button
                 onClick={handleClearFilters}
@@ -302,6 +328,15 @@ export const Receipts: React.FC = () => {
                 <X className="w-3.5 h-3.5" /> Clear Filters
               </button>
             )}
+            <button
+              onClick={handleExport}
+              disabled={filteredReceipts.length === 0}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+            >
+              <DownloadSimple className="w-4 h-4" />
+              Export CSV
+            </button>
+
           </div>
         </div>
       </div>
@@ -529,21 +564,9 @@ export const Receipts: React.FC = () => {
               className="bg-white rounded-lg shadow-2xl overflow-hidden max-w-4xl w-full h-[80vh] flex flex-col md:flex-row relative z-10 border border-slate-200"
             >
               {/* Image Section */}
-              <div className="flex-1 bg-slate-900 flex items-center justify-center p-6 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
+              <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                 {previewItem.receipt_url.toLowerCase().endsWith('.pdf') ? (
-                  <div className="text-slate-400 text-sm flex flex-col items-center">
-                    <Receipt className="w-16 h-16 mb-3 text-red-500" />
-                    <span className="font-semibold text-slate-200">PDF Document</span>
-                    <span className="text-xs text-slate-500 mt-1">{previewItem.receipt_url.split('/').pop()}</span>
-                    <a
-                      href={previewItem.receipt_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-4 bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded text-xs font-bold"
-                    >
-                      Download PDF
-                    </a>
-                  </div>
+                  <iframe src={previewItem.receipt_url} className="w-full h-full border-0" title="PDF Document" />
                 ) : (
                   <img
                     src={previewItem.receipt_url}

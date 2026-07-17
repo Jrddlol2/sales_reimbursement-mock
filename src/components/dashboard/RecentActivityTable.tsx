@@ -4,6 +4,13 @@ import { formatPHP, getStatusDisplayLabel } from '../../utils';
 import { useNavigate } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
 
+// Some source records (older seeded Cash Advances/Liquidations) don't carry
+// a createdAt timestamp - render a dash instead of "Invalid Date".
+const formatItemDate = (date: string): string => {
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+};
+
 interface ActivityItem {
   id: string;
   reference: string;
@@ -67,7 +74,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                         <span className="font-semibold">{formatPHP(item.amount)}</span>
                       </td>
                       <td>
-                        <span className="text-slate-500">{new Date(item.date).toLocaleDateString()}</span>
+                        <span className="text-slate-500">{formatItemDate(item.date)}</span>
                       </td>
                       <td>
                         <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
@@ -104,7 +111,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                     </div>
                     <div>
                       <span className="text-slate-400 font-medium mr-1">Date:</span>
-                      <span className="text-slate-700">{new Date(item.date).toLocaleDateString()}</span>
+                      <span className="text-slate-700">{formatItemDate(item.date)}</span>
                     </div>
                     <div className="text-right flex items-center justify-end gap-0.5 text-brand font-bold">
                       <span>View details</span>

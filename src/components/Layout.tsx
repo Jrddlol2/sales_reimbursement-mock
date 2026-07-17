@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../types';
 import { apiFetch } from '../lib/api';
-import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings } from '@phosphor-icons/react';
-import { formatPHP } from '../utils';
+import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy } from '@phosphor-icons/react';
+import { formatPHP, IS_DEMO_MODE } from '../utils';
 
 export const navItems = [
-  { label: 'Dashboard', path: '/', icon: SquaresFour, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
+    { label: 'Dashboard', path: '/', icon: SquaresFour, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
   { label: 'My Inbox', path: '/approvals', icon: Tray, group: 'PRIMARY', roles: [UserRole.APPROVER] },
   { label: 'Processing Queue', path: '/processing', icon: ListChecks, group: 'PRIMARY', roles: [UserRole.CUSTODIAN] },
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
   { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
+  { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
   { label: 'Meeting Minutes', path: '/moms', icon: ClipboardText, group: 'COMPLIANCE', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -21,8 +22,8 @@ export const navItems = [
   { label: 'Company Directory', path: '/companies', icon: Buildings, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Audit Log', path: '/audit', icon: ShieldCheck, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Settings', path: '/settings', icon: Gear, group: 'SYSTEM', roles: [UserRole.APPROVER, UserRole.ADMIN] },
-  { label: 'Scenario Guide', path: '/scenarios', icon: BookOpen, group: 'RESOURCES', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
-];
+  IS_DEMO_MODE ? { label: 'Scenario Guide', path: '/scenarios', icon: BookOpen, group: 'RESOURCES', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] } : null,
+  ].filter(Boolean) as any[];
 
 const sectionMap: Record<string, string> = {
   'Calendar': 'calendar',
@@ -41,8 +42,27 @@ export const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activityStatus, setActivityStatus] = useState<Record<string, number>>({});
 
+  // Small, deterministic per-route vertical offset for the .app-canvas
+  // bokeh background — main never remounts on navigation (that would reset
+  // scroll position), so instead we nudge the glow layer up/down by a few
+  // px whenever the route changes and let CSS transition the shift.
+  // Vertical only (no x component) so it reads as a clean up/down drift.
+  const bgOffset = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < location.pathname.length; i++) {
+      hash = (hash * 31 + location.pathname.charCodeAt(i)) % 56;
+    }
+    return hash - 28; // -28..27px, vertical
+  }, [location.pathname]);
+
   // Global search states
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   const [allClaims, setAllClaims] = useState<any[]>([]);
   const [allCadvs, setAllCadvs] = useState<any[]>([]);
   const [allLiqs, setAllLiqs] = useState<any[]>([]);
@@ -97,12 +117,12 @@ export const Layout: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!debouncedSearchQuery.trim()) {
       setSearchResults({ claims: [], cadvs: [], liqs: [] });
       return;
     }
 
-    const q = searchQuery.toLowerCase();
+    const q = debouncedSearchQuery.toLowerCase();
 
     // Helper to get requestor name
     const getRequestorName = (record: any) => {
@@ -161,7 +181,7 @@ export const Layout: React.FC = () => {
       cadvs: filteredCadvs.slice(0, 5),
       liqs: filteredLiqs.slice(0, 5)
     });
-  }, [searchQuery, allClaims, allCadvs, allLiqs, allUsers]);
+  }, [debouncedSearchQuery, allClaims, allCadvs, allLiqs, allUsers]);
 
   const refreshActivity = () => {
     if (user) {
@@ -227,7 +247,7 @@ export const Layout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-slate-100 flex flex-col md:flex-row text-sm font-sans overflow-hidden">
+    <div className="h-screen flex flex-col md:flex-row text-sm font-sans overflow-hidden">
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div 
@@ -239,13 +259,13 @@ export const Layout: React.FC = () => {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl transition-transform duration-300 ease-in-out shrink-0
+        fixed inset-y-0 left-0 w-64 glass-panel border-r border-slate-200/60 flex flex-col shadow-xl transition-transform duration-300 ease-in-out shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0 md:relative md:shadow-sm md:z-20
         ${sidebarOpen ? 'md:w-64' : 'md:w-16'}
         z-[50]
       `}>
-        <div className="h-16 flex items-center px-4 border-b border-slate-100 shrink-0">
+        <div className="h-16 flex items-center px-4 border-b border-slate-100 shrink-0 bg-gradient-to-r from-brand/[0.06] to-transparent">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-md hover:bg-slate-50">
             <List className="w-5 h-5" />
           </button>
@@ -438,7 +458,7 @@ export const Layout: React.FC = () => {
       {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
+        <header className="h-16 glass-panel border-b border-slate-200/60 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
           <div className="flex items-center text-[13px] text-slate-500 font-medium min-w-0">
              <button 
                onClick={() => setSidebarOpen(true)} 
@@ -583,11 +603,14 @@ export const Layout: React.FC = () => {
         </header>
 
         {/* Main scrollable content */}
-        <main className={`flex-1 bg-slate-100 p-4 sm:p-6 md:p-8 ${
-          location.pathname === '/emails' || location.pathname === '/moms'
-            ? 'flex flex-col overflow-hidden'
-            : 'overflow-auto'
-        }`}>
+        <main
+          className={`flex-1 app-canvas p-4 sm:p-6 md:p-8 ${
+            location.pathname === '/emails' || location.pathname === '/moms'
+              ? 'flex flex-col overflow-hidden'
+              : 'overflow-auto'
+          }`}
+          style={{ '--bokeh-x': '0px', '--bokeh-y': `${bgOffset}px` } as React.CSSProperties}
+        >
           <div 
             key={location.pathname} 
             className={`max-w-7xl mx-auto animate-page-fade-in w-full ${

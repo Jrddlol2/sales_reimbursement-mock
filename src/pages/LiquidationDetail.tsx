@@ -7,9 +7,10 @@ import { Liquidation, LiquidationStatus, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
-import { ArrowLeft, CurrencyDollar, Calendar, FileText, User as UserIcon, Question } from '@phosphor-icons/react';
+import { ArrowLeft, CurrencyDollar, Calendar, FileText, User as UserIcon, Question, Lifebuoy } from '@phosphor-icons/react';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailHeader } from '../components/DetailHeader';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
 import { Comments, CommentEntry } from '../components/Comments';
 
@@ -67,13 +68,7 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
     }
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-slate-500 font-medium italic">
-        Reading liquidation report database...
-      </div>
-    );
-  }
+  if (loading) return <PageSkeleton onBack={handleClose} />;
 
   if (!liq) {
     return (
@@ -101,6 +96,12 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
           eyebrow="Liquidation Report"
           title={`LIQ-${liq.id.substring(0, 6).toUpperCase()}`}
           status={<StatusBadge status={liq.status} label={liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : undefined} />}
+          actions={
+             <Link to={`/support?new=true&entityType=Liquidation&entityId=${liq.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
+                <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                Request Help
+             </Link>
+          }
         />
 
         <div className="p-6 space-y-6">

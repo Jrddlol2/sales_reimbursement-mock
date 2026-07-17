@@ -87,3 +87,28 @@ export const getApproverInfo = (
   return { name: approver?.name || 'Unknown Approver', comment: 'No comment on file.' };
 };
 
+export const uploadFile = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const userId = localStorage.getItem('mockUserId');
+  const headers: Record<string, string> = {};
+  if (userId) {
+    headers['X-User-Id'] = userId;
+  }
+
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+    headers
+  });
+  
+  if (!res.ok) {
+    throw new Error('Failed to upload file');
+  }
+  const data = await res.json();
+  return data.url;
+};
+
+
+export const IS_DEMO_MODE = (import.meta as any).env?.VITE_IS_DEMO_MODE !== 'false';

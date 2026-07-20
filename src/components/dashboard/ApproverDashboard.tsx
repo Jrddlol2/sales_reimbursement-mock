@@ -10,7 +10,7 @@ import { QuickActionsCard } from './QuickActionsCard';
 import { RecentActivityTable } from './RecentActivityTable';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleLineChart, SimpleBarChart } from './AnalyticsCharts';
-import { Tray, Clock, CalendarPlus } from '@phosphor-icons/react';
+import { Tray, Clock, CalendarPlus, UserCircle } from '@phosphor-icons/react';
 import { metricsForRole, MetricContext } from '../../metrics/registry';
 import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
 import { UserRole } from '../../types';
@@ -180,10 +180,21 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
           KPI summary — this used to sit below the analytics chart, where it
           competed with (and lost to) a chart nobody needs to act on. */}
       <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
-        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="You're all caught up — nothing is waiting on your review right now." />
+        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="You're all caught up — nothing is waiting on your review right now." showAging />
       </div>
 
       <QuickActionsCard actions={quickActions} layout="horizontal" />
+
+      {/* Divider — everything above this line is "your job as an Approver";
+          everything below is "your own claims as an employee". Called out
+          explicitly so the two don't blur into one long scroll. */}
+      <div className="flex items-center gap-3 my-8">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <UserCircle className="w-4 h-4" /> Your Own Requests
+        </span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
 
       {/* Level 3: the approver's own submitted requests — secondary to their
           approval duties, so it now sits below the work queue instead of

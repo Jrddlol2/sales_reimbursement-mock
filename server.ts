@@ -9,7 +9,8 @@ import {
   ExpenseLineItem, Approval, StatusHistory, Email,
   CashAdvance, CashAdvanceStatus, Liquidation, LiquidationStatus,
   LiquidationVarianceType, LiquidationLineItem,
-  ReviewMeeting, ReviewMeetingStatus, Company, SupportRequest, SupportRequestMessage, SupportRequestStatus, SupportRequestPriority, ImportBatch
+  ReviewMeeting, ReviewMeetingStatus, Company, SupportRequest, SupportRequestMessage, SupportRequestStatus, SupportRequestPriority, ImportBatch,
+  ApproverDelegation, DelegationStatus
 } from './src/types';
 
 const LIQUIDATION_DEADLINE_DAYS = 7;
@@ -28,6 +29,7 @@ let reviewMeetings: ReviewMeeting[] = [];
 let importBatches: ImportBatch[] = [];
 let supportRequests: SupportRequest[] = [];
 let supportMessages: SupportRequestMessage[] = [];
+let delegations: ApproverDelegation[] = [];
 
 // System Settings (In-Memory)
 let systemSettings = {
@@ -268,6 +270,52 @@ async function startServer() {
       changed_by: changedBy,
       reason,
       timestamp: new Date().toISOString()
+    });
+  };
+
+  const addDelegationHistory = (delegationId: string, oldStatus: string, newStatus: string, changedBy: string, reason?: string) => {
+    statusHistories.push({
+      id: uuidv4(),
+      claim_id: '',
+      delegation_id: delegationId,
+      old_status: oldStatus,
+      new_status: newStatus,
+      changed_by: changedBy,
+      reason,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Lazily flips any Active delegation whose end_date has passed to Expired.
+  // No scheduler exists in this prototype, so this runs on every read/use of
+  // the delegations list instead - self-healing rather than time-driven.
+  const syncDelegationStatuses = () => {
+    const now = new Date();
+    delegations.forEach(d => {
+      if (d.status === DelegationStatus.ACTIVE) {
+        const end = new Date(d.end_date);
+        end.setHours(23, 59, 59, 999);
+        if (now > end) {
+          const oldStatus = d.status;
+          d.status = DelegationStatus.EXPIRED;
+          d.updated_at = now.toISOString();
+          addDelegationHistory(d.id, oldStatus, DelegationStatus.EXPIRED, 'system', 'Delegation window ended.');
+        }
+      }
+    });
+  };
+
+  // The one place "who is actually approving for this approver right now"
+  // gets decided - every claim/CADV/MOM/review-meeting routing check below
+  // calls this instead of re-deriving it inline.
+  const getActiveDelegation = (approverId: string, atDate: Date = new Date()): ApproverDelegation | undefined => {
+    syncDelegationStatuses();
+    return delegations.find(d => {
+      if (d.approver_id !== approverId || d.status !== DelegationStatus.ACTIVE) return false;
+      const start = new Date(d.start_date);
+      const end = new Date(d.end_date);
+      end.setHours(23, 59, 59, 999);
+      return atDate >= start && atDate <= end;
     });
   };
 
@@ -615,14 +663,8 @@ async function startServer() {
       const momOwner = users.find(u => u.id === mom.requestor_id);
       let authorized = !!momOwner && momOwner.reports_to === user.id;
       if (!authorized && momOwner?.reports_to) {
-        const sup = users.find(u => u.id === momOwner.reports_to);
-        if (sup?.delegation) {
-          const now = new Date();
-          const start = new Date(sup.delegation.start_date);
-          const end = new Date(sup.delegation.end_date);
-          end.setHours(23, 59, 59, 999);
-          authorized = now >= start && now <= end && sup.delegation.delegate_id === user.id;
-        }
+        const activeDelegation = getActiveDelegation(momOwner.reports_to);
+        authorized = activeDelegation?.delegate_id === user.id;
       }
       if (!authorized) {
         return res.status(403).json({ error: 'Forbidden: not your direct report' });
@@ -856,16 +898,10 @@ ${user.name}`;
     let currentApproverId = user.reports_to || '';
     
     if (user.reports_to) {
-      const sup = users.find(u => u.id === user.reports_to);
-      if (sup?.delegation) {
-        const now = new Date();
-        const start = new Date(sup.delegation.start_date);
-        const end = new Date(sup.delegation.end_date);
-        end.setHours(23, 59, 59, 999);
-        if (now >= start && now <= end) {
-          originalApproverId = sup.id;
-          currentApproverId = sup.delegation.delegate_id;
-        }
+      const activeDelegation = getActiveDelegation(user.reports_to);
+      if (activeDelegation) {
+        originalApproverId = user.reports_to;
+        currentApproverId = activeDelegation.delegate_id;
       }
     }
 
@@ -971,7 +1007,8 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
         ...rm,
         requestor_name: requestor?.name || 'Unknown',
         approver_name: approver?.name || 'Unknown',
-        claim_number: claim?.claim_number
+        claim_number: claim?.claim_number,
+        total_amount: claim?.total_amount
       };
     });
 
@@ -983,15 +1020,7 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
   // now - the same dynamic delegation check already used for MOM PUT access.
   const isAuthorizedForReviewMeeting = (rm: ReviewMeeting, user: User): boolean => {
     if (rm.approver_id === user.id) return true;
-    const originalApprover = users.find(u => u.id === rm.approver_id);
-    if (originalApprover?.delegation) {
-      const now = new Date();
-      const start = new Date(originalApprover.delegation.start_date);
-      const end = new Date(originalApprover.delegation.end_date);
-      end.setHours(23, 59, 59, 999);
-      return now >= start && now <= end && originalApprover.delegation.delegate_id === user.id;
-    }
-    return false;
+    return getActiveDelegation(rm.approver_id)?.delegate_id === user.id;
   };
 
   // Approver (or active delegate) confirms a proposed Review Meeting time.
@@ -1253,15 +1282,9 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
     
     // Resolve who the actual approver is right now based on delegation
     let currentApproverId = user.reports_to;
-    const sup = users.find(u => u.id === user.reports_to);
-    if (sup?.delegation) {
-      const now = new Date();
-      const start = new Date(sup.delegation.start_date);
-      const end = new Date(sup.delegation.end_date);
-      end.setHours(23, 59, 59, 999);
-      if (now >= start && now <= end) {
-        currentApproverId = sup.delegation.delegate_id;
-      }
+    const activeDelegation = getActiveDelegation(user.reports_to);
+    if (activeDelegation) {
+      currentApproverId = activeDelegation.delegate_id;
     }
     
     // Find claims currently assigned to that approver
@@ -1280,15 +1303,9 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
     if (!user || !user.reports_to) return res.json([]);
 
     let currentApproverId = user.reports_to;
-    const sup = users.find(u => u.id === user.reports_to);
-    if (sup?.delegation) {
-      const now = new Date();
-      const start = new Date(sup.delegation.start_date);
-      const end = new Date(sup.delegation.end_date);
-      end.setHours(23, 59, 59, 999);
-      if (now >= start && now <= end) {
-        currentApproverId = sup.delegation.delegate_id;
-      }
+    const activeDelegation = getActiveDelegation(user.reports_to);
+    if (activeDelegation) {
+      currentApproverId = activeDelegation.delegate_id;
     }
 
     const relevant = reviewMeetings.filter(rm => rm.approver_id === currentApproverId && [ReviewMeetingStatus.PENDING_CONFIRMATION, ReviewMeetingStatus.CONFIRMED].includes(rm.status));
@@ -1785,20 +1802,8 @@ BSM Assistant | BSD - IT Security Business`;
     
     // Delegation logic matching claims
     if (user.reports_to) {
-      const sup = users.find(u => u.id === user.reports_to);
-      if (sup?.delegation) {
-        const now = new Date();
-        const start = new Date(sup.delegation.start_date);
-        const end = new Date(sup.delegation.end_date);
-        end.setHours(23, 59, 59, 999);
-        if (now >= start && now <= end) {
-          ca.approverId = sup.delegation.delegate_id;
-        } else {
-          ca.approverId = user.reports_to;
-        }
-      } else {
-        ca.approverId = user.reports_to;
-      }
+      const activeDelegation = getActiveDelegation(user.reports_to);
+      ca.approverId = activeDelegation ? activeDelegation.delegate_id : user.reports_to;
     }
 
     const approver = users.find(u => u.id === ca.approverId);
@@ -2304,22 +2309,149 @@ BSM Assistant | BSD - IT Security Business`;
     res.json(l);
   });
 
-  // Settings: Delegation
-  app.put('/api/settings/delegation', (req, res) => {
+  // Delegation: list delegations relevant to the current user, either as the
+  // Approver who requested them or as the delegate being asked to cover -
+  // powers both "my delegation status/history" and "pending requests
+  // waiting on my response" in Settings.
+  app.get('/api/delegations', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    syncDelegationStatuses();
+    const relevant = delegations.filter(d => d.approver_id === user.id || d.delegate_id === user.id);
+    const enriched = relevant.map(d => ({
+      ...d,
+      approver: users.find(u => u.id === d.approver_id),
+      delegate: users.find(u => u.id === d.delegate_id)
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    res.json(enriched);
+  });
+
+  // Approver requests a delegation. Starts Pending - routing does not change
+  // until the delegate explicitly accepts (see /accept below).
+  app.post('/api/delegations', (req, res) => {
     const user = getUser(req);
     if (!user || user.role !== UserRole.APPROVER) return res.status(403).json({ error: 'Forbidden' });
-    
+
     const { delegate_id, start_date, end_date } = req.body;
-    const targetUser = users.find(u => u.id === user.id);
-    
-    if (targetUser) {
-      if (!delegate_id) {
-        targetUser.delegation = undefined;
-      } else {
-        targetUser.delegation = { delegate_id, start_date, end_date };
-      }
+    if (!delegate_id || !start_date || !end_date) {
+      return res.status(400).json({ error: 'Delegate, start date, and end date are all required.' });
     }
-    res.json(targetUser);
+    if (delegate_id === user.id) {
+      return res.status(400).json({ error: 'You cannot delegate to yourself.' });
+    }
+    const delegate = users.find(u => u.id === delegate_id);
+    if (!delegate || delegate.role !== UserRole.APPROVER) {
+      return res.status(400).json({ error: 'You can only delegate to another Approver.' });
+    }
+    if (new Date(start_date) > new Date(end_date)) {
+      return res.status(400).json({ error: 'The start date cannot be after the end date.' });
+    }
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const delegation: ApproverDelegation = {
+      id,
+      approver_id: user.id,
+      delegate_id,
+      start_date,
+      end_date,
+      status: DelegationStatus.PENDING,
+      created_by: user.id,
+      created_at: now,
+      updated_at: now
+    };
+    delegations.push(delegation);
+    addDelegationHistory(id, '', DelegationStatus.PENDING, user.id, `Delegation requested to ${delegate.name}`);
+
+    sendEmail(
+      delegate_id,
+      `Delegation Request from ${user.name}`,
+      `${user.name} has asked you to cover their approval duties from ${start_date} to ${end_date}.\n\nPlease log in and Accept or Decline this request from Settings > Approval Delegation. Your decision does not take effect until you respond - claims will keep routing to ${user.name} until then.`
+    );
+
+    res.json(delegation);
+  });
+
+  // Delegate accepts a Pending request - only now does routing actually change.
+  app.post('/api/delegations/:id/accept', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    syncDelegationStatuses();
+
+    const delegation = delegations.find(d => d.id === req.params.id);
+    if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
+    if (delegation.delegate_id !== user.id) return res.status(403).json({ error: 'Forbidden' });
+    if (delegation.status !== DelegationStatus.PENDING) {
+      return res.status(400).json({ error: `This request is ${delegation.status.toLowerCase()} and can no longer be accepted.` });
+    }
+
+    const oldStatus = delegation.status;
+    delegation.status = DelegationStatus.ACTIVE;
+    delegation.updated_at = new Date().toISOString();
+    addDelegationHistory(delegation.id, oldStatus, DelegationStatus.ACTIVE, user.id, 'Delegation accepted');
+
+    sendEmail(
+      delegation.approver_id,
+      `${user.name} accepted your delegation request`,
+      `${user.name} has accepted your request to cover approvals from ${delegation.start_date} to ${delegation.end_date}. Claims from your direct reports will now route to them for that period.`
+    );
+
+    res.json(delegation);
+  });
+
+  // Delegate declines - request never takes effect, approver has to pick someone else.
+  app.post('/api/delegations/:id/decline', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const delegation = delegations.find(d => d.id === req.params.id);
+    if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
+    if (delegation.delegate_id !== user.id) return res.status(403).json({ error: 'Forbidden' });
+    if (delegation.status !== DelegationStatus.PENDING) {
+      return res.status(400).json({ error: `This request is ${delegation.status.toLowerCase()} and can no longer be declined.` });
+    }
+
+    const { reason } = req.body;
+    const oldStatus = delegation.status;
+    delegation.status = DelegationStatus.DECLINED;
+    delegation.decline_reason = reason || undefined;
+    delegation.updated_at = new Date().toISOString();
+    addDelegationHistory(delegation.id, oldStatus, DelegationStatus.DECLINED, user.id, reason || 'Delegation declined');
+
+    sendEmail(
+      delegation.approver_id,
+      `${user.name} declined your delegation request`,
+      `${user.name} has declined your request to cover approvals from ${delegation.start_date} to ${delegation.end_date}.${reason ? `\n\nReason: ${reason}` : ''}\n\nPlease choose a different delegate if you still need coverage for this period.`
+    );
+
+    res.json(delegation);
+  });
+
+  // Approver cancels their own delegation early, whether it's still Pending
+  // or already Active.
+  app.post('/api/delegations/:id/cancel', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const delegation = delegations.find(d => d.id === req.params.id);
+    if (!delegation) return res.status(404).json({ error: 'Delegation not found' });
+    if (delegation.approver_id !== user.id) return res.status(403).json({ error: 'Forbidden' });
+    if (delegation.status !== DelegationStatus.PENDING && delegation.status !== DelegationStatus.ACTIVE) {
+      return res.status(400).json({ error: `This delegation is already ${delegation.status.toLowerCase()}.` });
+    }
+
+    const oldStatus = delegation.status;
+    delegation.status = DelegationStatus.CANCELLED;
+    delegation.updated_at = new Date().toISOString();
+    addDelegationHistory(delegation.id, oldStatus, DelegationStatus.CANCELLED, user.id, 'Delegation cancelled by approver');
+
+    sendEmail(
+      delegation.delegate_id,
+      `${user.name} cancelled their delegation request`,
+      `${user.name} has cancelled the delegation ${oldStatus === DelegationStatus.ACTIVE ? 'that was active' : 'request'} covering ${delegation.start_date} to ${delegation.end_date}. ${oldStatus === DelegationStatus.ACTIVE ? 'You no longer need to act on their behalf.' : 'No action is needed.'}`
+    );
+
+    res.json(delegation);
   });
 
   // Admin: Reassign Approver
@@ -2385,20 +2517,42 @@ BSM Assistant | BSD - IT Security Business`;
       return d.toISOString();
     };
 
-    // Bob has an active delegation to Grace (covers "today", so auto-routing is
-    // demoable live). Looked up by id, not array position - buildDefaultUsers()
-    // has been reordered before and a positional index silently pointed at the
+    // Seeds a delegation already in the Active state (pre-accepted), so demo
+    // data doesn't require someone to manually click Accept after every
+    // reset. Looked up by id, not array position - buildDefaultUsers() has
+    // been reordered before and a positional index silently pointed at the
     // wrong user (Noah) the last time this drifted.
+    const seedAcceptedDelegation = (approverId: string, delegateId: string, startDate: string, endDate: string) => {
+      const approver = users.find(u => u.id === approverId);
+      const delegate = users.find(u => u.id === delegateId);
+      if (!approver || !delegate) return;
+      const id = uuidv4();
+      const createdAt = rDate(15);
+      delegations.push({
+        id,
+        approver_id: approverId,
+        delegate_id: delegateId,
+        start_date: startDate,
+        end_date: endDate,
+        status: DelegationStatus.ACTIVE,
+        created_by: approverId,
+        created_at: createdAt,
+        updated_at: createdAt
+      });
+      addDelegationHistory(id, '', DelegationStatus.PENDING, approverId, `Delegation requested to ${delegate.name}`);
+      addDelegationHistory(id, DelegationStatus.PENDING, DelegationStatus.ACTIVE, delegateId, 'Delegation accepted');
+    };
+
+    // Bob has an active delegation to Grace (covers "today", so auto-routing is demoable live).
     const activeDelegationStart = rDate(2).split('T')[0];
     const activeDelegationEnd = rDate(-5).split('T')[0];
-    const bob = users.find(u => u.id === 'u2');
-    if (bob) bob.delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
+    seedAcceptedDelegation('u2', 'u7', activeDelegationStart, activeDelegationEnd);
 
-    // Henry has an expired delegation to Bob (ended 2 days ago).
+    // Henry has a delegation to Bob that already ended 2 days ago - demonstrates
+    // the lazy Active -> Expired transition the first time delegations are read.
     const expiredStart = rDate(10).split('T')[0];
     const expiredEnd = rDate(2).split('T')[0];
-    const henry = users.find(u => u.id === 'u8');
-    if (henry) henry.delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
+    seedAcceptedDelegation('u8', 'u2', expiredStart, expiredEnd);
 
     let seedCounter = 123;
     const nextClaimNumber = () => `REIM-${new Date().getFullYear()}-${String(seedCounter++).padStart(6, '0')}`;
@@ -2517,14 +2671,9 @@ BSM Assistant | BSD - IT Security Business`;
 
       // Handle delegation for current_approver_id
       let currentApproverId = opts.approverId;
-      const originalApprover = users.find(u => u.id === opts.approverId);
-      if (originalApprover?.delegation) {
-        const start = new Date(originalApprover.delegation.start_date).getTime();
-        const end = new Date(originalApprover.delegation.end_date).getTime();
-        const claimTime = new Date(createdAt).getTime();
-        if (claimTime >= start && claimTime <= end) {
-          currentApproverId = originalApprover.delegation.delegate_id;
-        }
+      const activeDelegationAtCreation = getActiveDelegation(opts.approverId, new Date(createdAt));
+      if (activeDelegationAtCreation) {
+        currentApproverId = activeDelegationAtCreation.delegate_id;
       }
 
       if (decision) {
@@ -2911,7 +3060,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 3500.00,
       purpose: 'Client Lunch - Rockwell',
       approverId: 'u2',
-      status: CashAdvanceStatus.DRAFT
+      status: CashAdvanceStatus.DRAFT,
+      createdAt: rDate(1),
     });
     addCaHistoryWithTimestamp(ca1Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(1));
 
@@ -2923,7 +3073,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 5000.00,
       purpose: 'Travel to Cebu',
       approverId: 'u2',
-      status: CashAdvanceStatus.SUBMITTED
+      status: CashAdvanceStatus.SUBMITTED,
+      createdAt: rDate(3),
     });
     addCaHistoryWithTimestamp(ca2Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(3));
     addCaHistoryWithTimestamp(ca2Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval', rDate(2));
@@ -2943,7 +3094,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 7500.00,
       purpose: 'Client Entertainment - BGC',
       approverId: 'u2',
-      status: CashAdvanceStatus.APPROVED
+      status: CashAdvanceStatus.APPROVED,
+      createdAt: rDate(4),
     });
     addCaHistoryWithTimestamp(ca3Id, '', CashAdvanceStatus.DRAFT, 'u6', 'Draft created', rDate(4));
     addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u6', 'Submitted for Approval', rDate(3));
@@ -2971,7 +3123,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 12000.00,
       purpose: 'Team Building Advance',
       approverId: 'u10',
-      status: CashAdvanceStatus.REJECTED
+      status: CashAdvanceStatus.REJECTED,
+      createdAt: rDate(5),
     });
     addCaHistoryWithTimestamp(ca4Id, '', CashAdvanceStatus.DRAFT, 'u11', 'Draft created', rDate(5));
     addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u11', 'Submitted for Approval', rDate(4));
@@ -3002,7 +3155,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(2),
-      releaseReference: 'REF-LIAM-CA'
+      releaseReference: 'REF-LIAM-CA',
+      createdAt: rDate(5),
     });
     addCaHistoryWithTimestamp(ca5Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(5));
     addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(4));
@@ -3043,7 +3197,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(3),
-      releaseReference: 'REF-LIAM-SURVEY'
+      releaseReference: 'REF-LIAM-SURVEY',
+      createdAt: rDate(6),
     };
     cashAdvances.push(ca6);
     addCaHistoryWithTimestamp(ca6Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(6));
@@ -3080,7 +3235,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 0,
       varianceAmount: -6000.00,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.DRAFT
+      status: LiquidationStatus.DRAFT,
+      createdAt: rDate(2),
     });
     addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u12', 'Liquidation Started', rDate(2));
     addLiqHistoryWithTimestamp(liq1Id, '', LiquidationStatus.DRAFT, 'u12', 'Draft Liquidation started', rDate(2));
@@ -3098,7 +3254,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(4),
-      releaseReference: 'REF-ALICE-MAXS'
+      releaseReference: 'REF-ALICE-MAXS',
+      createdAt: rDate(7),
     };
     cashAdvances.push(ca7);
     addCaHistoryWithTimestamp(ca7Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(7));
@@ -3135,7 +3292,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 5000.00,
       varianceAmount: 0.00,
       varianceType: LiquidationVarianceType.SETTLED,
-      status: LiquidationStatus.SUBMITTED
+      status: LiquidationStatus.SUBMITTED,
+      createdAt: rDate(3),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -3171,7 +3329,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(6),
-      releaseReference: 'REF-EVE-CEBU'
+      releaseReference: 'REF-EVE-CEBU',
+      createdAt: rDate(9),
     };
     cashAdvances.push(ca8);
     addCaHistoryWithTimestamp(ca8Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(9));
@@ -3208,7 +3367,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 6000.00,
       varianceAmount: -2000.00,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.RETURNED_FOR_REVISION
+      status: LiquidationStatus.RETURNED_FOR_REVISION,
+      createdAt: rDate(5),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -3254,7 +3414,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(8),
-      releaseReference: 'REF-FRANK-BGC'
+      releaseReference: 'REF-FRANK-BGC',
+      createdAt: rDate(11),
     };
     cashAdvances.push(ca9);
     addCaHistoryWithTimestamp(ca9Id, '', CashAdvanceStatus.RELEASED, 'u3', 'Funds released', rDate(8));
@@ -3267,7 +3428,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 7000.00,
       varianceAmount: -3000.00,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.REVIEWED
+      status: LiquidationStatus.REVIEWED,
+      createdAt: rDate(7),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -3335,7 +3497,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 4000.00,
       purpose: 'Client Sync Taguig',
       approverId: 'u2',
-      status: CashAdvanceStatus.LIQUIDATED
+      status: CashAdvanceStatus.LIQUIDATED,
+      createdAt: rDate(13),
     };
     cashAdvances.push(ca10);
 
@@ -3347,7 +3510,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 3000.00,
       varianceAmount: -1000.00,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.CLOSED
+      status: LiquidationStatus.CLOSED,
+      createdAt: rDate(9),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -3427,7 +3591,8 @@ BSM Assistant | BSD - IT Security Business`;
       purpose: 'SM Prime Partnership',
       momId: ca11Mom.id,
       approverId: 'u2',
-      status: CashAdvanceStatus.LIQUIDATED
+      status: CashAdvanceStatus.LIQUIDATED,
+      createdAt: rDate(10),
     };
     cashAdvances.push(ca11);
 
@@ -3439,7 +3604,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 6200.00,
       varianceAmount: 1200.00,
       varianceType: LiquidationVarianceType.REIMBURSEMENT_DUE,
-      status: LiquidationStatus.CLOSED
+      status: LiquidationStatus.CLOSED,
+      createdAt: rDate(7),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -3584,6 +3750,7 @@ BSM Assistant | BSD - IT Security Business`;
     
     const mkCa = (reqId: string, appId: string, amt: number, purpose: string, status: CashAdvanceStatus, days: number) => {
       const caId = uuidv4();
+      const createdDate = rDate(days + 1);
       const ca: CashAdvance = {
         id: caId,
         requestorId: reqId,
@@ -3591,6 +3758,7 @@ BSM Assistant | BSD - IT Security Business`;
         purpose,
         approverId: appId,
         status,
+        createdAt: createdDate,
       };
       cashAdvances.push(ca);
 
@@ -3599,7 +3767,6 @@ BSM Assistant | BSD - IT Security Business`;
       const appUser = users.find(u => u.id === appId);
       const appName = appUser?.name || 'Approver';
 
-      const createdDate = rDate(days + 1);
       const actionDate = rDate(days);
 
       // Draft
@@ -3673,20 +3840,42 @@ BSM Assistant | BSD - IT Security Business`;
       return d.toISOString();
     };
 
-    // Bob has an active delegation to Grace (covers "today", so auto-routing is
-    // demoable live). Looked up by id, not array position - buildDefaultUsers()
-    // has been reordered before and a positional index silently pointed at the
+    // Seeds a delegation already in the Active state (pre-accepted), so demo
+    // data doesn't require someone to manually click Accept after every
+    // reset. Looked up by id, not array position - buildDefaultUsers() has
+    // been reordered before and a positional index silently pointed at the
     // wrong user (Noah) the last time this drifted.
+    const seedAcceptedDelegation = (approverId: string, delegateId: string, startDate: string, endDate: string) => {
+      const approver = users.find(u => u.id === approverId);
+      const delegate = users.find(u => u.id === delegateId);
+      if (!approver || !delegate) return;
+      const id = uuidv4();
+      const createdAt = rDate(15);
+      delegations.push({
+        id,
+        approver_id: approverId,
+        delegate_id: delegateId,
+        start_date: startDate,
+        end_date: endDate,
+        status: DelegationStatus.ACTIVE,
+        created_by: approverId,
+        created_at: createdAt,
+        updated_at: createdAt
+      });
+      addDelegationHistory(id, '', DelegationStatus.PENDING, approverId, `Delegation requested to ${delegate.name}`);
+      addDelegationHistory(id, DelegationStatus.PENDING, DelegationStatus.ACTIVE, delegateId, 'Delegation accepted');
+    };
+
+    // Bob has an active delegation to Grace (covers "today", so auto-routing is demoable live).
     const activeDelegationStart = rDate(2).split('T')[0];
     const activeDelegationEnd = rDate(-5).split('T')[0];
-    const bob = users.find(u => u.id === 'u2');
-    if (bob) bob.delegation = { delegate_id: 'u7', start_date: activeDelegationStart, end_date: activeDelegationEnd };
+    seedAcceptedDelegation('u2', 'u7', activeDelegationStart, activeDelegationEnd);
 
-    // Henry has an expired delegation to Bob (ended 2 days ago).
+    // Henry has a delegation to Bob that already ended 2 days ago - demonstrates
+    // the lazy Active -> Expired transition the first time delegations are read.
     const expiredStart = rDate(10).split('T')[0];
     const expiredEnd = rDate(2).split('T')[0];
-    const henry = users.find(u => u.id === 'u8');
-    if (henry) henry.delegation = { delegate_id: 'u2', start_date: expiredStart, end_date: expiredEnd };
+    seedAcceptedDelegation('u8', 'u2', expiredStart, expiredEnd);
 
     let seedCounter = 123;
     const nextClaimNumber = () => `REIM-${new Date().getFullYear()}-${String(seedCounter++).padStart(6, '0')}`;
@@ -3803,14 +3992,9 @@ BSM Assistant | BSD - IT Security Business`;
       const approvedAt = opts.approvedDaysAgo !== undefined ? rDate(opts.approvedDaysAgo) : createdAt;
 
       let currentApproverId = opts.approverId;
-      const originalApprover = users.find(u => u.id === opts.approverId);
-      if (originalApprover?.delegation) {
-        const start = new Date(originalApprover.delegation.start_date).getTime();
-        const end = new Date(originalApprover.delegation.end_date).getTime();
-        const claimTime = new Date(createdAt).getTime();
-        if (claimTime >= start && claimTime <= end) {
-          currentApproverId = originalApprover.delegation.delegate_id;
-        }
+      const activeDelegationAtCreation = getActiveDelegation(opts.approverId, new Date(createdAt));
+      if (activeDelegationAtCreation) {
+        currentApproverId = activeDelegationAtCreation.delegate_id;
       }
 
       if (decision) {
@@ -4187,7 +4371,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 3500.00,
       purpose: 'Client Lunch - Rockwell',
       approverId: 'u2',
-      status: CashAdvanceStatus.DRAFT
+      status: CashAdvanceStatus.DRAFT,
+      createdAt: rDate(1),
     });
     addCaHistoryWithTimestamp(ca1Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(1));
 
@@ -4198,7 +4383,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 5000.00,
       purpose: 'Travel to Cebu',
       approverId: 'u2',
-      status: CashAdvanceStatus.SUBMITTED
+      status: CashAdvanceStatus.SUBMITTED,
+      createdAt: rDate(3),
     });
     addCaHistoryWithTimestamp(ca2Id, '', CashAdvanceStatus.DRAFT, 'u5', 'Draft created', rDate(3));
     addCaHistoryWithTimestamp(ca2Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u5', 'Submitted for Approval', rDate(2));
@@ -4217,7 +4403,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 7500.00,
       purpose: 'Client Entertainment - BGC',
       approverId: 'u2',
-      status: CashAdvanceStatus.APPROVED
+      status: CashAdvanceStatus.APPROVED,
+      createdAt: rDate(4),
     });
     addCaHistoryWithTimestamp(ca3Id, '', CashAdvanceStatus.DRAFT, 'u6', 'Draft created', rDate(4));
     addCaHistoryWithTimestamp(ca3Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u6', 'Submitted for Approval', rDate(3));
@@ -4244,7 +4431,8 @@ BSM Assistant | BSD - IT Security Business`;
       amount: 12000.00,
       purpose: 'Team Building Advance',
       approverId: 'u10',
-      status: CashAdvanceStatus.REJECTED
+      status: CashAdvanceStatus.REJECTED,
+      createdAt: rDate(5),
     });
     addCaHistoryWithTimestamp(ca4Id, '', CashAdvanceStatus.DRAFT, 'u11', 'Draft created', rDate(5));
     addCaHistoryWithTimestamp(ca4Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u11', 'Submitted for Approval', rDate(4));
@@ -4274,7 +4462,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(2),
-      releaseReference: 'REF-LIAM-CA'
+      releaseReference: 'REF-LIAM-CA',
+      createdAt: rDate(5),
     });
     addCaHistoryWithTimestamp(ca5Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(5));
     addCaHistoryWithTimestamp(ca5Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(4));
@@ -4313,7 +4502,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(3),
-      releaseReference: 'REF-LIAM-SURVEY'
+      releaseReference: 'REF-LIAM-SURVEY',
+      createdAt: rDate(6),
     });
     addCaHistoryWithTimestamp(ca6Id, '', CashAdvanceStatus.DRAFT, 'u12', 'Draft created', rDate(6));
     addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u12', 'Submitted for Approval', rDate(5));
@@ -4349,7 +4539,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 0,
       varianceAmount: -6000.00,
       varianceType: LiquidationVarianceType.REFUND_DUE,
-      status: LiquidationStatus.DRAFT
+      status: LiquidationStatus.DRAFT,
+      createdAt: rDate(2),
     });
     addCaHistoryWithTimestamp(ca6Id, CashAdvanceStatus.RELEASED, CashAdvanceStatus.RELEASED, 'u12', 'Liquidation Started', rDate(2));
     addLiqHistoryWithTimestamp(liq1Id, '', LiquidationStatus.DRAFT, 'u12', 'Draft Liquidation started', rDate(2));
@@ -4367,7 +4558,8 @@ BSM Assistant | BSD - IT Security Business`;
       status: CashAdvanceStatus.RELEASED,
       releasedBy: 'u3',
       releaseDate: rDate(4),
-      releaseReference: 'REF-ALICE-MAXS'
+      releaseReference: 'REF-ALICE-MAXS',
+      createdAt: rDate(7),
     });
     addCaHistoryWithTimestamp(ca7Id, '', CashAdvanceStatus.DRAFT, 'u1', 'Draft created', rDate(7));
     addCaHistoryWithTimestamp(ca7Id, CashAdvanceStatus.DRAFT, CashAdvanceStatus.SUBMITTED, 'u1', 'Submitted for Approval', rDate(6));
@@ -4403,7 +4595,8 @@ BSM Assistant | BSD - IT Security Business`;
       totalSpent: 5000.00,
       varianceAmount: 0.00,
       varianceType: LiquidationVarianceType.SETTLED,
-      status: LiquidationStatus.SUBMITTED
+      status: LiquidationStatus.SUBMITTED,
+      createdAt: rDate(3),
     });
     liquidationLineItems.push({
       id: uuidv4(),
@@ -4463,6 +4656,7 @@ BSM Assistant | BSD - IT Security Business`;
 
     const mkCa = (reqId: string, appId: string, amt: number, purpose: string, status: CashAdvanceStatus, days: number) => {
       const caId = uuidv4();
+      const createdDate = rDate(days + 1);
       const ca: CashAdvance = {
         id: caId,
         requestorId: reqId,
@@ -4470,6 +4664,7 @@ BSM Assistant | BSD - IT Security Business`;
         purpose,
         approverId: appId,
         status,
+        createdAt: createdDate,
       };
       cashAdvances.push(ca);
 
@@ -4478,7 +4673,6 @@ BSM Assistant | BSD - IT Security Business`;
       const appUser = users.find(u => u.id === appId);
       const appName = appUser?.name || 'Approver';
 
-      const createdDate = rDate(days + 1);
       const actionDate = rDate(days);
 
       addCaHistoryWithTimestamp(caId, '', CashAdvanceStatus.DRAFT, reqId, 'Draft created', createdDate);
@@ -4589,6 +4783,7 @@ BSM Assistant | BSD - IT Security Business`;
       client: string
     ) => {
       const caId = uuidv4();
+      const createdDate = rDate(daysAgoCreated);
       const ca: CashAdvance = {
         id: caId,
         requestorId: reqId,
@@ -4596,6 +4791,7 @@ BSM Assistant | BSD - IT Security Business`;
         purpose,
         approverId: appId,
         status,
+        createdAt: createdDate,
       };
       cashAdvances.push(ca);
 
@@ -4604,7 +4800,6 @@ BSM Assistant | BSD - IT Security Business`;
       const appUser = users.find(u => u.id === appId);
       const appName = appUser?.name || 'Approver';
 
-      const createdDate = rDate(daysAgoCreated);
       
       // Draft
       addCaHistoryWithTimestamp(caId, '', CashAdvanceStatus.DRAFT, reqId, 'Draft created', createdDate);
@@ -4666,7 +4861,8 @@ BSM Assistant | BSD - IT Security Business`;
           totalSpent,
           varianceAmount: 0.00,
           varianceType: LiquidationVarianceType.SETTLED,
-          status: LiquidationStatus.CLOSED
+          status: LiquidationStatus.CLOSED,
+      createdAt: liqStartedDate,
         });
 
         liquidationLineItems.push({

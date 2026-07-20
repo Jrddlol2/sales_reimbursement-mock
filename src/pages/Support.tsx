@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { format } from 'date-fns';
 import { Plus, Lifebuoy, CaretRight, ShieldCheck, User as UserIcon } from '@phosphor-icons/react';
 import { useToast } from '../components/Toast';
+import { EmptyState } from '../components/EmptyState';
 
 export const Support: React.FC = () => {
   const { user } = useAuth();
@@ -63,7 +64,7 @@ export const Support: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 font-display">
@@ -115,7 +116,7 @@ export const Support: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {requests.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 text-sm">No support requests found.</div>
+          <EmptyState icon={Lifebuoy} title="No support requests found" />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

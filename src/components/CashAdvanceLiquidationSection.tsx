@@ -643,32 +643,12 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* KPI Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display">Pending requests</span>
-          <div className="text-2xl font-extrabold text-slate-900 font-display">
-            {pendingRequestsCount}
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Unliquidated Float</span>
-          <div className="text-2xl font-extrabold text-brand font-display">
-            {formatPHP(unliquidatedFloat)}
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Total Reimbursed & Spent</span>
-          <div className="text-2xl font-extrabold text-slate-900 font-display">
-            {formatPHP(totalReimbursedOrSpent)}
-          </div>
-        </div>
-      </div>
-
       {/* Needs Your Action - every item that requires a click from this user, always
           shown in full regardless of the history table's recency cap below. This is
           the fix for "filing a liquidation is hard to find": the action lives here,
-          not buried as a small button in a long table. */}
+          not buried as a small button in a long table. Rendered before the KPI
+          section below so it's the first thing a Requestor sees, ahead of summary
+          numbers. */}
       {(() => {
         const draftAdvances = userAdvances.filter(ca => ca.status === CashAdvanceStatus.DRAFT);
         const releasedAdvances = userAdvances.filter(ca => {
@@ -734,6 +714,28 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* KPI Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display">Pending requests</span>
+          <div className="text-2xl font-extrabold text-slate-900 font-display">
+            {pendingRequestsCount}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Unliquidated Float</span>
+          <div className="text-2xl font-extrabold text-brand font-display">
+            {formatPHP(unliquidatedFloat)}
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Total Reimbursed & Spent</span>
+          <div className="text-2xl font-extrabold text-slate-900 font-display">
+            {formatPHP(totalReimbursedOrSpent)}
+          </div>
+        </div>
+      </div>
 
       {/* Request Form Toggle */}
       {showRequestForm ? (

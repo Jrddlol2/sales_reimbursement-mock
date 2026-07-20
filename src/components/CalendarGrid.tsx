@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Mom, MomStatus, UserRole, ReviewMeetingStatus } from '../types';
 import { getStatusConfig, getStatusBadgeClass } from '../statusConfig';
+import { formatPHP } from '../utils';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -18,6 +19,8 @@ interface ReviewMeetingLike {
   approver_name?: string;
   requestor_name?: string;
   status?: ReviewMeetingStatus;
+  claim_number?: string;
+  total_amount?: number;
 }
 
 interface CalendarGridProps {
@@ -108,12 +111,16 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                     );
                   })}
                   {dayReviewMeetings.map(rm => {
-                    const withName = rm.approver_name || rm.requestor_name || 'Approver';
+                    // Claimant (requestor) identifies *whose* meeting this is —
+                    // showing the Approver's own name here is useless to an
+                    // Approver scanning several direct reports' meetings.
+                    const claimantName = rm.requestor_name || 'Requestor';
                     const rmConfig = getStatusConfig(rm.status);
                     const statusSuffix = rmConfig.colorKey === 'pending' ? ' (Pending)'
                       : rmConfig.colorKey === 'rejected' ? ' (Declined)'
                       : '';
-                    const displayLabel = `${rm.meeting_time || 'Review'} - ${withName}${statusSuffix}`;
+                    const amountSuffix = typeof rm.total_amount === 'number' ? ` · ${formatPHP(rm.total_amount)}` : '';
+                    const displayLabel = `${rm.meeting_time || 'Review'} - ${claimantName}${amountSuffix}${statusSuffix}`;
                     return (
                       <div
                         key={rm.id}
@@ -121,7 +128,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                           "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block shadow-xs",
                           getStatusBadgeClass(rm.status)
                         )}
-                        title={`Review Meeting with ${withName} at ${rm.meeting_time || 'unspecified time'} - ${rmConfig.description} Your internal claim review call, not the client meeting.`}
+                        title={`Review Meeting with ${claimantName}${rm.claim_number ? ` (${rm.claim_number})` : ''} at ${rm.meeting_time || 'unspecified time'}${typeof rm.total_amount === 'number' ? ` — ${formatPHP(rm.total_amount)}` : ''} - ${rmConfig.description} Your internal claim review call, not the client meeting.`}
                       >
                         {displayLabel}
                       </div>

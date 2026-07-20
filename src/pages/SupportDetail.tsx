@@ -96,7 +96,7 @@ export const SupportDetail: React.FC = () => {
   if (!request) return <div className="p-8 text-center text-red-500">Support request not found.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <Link to="/support" className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors uppercase tracking-wider font-display">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Support Requests
       </Link>

@@ -80,11 +80,13 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   const completedClaims = claims.filter(c => c.status === ClaimStatus.COMPLETED);
   const totalReimbursed = completedClaims.reduce((acc, c) => acc + c.total_amount, 0);
 
+  // "New Reimbursement" / "New Cash Advance" are intentionally not repeated
+  // here — CashAdvanceLiquidationSection above already surfaces both as its
+  // own primary actions (including the inline Cash Advance quick-form), so
+  // this card only covers the actions that aren't offered anywhere else.
   const quickActions = [
-    { label: 'New Reimbursement', icon: Receipt, path: '/claims/new', colorClass: 'text-white', bgColorClass: 'bg-brand', group: 'Start New' },
-    { label: 'New Cash Advance', icon: Money, path: '/claims/new?type=cash_advance', colorClass: 'text-white', bgColorClass: 'bg-emerald-600', group: 'Start New' },
-    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-white', bgColorClass: 'bg-amber-500', group: 'Manage / Schedule' },
-    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-slate-600', group: 'Manage / Schedule' },
+    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-white', bgColorClass: 'bg-amber-500' },
+    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
   ];
 
   const statusDistribution = [
@@ -134,14 +136,15 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
         <DashboardHeader user={user} summaryText={`You currently have ${activeClaims.length} active claims and ${activeCadvs.length} pending cash advances.`} />
         <DashboardPeriodFilter role={UserRole.REQUESTOR} />
       </div>
 
-      {/* Level 1: things needing action today (drafts to finish, returned
-          items to fix, funds ready to collect) surface before any KPI or
-          chart — this is the section the requestor should see first. */}
+      {/* Recent requests, drafts, and items needing attention — rendered
+          before the KPI cards below so "Needs Your Action" (inside this
+          section) is the first thing a Requestor sees, not buried under
+          a row of summary metrics. */}
       <div className="mb-8">
         <CashAdvanceLiquidationSection />
       </div>

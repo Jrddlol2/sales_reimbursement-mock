@@ -354,7 +354,7 @@ const adminMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'currency',
     variant: 'info',
-    description: 'Completed claims, calendar year (no fiscal-year concept configured)',
+    description: 'Completed claims, calendar year to date',
     compute: ({ claims }, range) =>
       claims
         .filter(c => c.status === ClaimStatus.COMPLETED)
@@ -369,7 +369,7 @@ const adminMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'number',
     variant: 'info',
-    description: 'Users with claim/approval activity this month (no login tracking exists — proxied via activity)',
+    description: 'Users with claim or approval activity this month',
     compute: ({ claims, users }, range) => {
       const active = new Set<string>();
       claims.forEach(c => {

@@ -589,6 +589,14 @@ export const Moms: React.FC = () => {
         )}
       </div>
 
+      {/* Previously this fetch error only surfaced inside the upload modal,
+          so a failed initial load of the MOM list looked like an empty list
+          rather than a broken page. Surface it here too, on the page the
+          user is actually looking at. */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded text-sm shrink-0">{error}</div>
+      )}
+
       {creationStep === 'choice' ? (
           /* Source Choice Step */
           <motion.div

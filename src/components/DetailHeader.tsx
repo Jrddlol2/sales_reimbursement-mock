@@ -28,6 +28,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ eyebrow, title, stat
             }}
             className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
             title="Copy ID"
+            aria-label="Copy ID to clipboard"
           >
             <Copy className="w-4 h-4" />
           </button>
@@ -41,7 +42,7 @@ export const DetailHeader: React.FC<DetailHeaderProps> = ({ eyebrow, title, stat
       <div className="flex items-center gap-2">
         {actions}
         {onClose && (
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors ml-2">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors ml-2" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         )}

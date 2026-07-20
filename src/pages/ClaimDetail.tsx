@@ -102,6 +102,18 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
     if ((action === 'reject' || action === 'return') && !comment) {
       return toast.error('A brief comment is required to return or reject this claim.');
     }
+    const ok = await confirmAction({
+      title: decision === 'Approved' ? 'Approve this claim?' : decision === 'Rejected' ? 'Reject this claim?' : 'Return this claim for revision?',
+      message: decision === 'Approved'
+        ? 'This will approve the claim and route it to Finance for processing.'
+        : decision === 'Rejected'
+          ? 'This will reject the claim. The Requestor will be notified and this decision cannot be undone.'
+          : 'This will send the claim back to the Requestor for revision.',
+      confirmLabel: `Yes, ${decision}`,
+      cancelLabel: 'Cancel',
+      tone: decision === 'Rejected' ? 'danger' : 'default',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/claims/${claimId}/approve`, {
         method: 'POST',
@@ -171,6 +183,12 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
 
   const claimNumber = claim ? getClaimNumber(claim) : `REIM-${claimId.substring(0, 6)}`;
 
+  // Set only when the claim was routed via an active delegation - lets the
+  // Requestor see it's actually with a delegate, not their real manager.
+  const isDelegated = !!(claim?.original_approver_id && claim.original_approver_id !== claim.current_approver_id);
+  const delegateApproverName = isDelegated ? users.find(u => u.id === claim!.current_approver_id)?.name : undefined;
+  const originalApproverName = isDelegated ? users.find(u => u.id === claim!.original_approver_id)?.name : undefined;
+
   const drawerContent = (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-slate-900/40 backdrop-blur-[2px]" id="claim_detail_side_panel">
       {/* Backdrop */}
@@ -215,7 +233,19 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
           <DetailHeader
             eyebrow="Reimbursement Request"
             title={claimNumber}
-            status={claim && <><StatusBadge status={claim.status} /><WorkflowOwnerTag status={claim.status} className="ml-1.5" /></>}
+            status={claim && (
+              <>
+                <StatusBadge status={claim.status} />
+                {isDelegated && delegateApproverName ? (
+                  <span className="text-[10px] font-semibold text-slate-400 ml-1.5">
+                    Currently with <span className="text-slate-600 font-bold">{delegateApproverName}</span>
+                    {originalApproverName && <> (on behalf of <span className="text-slate-600 font-bold">{originalApproverName}</span>)</>}
+                  </span>
+                ) : (
+                  <WorkflowOwnerTag status={claim.status} className="ml-1.5" />
+                )}
+              </>
+            )}
             onClose={onClose}
             actions={
               <>

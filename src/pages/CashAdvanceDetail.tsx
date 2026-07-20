@@ -85,7 +85,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
   const linkedMom = ca.momId ? moms.find(m => m.id === ca.momId) : null;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Back navigation */}
       <button
         onClick={handleClose}

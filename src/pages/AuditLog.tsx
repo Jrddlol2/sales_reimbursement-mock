@@ -5,6 +5,19 @@ import Papa from 'papaparse';
 import { DownloadSimple, CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { getStatusColor, getClaimNumber } from '../utils';
 
+// Claim-related entries have a claim_number; user-admin entries have a
+// targetUser name. Everything else (Cash Advance / Liquidation events) has
+// claim_id === '' and previously fell through to a blank Reference ID —
+// fall back to the CADV/Liquidation id instead so every row is traceable.
+const getReferenceId = (log: any): string => {
+  if (log.claim) return log.claim.claim_number || log.claim.id.substring(0, 8);
+  if (log.targetUser) return log.targetUser.name;
+  if (log.cash_advance_id) return `CADV-${log.cash_advance_id.substring(0, 8)}`;
+  if (log.liquidation_id) return `LIQ-${log.liquidation_id.substring(0, 8)}`;
+  if (log.delegation_id) return `DEL-${log.delegation_id.substring(0, 8)}`;
+  return log.claim_id ? log.claim_id.substring(0, 8) : '—';
+};
+
 export const AuditLog: React.FC = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +26,7 @@ export const AuditLog: React.FC = () => {
     if (history.length === 0) return;
     const csv = Papa.unparse(history.map((log) => ({
       Timestamp: new Date(log.timestamp).toLocaleString(),
-      'Reference ID': log.claim ? (log.claim.claim_number || log.claim.id.substring(0,8)) : log.targetUser ? log.targetUser.name : log.claim_id.substring(0,8),
+      'Reference ID': getReferenceId(log),
       'Old Status': log.old_status,
       'New Status': log.new_status,
       'Changed By': log.user ? log.user.name : log.changed_by,
@@ -121,7 +134,7 @@ export const AuditLog: React.FC = () => {
                       ) : log.targetUser ? (
                         <span className="text-slate-900 font-sans font-bold">{log.targetUser.name}</span>
                       ) : (
-                        <span className="text-slate-900">{log.claim_id.substring(0,8)}</span>
+                        <span className="text-slate-900">{getReferenceId(log)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -166,7 +179,7 @@ export const AuditLog: React.FC = () => {
                     ) : log.targetUser ? (
                       <span className="text-slate-900 font-sans font-bold">{log.targetUser.name}</span>
                     ) : (
-                      <span className="text-slate-900">{log.claim_id.substring(0,8)}</span>
+                      <span className="text-slate-900">{getReferenceId(log)}</span>
                     )}
                   </span>
                 </div>

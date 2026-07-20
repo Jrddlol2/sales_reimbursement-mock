@@ -1,6 +1,7 @@
 import React from 'react';
 import { StatusBadge } from '../StatusBadge';
 import { formatPHP } from '../../utils';
+import { getAgingInfo } from '../../statusConfig';
 import { useNavigate } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
 
@@ -19,9 +20,14 @@ interface RecentActivityTableProps {
   items: ActivityItem[];
   emptyMessage?: string;
   action?: React.ReactNode;
+  // Opt-in only — this table is shared across every role's dashboard, and
+  // "how long has this been waiting" is only meaningful for a queue of
+  // pending items (e.g. the Approver's Action Required list), not for
+  // already-decided history rows on other dashboards.
+  showAging?: boolean;
 }
 
-export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "Nothing here yet — activity will appear as requests move through the workflow.", action }) => {
+export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "Nothing here yet — activity will appear as requests move through the workflow.", action, showAging = false }) => {
   const navigate = useNavigate();
 
   return (
@@ -46,14 +52,15 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                     <th>Type</th>
                     <th>Amount</th>
                     <th>Date</th>
+                    {showAging && <th>Aging</th>}
                     <th>Status</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
-                    <tr 
-                      key={item.id} 
+                    <tr
+                      key={item.id}
                       className="cursor-pointer"
                       onClick={() => navigate(item.path)}
                     >
@@ -69,6 +76,18 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                       <td>
                         <span className="text-slate-500">{new Date(item.date).toLocaleDateString()}</span>
                       </td>
+                      {showAging && (
+                        <td>
+                          {(() => {
+                            const aging = getAgingInfo(item.date);
+                            return (
+                              <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap ${aging.badgeClass}`}>
+                                {aging.label}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      )}
                       <td>
                         <StatusBadge status={item.status} size="sm" />
                       </td>
@@ -106,6 +125,17 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                       <span className="text-slate-400 font-medium mr-1">Date:</span>
                       <span className="text-slate-700">{new Date(item.date).toLocaleDateString()}</span>
                     </div>
+                    {showAging && (() => {
+                      const aging = getAgingInfo(item.date);
+                      return (
+                        <div>
+                          <span className="text-slate-400 font-medium mr-1">Aging:</span>
+                          <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${aging.badgeClass}`}>
+                            {aging.label}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     <div className="text-right flex items-center justify-end gap-0.5 text-brand font-bold">
                       <span>View details</span>
                       <CaretRight size={12} weight="bold" />

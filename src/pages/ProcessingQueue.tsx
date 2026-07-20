@@ -18,6 +18,7 @@ import { ClaimLineItems } from '../components/ClaimLineItems';
 import { ClaimApprovalInfo } from '../components/ClaimApprovalInfo';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
+import { EmptyState } from '../components/EmptyState';
 
 type ClaimWithDetails = Claim & { requestor?: User; mom?: any; expenses?: any[]; approvals?: any[] };
 
@@ -27,6 +28,7 @@ export const ProcessingQueue: React.FC = () => {
   const [claims, setClaims] = useState<ClaimWithDetails[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'queue' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'queue');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export const ProcessingQueue: React.FC = () => {
 
   const fetchClaims = () => {
     setLoading(true);
+    setLoadError(false);
     Promise.all([
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
@@ -66,6 +69,8 @@ export const ProcessingQueue: React.FC = () => {
       .catch(err => {
         console.error(err);
         setLoading(false);
+        setLoadError(true);
+        toast.error('Failed to load the processing queue. Please try again.');
       });
   };
 
@@ -201,6 +206,21 @@ export const ProcessingQueue: React.FC = () => {
     if (filterRequestor && c.requestor_id !== filterRequestor) return false;
     return true;
   }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  if (loadError) {
+    return (
+      <div className="corp-card flex flex-col items-center justify-center text-center py-16 px-6">
+        <WarningCircle className="w-10 h-10 text-red-400 mb-3" />
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Couldn't load the processing queue</h3>
+        <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+          Something went wrong while fetching claims, cash advances, and liquidations. The queue may not actually be empty — please try again.
+        </p>
+        <button onClick={fetchClaims} className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" id="processing_queue_view">
@@ -412,14 +432,8 @@ export const ProcessingQueue: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {pendingClaims.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center">
-                        <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                          <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                            <Tray className="w-5 h-5" />
-                          </div>
-                          <p className="text-sm font-bold text-gray-700">All Clear!</p>
-                          <p className="text-xs text-gray-400 max-w-sm mx-auto">There are no approved reimbursement claims currently awaiting disbursement or processing.</p>
-                        </div>
+                      <td colSpan={5} className="px-4 py-4">
+                        <EmptyState icon={Tray} title="All Clear!" description="There are no approved reimbursement claims currently awaiting disbursement or processing." />
                       </td>
                     </tr>
                   ) : (
@@ -578,15 +592,7 @@ export const ProcessingQueue: React.FC = () => {
             {/* Mobile Stacked Card View */}
             <div className="sm:hidden flex flex-col divide-y divide-slate-100">
               {pendingClaims.length === 0 ? (
-                <div className="p-8 text-center">
-                  <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                      <Tray className="w-5 h-5" />
-                    </div>
-                    <p className="text-sm font-bold text-gray-700">All Clear!</p>
-                    <p className="text-xs text-gray-400 max-w-sm mx-auto">There are no approved reimbursement claims currently awaiting disbursement or processing.</p>
-                  </div>
-                </div>
+                <EmptyState icon={Tray} title="All Clear!" description="There are no approved reimbursement claims currently awaiting disbursement or processing." />
               ) : (
                 pendingClaims.map(claim => {
                   const isExpanded = expandedId === claim.id;
@@ -783,14 +789,8 @@ export const ProcessingQueue: React.FC = () => {
                   <tbody className="bg-white divide-y divide-slate-100">
                     {filteredHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-12 text-center">
-                          <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                            <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                              <FolderOpen className="w-5 h-5" />
-                            </div>
-                            <p className="text-sm font-bold text-gray-700">No History Found</p>
-                            <p className="text-xs text-gray-400 max-w-sm mx-auto">No processed or historical claims found matching the current selected filters.</p>
-                          </div>
+                        <td colSpan={7} className="px-4 py-4">
+                          <EmptyState icon={FolderOpen} title="No History Found" description="No processed or historical claims found matching the current selected filters." />
                         </td>
                       </tr>
                     ) : (
@@ -841,15 +841,7 @@ export const ProcessingQueue: React.FC = () => {
               {/* Mobile Card View */}
               <div className="md:hidden flex flex-col divide-y divide-slate-100">
                 {filteredHistory.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-gray-500">
-                    <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                      <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                        <FolderOpen className="w-5 h-5" />
-                      </div>
-                      <p className="text-sm font-bold text-gray-700">No History Found</p>
-                      <p className="text-xs text-gray-400 max-w-sm mx-auto">No processed or historical claims found matching the current selected filters.</p>
-                    </div>
-                  </div>
+                  <EmptyState icon={FolderOpen} title="No History Found" description="No processed or historical claims found matching the current selected filters." />
                 ) : (
                   filteredHistory.map(claim => {
                     const claimNumber = getClaimNumber(claim);

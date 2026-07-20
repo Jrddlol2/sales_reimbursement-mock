@@ -13,11 +13,30 @@ export interface User {
   department: string;
   job_title?: string;
   reports_to: string | null; // ID of the Approver they report to
-  delegation?: {
-    delegate_id: string;
-    start_date: string;
-    end_date: string;
-  };
+}
+
+export enum DelegationStatus {
+  PENDING = 'Pending',
+  ACTIVE = 'Active',
+  DECLINED = 'Declined',
+  EXPIRED = 'Expired',
+  CANCELLED = 'Cancelled',
+}
+
+export interface ApproverDelegation {
+  id: string;
+  approver_id: string;
+  delegate_id: string;
+  start_date: string;
+  end_date: string;
+  status: DelegationStatus;
+  decline_reason?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // Enriched by the API for display - not stored fields.
+  approver?: User;
+  delegate?: User;
 }
 
 export enum MomStatus {
@@ -158,7 +177,7 @@ export interface Approval {
   timestamp: string;
 }
 
-export interface StatusHistory {  id: string;  claim_id: string;  cash_advance_id?: string;  liquidation_id?: string;  user_id?: string;  old_status: string;  new_status: string;  changed_by: string;  changedBy?: User;  reason?: string;  timestamp: string;}
+export interface StatusHistory {  id: string;  claim_id: string;  cash_advance_id?: string;  liquidation_id?: string;  delegation_id?: string;  user_id?: string;  old_status: string;  new_status: string;  changed_by: string;  changedBy?: User;  reason?: string;  timestamp: string;}
 
 export interface Company {
   id: string;

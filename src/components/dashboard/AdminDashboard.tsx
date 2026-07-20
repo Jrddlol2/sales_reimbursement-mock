@@ -306,7 +306,13 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             <KPICard title="Total Users" value={users.length} icon={Users} colorClass="text-slate-600 bg-white" />
             <KPICard title="Total Requests" value={claims.length + cadvs.length} icon={FileText} colorClass="text-slate-600 bg-white" />
             <KPICard title="System Audit (Today)" value={todayHistory.length} icon={ShieldCheck} colorClass="text-slate-600 bg-white" />
-            <KPICard title="System Health" value="100%" icon={Heartbeat} colorClass="text-emerald-600 bg-white" />
+            <KPICard
+              title="System Status"
+              value="Operational"
+              icon={Heartbeat}
+              variant="info"
+              description="Reflects app availability, not a computed health score"
+            />
           </div>
 
           <QuickActionsCard actions={quickActions} layout="horizontal" />

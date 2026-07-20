@@ -3,7 +3,7 @@ import {
   XCircle, ArrowUUpLeft, FolderOpen,
 } from '@phosphor-icons/react';
 import {
-  ClaimStatus, CashAdvanceStatus, LiquidationStatus, SupportRequestStatus, ReviewMeetingStatus,
+  ClaimStatus, CashAdvanceStatus, LiquidationStatus, SupportRequestStatus, ReviewMeetingStatus, DelegationStatus,
 } from './types';
 
 // Single source of truth for how every workflow status in the app is
@@ -161,6 +161,33 @@ const STATUS_CONFIG: Record<string, StatusMeta> = {
     label: 'Declined — Please Reschedule', colorKey: 'rejected', icon: XCircle,
     description: 'Declined by the Approver — propose a new time.',
     stage: 0, nextStep: 'Propose a new time', ownerRole: 'Requestor',
+  },
+
+  // --- ApproverDelegation-only ---
+  'Pending': {
+    label: 'Pending', colorKey: 'pending', icon: Clock,
+    description: 'Waiting for the delegate to accept or decline.',
+    stage: 0, nextStep: 'Awaiting delegate response', ownerRole: 'Delegate',
+  },
+  'Active': {
+    label: 'Active', colorKey: 'approved', icon: CheckCircle,
+    description: 'Accepted — claims are currently routing to the delegate.',
+    stage: 1, ownerRole: undefined,
+  },
+  'Declined': {
+    label: 'Declined', colorKey: 'rejected', icon: XCircle,
+    description: 'The delegate declined this request.',
+    stage: -1, ownerRole: 'Approver',
+  },
+  'Expired': {
+    label: 'Expired', colorKey: 'draft', icon: FolderOpen,
+    description: "The delegation window has ended.",
+    stage: 2, ownerRole: undefined,
+  },
+  'Cancelled': {
+    label: 'Cancelled', colorKey: 'draft', icon: XCircle,
+    description: 'Cancelled by the Approver before it ended.',
+    stage: -1, ownerRole: undefined,
   },
 };
 

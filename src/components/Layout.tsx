@@ -12,7 +12,7 @@ export const navItems = [
   { label: 'My Inbox', path: '/approvals', icon: Tray, group: 'PRIMARY', roles: [UserRole.APPROVER] },
   { label: 'Processing Queue', path: '/processing', icon: ListChecks, group: 'PRIMARY', roles: [UserRole.CUSTODIAN] },
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
-  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
+  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN] },
   { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -272,7 +272,11 @@ export const Layout: React.FC = () => {
         z-[50]
       `}>
         <div className="h-16 flex items-center px-4 border-b border-slate-100 shrink-0 bg-gradient-to-r from-brand/[0.06] to-transparent">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-md hover:bg-slate-50">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-md hover:bg-slate-50"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
             <List className="w-5 h-5" />
           </button>
           <img 
@@ -317,6 +321,7 @@ export const Layout: React.FC = () => {
                       key={item.path}
                       to={item.path}
                       title={!sidebarOpen ? item.label : undefined}
+                      aria-label={item.label}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative group overflow-hidden ${
                         isActive 
                           ? 'bg-brand/10 text-brand shadow-sm font-semibold' 
@@ -466,10 +471,11 @@ export const Layout: React.FC = () => {
         {/* Top Bar */}
         <header className="h-16 glass-panel border-b border-slate-200/60 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
           <div className="flex items-center text-[13px] text-slate-500 font-medium min-w-0">
-             <button 
-               onClick={() => setSidebarOpen(true)} 
+             <button
+               onClick={() => setSidebarOpen(true)}
                className="md:hidden text-slate-500 hover:text-slate-700 p-1.5 mr-1.5 rounded-md hover:bg-slate-50 transition-colors shrink-0"
                id="mobile_sidebar_hamburger"
+               aria-label="Open sidebar menu"
              >
                <List className="w-5 h-5" />
              </button>
@@ -580,15 +586,16 @@ export const Layout: React.FC = () => {
           
           <div className="flex items-center gap-2 sm:gap-5">
             {/* Mobile Search Trigger Button */}
-            <button 
+            <button
               onClick={() => { handleSearchFocus(); setIsMobileSearchOpen(true); }}
               className="md:hidden text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-50 transition-colors shrink-0"
               id="mobile_search_trigger"
+              aria-label="Open search"
             >
               <MagnifyingGlass className="w-5 h-5" />
             </button>
 
-            <Link to="/notifications" className="text-slate-400 hover:text-slate-700 relative p-1.5 rounded-full hover:bg-slate-50 transition-colors shrink-0">
+            <Link to="/notifications" className="text-slate-400 hover:text-slate-700 relative p-1.5 rounded-full hover:bg-slate-50 transition-colors shrink-0" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}>
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
@@ -601,7 +608,7 @@ export const Layout: React.FC = () => {
                   {user?.job_title ? `${user.job_title} · ${user.role}` : user?.role}
                 </div>
               </div>
-              <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-1">
+              <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-1" aria-label="Log out">
                 <SignOut className="w-5 h-5" />
               </button>
             </div>

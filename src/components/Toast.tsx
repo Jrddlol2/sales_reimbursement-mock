@@ -71,7 +71,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             >
               <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${style.iconColor}`} />
               <p className="text-sm text-gray-800 flex-1 leading-snug">{t.message}</p>
-              <button onClick={() => dismiss(t.id)} className="text-gray-400 hover:text-gray-600 shrink-0">
+              <button onClick={() => dismiss(t.id)} className="text-gray-400 hover:text-gray-600 shrink-0" aria-label="Dismiss notification">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

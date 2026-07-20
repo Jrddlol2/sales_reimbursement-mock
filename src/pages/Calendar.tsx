@@ -41,7 +41,7 @@ export const Calendar: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h2 className="text-xl font-medium text-gray-900 tracking-tight">Review Meetings</h2>
+        <h2 className="text-xl font-medium text-gray-900 tracking-tight">Calendar</h2>
         <p className="mt-1 text-sm text-gray-500">
           {user?.role === UserRole.APPROVER ? "Read-only rollup of your team's scheduled review meetings." : "Schedule and track claim review meetings with your Approver."}
         </p>

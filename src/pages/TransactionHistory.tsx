@@ -5,6 +5,7 @@ import { formatPHP } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { ClockCounterClockwise, CaretRight, Funnel } from '@phosphor-icons/react';
+import { EmptyState } from '../components/EmptyState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { DownloadSimple } from '@phosphor-icons/react';
@@ -300,9 +301,7 @@ export const TransactionHistory: React.FC = () => {
         </div>
         <div className="overflow-x-auto rounded-b-xl">
           {paginatedItems.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 text-sm">
-              No transactions matching the selected filters were found.
-            </div>
+            <EmptyState icon={ClockCounterClockwise} title="No transactions found" description="No transactions matching the selected filters were found." />
           ) : (
             <>
               {/* Desktop Table */}

@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
 import { ClaimLineItems } from '../components/ClaimLineItems';
+import { EmptyState } from '../components/EmptyState';
 
 export const ApprovalQueue: React.FC = () => {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export const ApprovalQueue: React.FC = () => {
   const [inboxClaims, setInboxClaims] = useState<Claim[]>([]);
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'inbox' | 'meetings' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'inbox');
@@ -54,6 +56,7 @@ export const ApprovalQueue: React.FC = () => {
 
   const fetchClaims = () => {
     setLoading(true);
+    setLoadError(false);
     Promise.all([
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
@@ -79,6 +82,8 @@ export const ApprovalQueue: React.FC = () => {
     }).catch(err => {
       console.error(err);
       setLoading(false);
+      setLoadError(true);
+      toast.error('Failed to load your approval queue. Please try again.');
     });
   };
 
@@ -225,6 +230,21 @@ export const ApprovalQueue: React.FC = () => {
             <div className="h-12 bg-slate-50 rounded-md w-full"></div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="corp-card flex flex-col items-center justify-center text-center py-16 px-6">
+        <Warning className="w-10 h-10 text-red-400 mb-3" />
+        <h3 className="text-sm font-semibold text-slate-900 mb-1">Couldn't load your approval queue</h3>
+        <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
+          Something went wrong while fetching your pending approvals. Your queue may not be empty — please try again.
+        </p>
+        <button onClick={fetchClaims} className="corp-btn-primary text-xs font-semibold px-4 py-2 rounded">
+          Retry
+        </button>
       </div>
     );
   }
@@ -607,14 +627,8 @@ export const ApprovalQueue: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-100">
                 {inboxClaims.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                          <Tray className="w-5 h-5" />
-                        </div>
-                        <p className="text-sm font-bold text-gray-700">Inbox Zero!</p>
-                        <p className="text-xs text-gray-400 max-w-sm mx-auto">You have no pending approvals or returned claims.</p>
-                      </div>
+                    <td colSpan={6} className="px-4 py-4">
+                      <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
                     </td>
                   </tr>
                 ) : inboxClaims.map((claim: any) => {
@@ -675,15 +689,7 @@ export const ApprovalQueue: React.FC = () => {
           {/* Mobile Stacked Card View */}
           <div className="sm:hidden flex flex-col divide-y divide-slate-100">
             {inboxClaims.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="flex flex-col items-center justify-center space-y-2 py-4">
-                  <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-100">
-                    <Tray className="w-5 h-5" />
-                  </div>
-                  <p className="text-sm font-bold text-gray-700">Inbox Zero!</p>
-                  <p className="text-xs text-gray-400 max-w-sm mx-auto">You have no pending approvals or returned claims.</p>
-                </div>
-              </div>
+              <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
             ) : inboxClaims.map((claim: any) => {
               const claimNumber = getClaimNumber(claim);
               const isReturned = claim.status === ClaimStatus.RETURNED;
@@ -767,8 +773,8 @@ export const ApprovalQueue: React.FC = () => {
                 <tbody className="bg-white divide-y divide-slate-100">
                   {decisionHistoryItems.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center">
-                        <p className="text-sm text-gray-500">No decisions made yet.</p>
+                      <td colSpan={6} className="px-4 py-4">
+                        <EmptyState icon={CheckSquare} title="No decisions made yet" />
                       </td>
                     </tr>
                   ) : (
@@ -808,7 +814,7 @@ export const ApprovalQueue: React.FC = () => {
             {/* Mobile Stacked Card View */}
             <div className="sm:hidden flex flex-col divide-y divide-slate-100">
               {decisionHistoryItems.length === 0 ? (
-                <div className="p-8 text-center text-sm text-gray-500">No decisions made yet.</div>
+                <EmptyState icon={CheckSquare} title="No decisions made yet" />
               ) : (
                 decisionHistoryItems.map((item, idx) => {
                   const claimNumber = getClaimNumber(item.claim);

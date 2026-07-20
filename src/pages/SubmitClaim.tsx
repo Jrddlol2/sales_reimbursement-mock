@@ -406,7 +406,7 @@ export const SubmitClaim: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6" id="submit_claim_view">
+    <div className="max-w-4xl mx-auto space-y-6" id="submit_claim_view">
       {/* Back button and title */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="space-y-1">
@@ -445,6 +445,29 @@ export const SubmitClaim: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Lightweight progress indicator — reflects where the Requestor is in
+          the existing single-page form (already numbered 1-5 inline below),
+          not a separate multi-screen wizard. Purely orientation, derived
+          from state that already exists; no new routing or gating. */}
+      {!isResubmit && requestType === 'reimbursement' && (
+        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          {(() => {
+            const hasMom = !!selectedMomId;
+            const hasLineItems = lineItems.some(li => li.category && li.amount);
+            const hasMeeting = !!(meetingDate && meetingTime);
+            const stepIndex = !hasMom ? 0 : !hasLineItems ? 1 : !hasMeeting ? 2 : 3;
+            const steps = ['Minutes of Meeting', 'Expense Details', 'Review Meeting', 'Review & Submit'];
+            return (
+              <>
+                <span className="text-brand">Step {stepIndex + 1} of {steps.length}</span>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-500 normal-case tracking-normal font-semibold">{steps[stepIndex]}</span>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       {!user?.reports_to && (
         <div className="bg-red-50 border border-red-200 rounded p-4 text-sm text-red-700 flex items-start gap-2">

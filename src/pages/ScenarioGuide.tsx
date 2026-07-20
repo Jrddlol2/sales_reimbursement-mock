@@ -291,7 +291,7 @@ export const ScenarioGuide: React.FC = () => {
     
     if (badge) {
       const bgColors = {
-        default: 'bg-blue-50 text-blue-700 border-blue-200',
+        default: 'bg-slate-100 text-slate-700 border-slate-200',
         amber: 'bg-amber-50 text-amber-700 border-amber-200',
         rose: 'bg-rose-50 text-rose-700 border-rose-200',
         green: 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -315,9 +315,9 @@ export const ScenarioGuide: React.FC = () => {
       case 'Policy': return <ShieldWarning className="w-4 h-4 text-rose-500" />;
       case 'Delegation': return <Stack className="w-4 h-4 text-purple-500" />;
       case 'Workflow': return <Lightning className="w-4 h-4 text-amber-500" />;
-      case 'Admin': return <Sliders className="w-4 h-4 text-blue-500" />;
+      case 'Admin': return <Sliders className="w-4 h-4 text-slate-500" />;
       case 'Edge Cases': return <Pulse className="w-4 h-4 text-emerald-500" />;
-      case 'Navigation & UX': return <Compass className="w-4 h-4 text-indigo-500" />;
+      case 'Navigation & UX': return <Compass className="w-4 h-4 text-teal-500" />;
       default: return <BookOpen className="w-4 h-4 text-gray-500" />;
     }
   };
@@ -364,7 +364,7 @@ export const ScenarioGuide: React.FC = () => {
         {filteredScenarios.map(scenario => (
           <div 
             key={scenario.id} 
-            className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+            className="corp-card p-5 hover:shadow-md transition-all flex flex-col justify-between"
           >
             <div>
               {/* Card Top Header */}

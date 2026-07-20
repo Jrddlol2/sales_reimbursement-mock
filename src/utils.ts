@@ -1,60 +1,16 @@
-import { ClaimStatus, Claim, Approval, User } from './types';
+import { Claim, Approval, User } from './types';
+import { getStatusBadgeClass, getStatusConfig } from './statusConfig';
 
-// Maps a claim/cash-advance/liquidation status to one of the semantic badge
-// classes defined in index.css (corp-badge-success/warning/danger/info).
-// Pending-type statuses -> warning, approved/completed/closed -> success,
-// rejected -> danger, in-flight/neutral pipeline statuses -> info. Draft and
-// unrecognized statuses stay neutral slate since they aren't a semantic state.
-export const getStatusColor = (status: ClaimStatus | string) => {
-  switch (status) {
-    case ClaimStatus.DRAFT:
-    case 'Draft':
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-    case ClaimStatus.PENDING_APPROVAL:
-      return 'corp-badge-warning';
-    case ClaimStatus.APPROVED:
-    case 'Approved':
-      return 'corp-badge-success';
-    case ClaimStatus.PROCESSING:
-      return 'corp-badge-info';
-    case ClaimStatus.READY_FOR_CLAIM:
-      return 'corp-badge-info';
-    case ClaimStatus.COMPLETED:
-      return 'corp-badge-success';
-    case ClaimStatus.REJECTED:
-    case 'Rejected':
-      return 'corp-badge-danger';
-    case ClaimStatus.RETURNED:
-      return 'corp-badge-warning';
-    case 'Submitted':
-      return 'corp-badge-info';
-    case 'Released':
-      return 'corp-badge-success';
-    case 'ReturnedForRevision':
-      return 'corp-badge-warning';
-    case 'Reviewed':
-      return 'corp-badge-info';
-    case 'Closed':
-    case 'Liquidated':
-      return 'corp-badge-success';
-    case 'PendingConfirmation':
-      return 'corp-badge-warning';
-    case 'Confirmed':
-      return 'corp-badge-success';
-    case 'DeclineRequested':
-      return 'corp-badge-danger';
-    default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-  }
-};
+// Thin re-exports over statusConfig.ts (the single source of truth for
+// status -> color/label/icon) kept for existing callers that need a raw
+// class string or label instead of the <StatusBadge> component.
+export const getStatusColor = getStatusBadgeClass;
 
-// Display-only label override for the payout/release step. The stored status
-// value stays ClaimStatus.READY_FOR_CLAIM ('Ready for Claim') everywhere in
-// data/business logic; this just standardizes the user-facing copy to match
-// the "Ready to Claim" term already used for the nav item and page title.
-export const getStatusDisplayLabel = (status: string): string | undefined => {
-  return status === ClaimStatus.READY_FOR_CLAIM ? 'Ready to Claim' : undefined;
-};
+// Canonical display label for a status, e.g. 'Ready for Claim' -> 'Ready to
+// Claim', 'ReturnedForRevision' -> 'Returned for Revision'. <StatusBadge>
+// already applies this by default — only call this directly when you need
+// the bare label string outside a badge.
+export const getStatusDisplayLabel = (status: string): string => getStatusConfig(status).label;
 
 export const formatPHP = (amount: number) => {
   return new Intl.NumberFormat('en-PH', {

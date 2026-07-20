@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, ReviewMeeting, ReviewMeetingStatus } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { KPICard } from './KPICard';
+import { MetricCard } from './MetricCard';
+import { DashboardPeriodFilter } from './DashboardPeriodFilter';
 import { MyRequestsCards } from './MyRequestsCards';
 import { MyRecentSubmissionsTable } from './MyRecentSubmissionsTable';
 import { DashboardHeader } from './DashboardHeader';
@@ -9,26 +10,33 @@ import { QuickActionsCard } from './QuickActionsCard';
 import { RecentActivityTable } from './RecentActivityTable';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleLineChart, SimpleBarChart } from './AnalyticsCharts';
-import { Tray, Money, Clock, CheckCircle, ReceiptX, CalendarPlus } from '@phosphor-icons/react';
+import { Tray, Clock, CalendarPlus } from '@phosphor-icons/react';
+import { metricsForRole, MetricContext } from '../../metrics/registry';
+import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
+import { UserRole } from '../../types';
 
 export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [cadvs, setCadvs] = useState<CashAdvance[]>([]);
   const [liqs, setLiqs] = useState<Liquidation[]>([]);
   const [meetings, setMeetings] = useState<ReviewMeeting[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const { resolveMetricRange, effectiveScope } = useDashboardPeriod();
 
   useEffect(() => {
     Promise.all([
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
       apiFetch('/api/liquidations'),
-      apiFetch('/api/review-meetings')
-    ]).then(([claimsData, cadvsData, liqsData, meetingsData]) => {
+      apiFetch('/api/review-meetings'),
+      apiFetch('/api/users')
+    ]).then(([claimsData, cadvsData, liqsData, meetingsData, usersData]) => {
       setClaims(claimsData);
       setCadvs(cadvsData);
       setLiqs(liqsData);
       setMeetings(meetingsData);
+      setUsers(usersData);
       setLoading(false);
     }).catch(console.error);
   }, []);
@@ -73,15 +81,15 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
   // Calculate KPIs (Things awaiting this approver's action)
   const pendingClaims = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user.id);
   const pendingCadvs = cadvs.filter(c => c.status === CashAdvanceStatus.SUBMITTED && c.approverId === user.id);
-  const pendingLiqs = liqs.filter(l => l.status === LiquidationStatus.SUBMITTED); // We assume if it's visible and pending, it's theirs
+  const pendingLiqs = liqs.filter(l => l.status === LiquidationStatus.SUBMITTED && cadvs.find(ca => ca.id === l.cashAdvanceId)?.approverId === user.id);
   const pendingMeetings = meetings.filter(m => m.approver_id === user.id && m.status === ReviewMeetingStatus.PENDING_CONFIRMATION);
 
   const pendingTotal = pendingClaims.length + pendingCadvs.length + pendingLiqs.length + pendingMeetings.length;
 
   const quickActions = [
-    { label: 'Approval Queue', icon: Tray, path: '/approvals', colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50' },
-    { label: 'Review Meetings', icon: CalendarPlus, path: '/calendar', colorClass: 'text-blue-600', bgColorClass: 'bg-blue-50' },
-    { label: 'Delegation Settings', icon: Clock, path: '/settings', colorClass: 'text-slate-600', bgColorClass: 'bg-slate-100' },
+    { label: 'Approval Queue', icon: Tray, path: '/approvals', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
+    { label: 'Review Meetings', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
+    { label: 'Delegation Settings', icon: Clock, path: '/settings', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
   ];
 
   // Approver recent activity - mostly things they need to approve, or recently approved
@@ -122,74 +130,74 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
     { name: 'Review Meetings', count: pendingMeetings.length }
   ];
 
+  const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users, currentUser: user };
+  const approverMetricDefs = metricsForRole(UserRole.APPROVER);
+  const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
+    approver_pending_approvals: { actionLabel: 'Review Requests', actionPath: '/approvals?tab=inbox' },
+    approver_claims_awaiting_action: { actionLabel: 'Open My Inbox', actionPath: '/approvals' },
+    approver_claims_submitted: { actionLabel: 'View Claims', actionPath: '/approvals?tab=inbox' },
+    approver_team_spending: { actionLabel: 'View Team Activity', actionPath: '/approvals?tab=history' },
+    approver_approval_rate: { actionLabel: 'Decision History', actionPath: '/approvals?tab=history' },
+    approver_avg_approval_time: { actionLabel: 'Decision History', actionPath: '/approvals?tab=history' },
+  };
+
   return (
     <div>
-      <DashboardHeader 
-         user={user} 
-         summaryText={`You have ${pendingTotal} items pending your review or approval.`}
-      />
-      
-      {/* Approval Priority Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <DashboardHeader
+           user={user}
+           summaryText={`You have ${pendingTotal} items pending your review or approval.`}
+        />
+        <DashboardPeriodFilter role={UserRole.APPROVER} />
+      </div>
+
+      {/* Approval Priority Section - registry-driven, every card labeled with its own time scope */}
       <div className="mb-10">
         <h2 className="text-lg font-bold text-slate-800 mb-1">Approval Center</h2>
         <p className="text-sm text-slate-500 mb-4">Requests requiring your attention</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard 
-            title="Pending Approvals" 
-            value={pendingTotal} 
-            icon={Tray} 
-            variant={pendingTotal > 0 ? "action" : "success"}
-            description={pendingTotal > 0 ? "Waiting for your review" : "All caught up!"}
-            actionLabel={pendingTotal > 0 ? "Review Requests" : undefined}
-            actionPath={pendingTotal > 0 ? "/approvals?tab=inbox" : undefined}
-          />
-          <KPICard 
-            title="Reimbursements" 
-            value={pendingClaims.length} 
-            icon={ReceiptX} 
-            variant="info"
-            description="Reimbursement claims"
-            additionalContext={pendingClaims.length > 0 ? "Needs approval" : "No pending reimbursements"}
-            actionLabel={pendingClaims.length > 0 ? "View Claims" : undefined}
-            actionPath={pendingClaims.length > 0 ? "/approvals?tab=inbox" : undefined}
-          />
-          <KPICard 
-            title="Cash Advances" 
-            value={pendingCadvs.length} 
-            icon={Money} 
-            variant="info"
-            description="Cash advance requests"
-            additionalContext={pendingCadvs.length > 0 ? "Needs approval" : "No pending cash advances"}
-            actionLabel={pendingCadvs.length > 0 ? "View CADVs" : undefined}
-            actionPath={pendingCadvs.length > 0 ? "/approvals?tab=cadv" : undefined}
-          />
-          <KPICard 
-            title="Liquidations" 
-            value={pendingLiqs.length} 
-            icon={CheckCircle} 
-            variant="info"
-            description="Liquidation reviews"
-            additionalContext={pendingLiqs.length > 0 ? "Needs approval" : "No pending liquidations"}
-            actionLabel={pendingLiqs.length > 0 ? "View Liquidations" : undefined}
-            actionPath={pendingLiqs.length > 0 ? "/approvals?tab=inbox" : undefined}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {approverMetricDefs.map(metric => {
+            const scope = effectiveScope(metric);
+            const range = resolveMetricRange(metric);
+            const value = metric.compute(ctx, range);
+            const action = metricActionMap[metric.id];
+            return (
+              <MetricCard
+                key={metric.id}
+                metric={metric}
+                ctx={ctx}
+                scope={scope}
+                value={value}
+                actionLabel={action?.actionLabel}
+                actionPath={action?.actionPath}
+              />
+            );
+          })}
         </div>
       </div>
 
-      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={pendingTotal} />
-      
+      {/* Level 1: the actual queue of items to decide on, right under the
+          KPI summary — this used to sit below the analytics chart, where it
+          competed with (and lost to) a chart nobody needs to act on. */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
+        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="You're all caught up — nothing is waiting on your review right now." />
+      </div>
+
       <QuickActionsCard actions={quickActions} layout="horizontal" />
 
+      {/* Level 3: the approver's own submitted requests — secondary to their
+          approval duties, so it now sits below the work queue instead of
+          directly competing with it for top-of-page attention. */}
+      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={pendingTotal} />
+
       <MyRecentSubmissionsTable user={user} claims={claims} cadvs={cadvs} liqs={liqs} />
-      
+
+      {/* Level 4: analytics — last, since it answers "how am I trending",
+          not "what do I do next". */}
       <div className="mb-8">
         <AnalyticsCard title="Current Workload Breakdown">
           <SimpleBarChart data={workloadData} dataKey="count" color="#2563eb" name="Pending Items" />
         </AnalyticsCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
-        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="Your queue is clear. Great job!" />
       </div>
     </div>
   );

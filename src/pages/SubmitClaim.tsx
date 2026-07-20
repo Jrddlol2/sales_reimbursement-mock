@@ -93,7 +93,9 @@ export const SubmitClaim: React.FC = () => {
   ]);
 
   const [pastClaims, setPastClaims] = useState<any[]>([]);
-  const [requestType, setRequestType] = useState<'reimbursement' | 'cash_advance'>('reimbursement');
+  const [requestType, setRequestType] = useState<'reimbursement' | 'cash_advance'>(
+    new URLSearchParams(window.location.search).get('type') === 'cash_advance' ? 'cash_advance' : 'reimbursement'
+  );
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advancePurpose, setAdvancePurpose] = useState('');
   const [expenseCategories, setExpenseCategories] = useState<string[]>([]);
@@ -427,7 +429,7 @@ export const SubmitClaim: React.FC = () => {
             <button
               type="button"
               onClick={handleQuickFill}
-              className="inline-flex items-center justify-center text-xs font-bold text-brand bg-blue-50 border border-blue-200 hover:bg-blue-100 px-4 py-2 rounded shadow-sm gap-1.5 uppercase tracking-wider font-display"
+              className="inline-flex items-center justify-center text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 hover:bg-slate-200 px-4 py-2 rounded shadow-sm gap-1.5 uppercase tracking-wider font-display"
             >
               <Sparkle className="w-4 h-4" /> Quick-fill Sample Data
             </button>
@@ -685,7 +687,7 @@ export const SubmitClaim: React.FC = () => {
                       </select>
                       <Link
                         to="/moms?create=true"
-                        className="inline-flex items-center justify-center gap-1 text-xs font-bold text-brand bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-2 rounded whitespace-nowrap shrink-0"
+                        className="inline-flex items-center justify-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 hover:bg-slate-200 px-3 py-2 rounded whitespace-nowrap shrink-0"
                       >
                         <Plus className="w-4 h-4" /> Create New MOM
                       </Link>
@@ -823,8 +825,8 @@ export const SubmitClaim: React.FC = () => {
                   </div>
 
                   {superior && (
-                    <div className="bg-blue-50 border border-blue-100 p-3 rounded space-y-1 text-gray-800">
-                      <span className="font-bold block text-[10px] text-blue-800 uppercase tracking-wider">Assigned Approver</span>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded space-y-1 text-gray-800">
+                      <span className="font-bold block text-[10px] text-slate-700 uppercase tracking-wider">Assigned Approver</span>
                       <span className="font-semibold text-sm text-gray-900 block">{superior.name}</span>
                       <span className="text-[10px] text-gray-500 block">
                         {superior.job_title ? `${superior.job_title} · ${superior.email}` : superior.email}

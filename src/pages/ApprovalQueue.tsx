@@ -4,9 +4,11 @@ import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus, ReviewMeetingStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
-import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck } from '@phosphor-icons/react';
+import { StatusBadge } from '../components/StatusBadge';
+import { SourceLiquidationTag } from '../components/SourceLiquidationTag';
+import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck, Wallet } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
-import { KPITile } from '../components/KPITile';
+import { KPICard } from '../components/dashboard/KPICard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 import { useToast } from '../components/Toast';
@@ -277,33 +279,37 @@ export const ApprovalQueue: React.FC = () => {
         <p className="mt-1 text-xs text-slate-500">Unified action list: Reimbursement claims, Cash Advances, and Liquidations awaiting your decision, plus your own claims returned for revision.</p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="flex flex-row gap-4 mb-6">
-        <div className="flex-1">
-          <KPITile
-            label="Pending Approvals"
-            value={pendingApprovals.length}
-            description="Claims from direct reports awaiting your decision."
-            icon={CheckSquare}
-          />
-        </div>
-        <div className="flex-1">
-          <KPITile
-            label="Returned to You"
-            value={returnedClaims.length}
-            description="Your own claims needing revision."
-            icon={Warning}
-            isActive={returnedClaims.length > 0}
-          />
-        </div>
-        <div className="flex-1">
-          <KPITile
-            label="Oldest Pending"
-            value={<span>{oldestPendingDays} <span className="text-sm font-semibold text-slate-500">d</span></span>}
-            description="Longest waiting claim in your approval queue."
-            icon={Clock}
-          />
-        </div>
+      {/* Stats Cards - same KPICard component/sizing as the Dashboard, for visual consistency */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KPICard
+          title="Pending Approvals"
+          value={pendingApprovals.length}
+          description="Claims from direct reports awaiting your decision."
+          icon={CheckSquare}
+          variant={pendingApprovals.length > 0 ? "action" : "success"}
+        />
+        <KPICard
+          title="Returned to You"
+          value={returnedClaims.length}
+          description="Your own claims needing revision."
+          icon={Warning}
+          variant={returnedClaims.length > 0 ? "warning" : "success"}
+        />
+        <KPICard
+          title="Oldest Pending"
+          value={`${oldestPendingDays}d`}
+          description="Longest waiting claim in your approval queue."
+          icon={Clock}
+          variant="info"
+        />
+        <KPICard
+          title="Advances & Liquidations"
+          value={pendingAdvances.length + pendingLiqs.length}
+          description="Cash Advances and Liquidations awaiting your review."
+          icon={Wallet}
+          variant={pendingAdvances.length + pendingLiqs.length > 0 ? "action" : "success"}
+          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }}
+        />
       </div>
 
       {/* Navigation tabs */}
@@ -446,7 +452,7 @@ export const ApprovalQueue: React.FC = () => {
                           <div className="text-[11px] text-slate-600 mt-2 font-bold space-x-3">
                             <span>Advance: {formatPHP(ca?.amount || 0)}</span>
                             <span>Spent: {formatPHP(l.totalSpent)}</span>
-                            <span className={l.varianceAmount === 0 ? 'text-green-600' : l.varianceAmount < 0 ? 'text-amber-600' : 'text-indigo-600'}>
+                            <span className={l.varianceAmount === 0 ? 'text-green-600' : l.varianceAmount < 0 ? 'text-amber-600' : 'text-slate-700'}>
                               Discrepancy: {l.varianceAmount === 0 ? '₱0.00 (Settled)' : l.varianceAmount < 0 ? `${formatPHP(Math.abs(l.varianceAmount))} Refund Due` : `${formatPHP(l.varianceAmount)} Reimbursement Due`}
                             </span>
                           </div>
@@ -468,7 +474,7 @@ export const ApprovalQueue: React.FC = () => {
                               cancelLabel: ''
                             });
                           }}
-                          className="bg-blue-50 hover:bg-blue-100 text-brand px-3 py-1.5 rounded text-xs font-bold border border-blue-200 uppercase tracking-wider"
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider"
                         >
                           Review Line Items
                         </button>
@@ -639,12 +645,10 @@ export const ApprovalQueue: React.FC = () => {
                         <div className="flex flex-col gap-1 items-start">
                           <span>{claim.expense_category || 'Meals'}</span>
                           {claim.sourceLiquidationId && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                              Auto-generated from Cash Advance Shortfall
-                            </span>
+                            <SourceLiquidationTag />
                           )}
                           {claim.flagged_high_value && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
                               <Warning className="w-2 h-2" /> High Value — Review Closely
                             </span>
                           )}
@@ -654,11 +658,7 @@ export const ApprovalQueue: React.FC = () => {
                         {formatPHP(claim.total_amount)}
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-center">
-                         {isReturned ? (
-                           <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Needs Revision</span>
-                         ) : (
-                           <span className="px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approval Required</span>
-                         )}
+                        <StatusBadge status={claim.status} size="sm" />
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
                         <button onClick={() => setSelectedClaimId(claim.id)} className="text-brand hover:text-brand-hover">
@@ -703,11 +703,7 @@ export const ApprovalQueue: React.FC = () => {
                         {claimNumber}
                       </span>
                     </div>
-                    {isReturned ? (
-                      <span className="px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">Needs Revision</span>
-                    ) : (
-                      <span className="px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approval Required</span>
-                    )}
+                    <StatusBadge status={claim.status} size="sm" />
                   </div>
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                     <div>
@@ -724,7 +720,7 @@ export const ApprovalQueue: React.FC = () => {
                     </div>
                     {claim.flagged_high_value && (
                       <div className="col-span-2 mt-1">
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
                           <Warning className="w-2.5 h-2.5 mr-0.5 inline" /> High Value — Review Closely
                         </span>
                       </div>
@@ -820,7 +816,7 @@ export const ApprovalQueue: React.FC = () => {
                     <div key={`${item.claim.id}-${idx}`} className="p-4 hover:bg-slate-50 flex flex-col gap-2 transition-colors">
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-brand text-xs">{claimNumber}</span>
-                        <span className={`px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full ${getStatusColor(item.decision)}`}>
+                        <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full ${getStatusColor(item.decision)}`}>
                           {item.decision}
                         </span>
                       </div>

@@ -6,6 +6,7 @@ import { RequestorDashboard } from '../components/dashboard/RequestorDashboard';
 import { ApproverDashboard } from '../components/dashboard/ApproverDashboard';
 import { CustodianDashboard } from '../components/dashboard/CustodianDashboard';
 import { AdminDashboard } from '../components/dashboard/AdminDashboard';
+import { DashboardPeriodProvider } from '../contexts/DashboardPeriodContext';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -30,11 +31,13 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6" id={`${user.role.toLowerCase()}_dashboard`}>
-      {user.role === UserRole.REQUESTOR && <RequestorDashboard user={user} />}
-      {user.role === UserRole.APPROVER && <ApproverDashboard user={user} />}
-      {user.role === UserRole.CUSTODIAN && <CustodianDashboard user={user} />}
-      {user.role === UserRole.ADMIN && <AdminDashboard user={user} />}
-    </div>
+    <DashboardPeriodProvider>
+      <div className="space-y-6" id={`${user.role.toLowerCase()}_dashboard`}>
+        {user.role === UserRole.REQUESTOR && <RequestorDashboard user={user} />}
+        {user.role === UserRole.APPROVER && <ApproverDashboard user={user} />}
+        {user.role === UserRole.CUSTODIAN && <CustodianDashboard user={user} />}
+        {user.role === UserRole.ADMIN && <AdminDashboard user={user} />}
+      </div>
+    </DashboardPeriodProvider>
   );
 };

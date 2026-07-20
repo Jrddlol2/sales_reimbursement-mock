@@ -5,12 +5,9 @@ import Papa from 'papaparse';
 import { DownloadSimple, CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { getStatusColor, getClaimNumber } from '../utils';
 
-const PAGE_SIZE = 25;
-
 export const AuditLog: React.FC = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
 
   const handleExport = () => {
     if (history.length === 0) return;
@@ -36,10 +33,6 @@ export const AuditLog: React.FC = () => {
       setLoading(false);
     });
   }, []);
-
-  const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pagedHistory = history.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   if (loading) {
     return (
@@ -115,7 +108,7 @@ export const AuditLog: React.FC = () => {
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</td>
                   </tr>
-                ) : pagedHistory.map((log: any) => (
+                ) : history.map((log: any) => (
                   <tr key={log.id} className="hover:bg-brand/5 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap text-[10px] text-slate-500 font-mono">
                       {new Date(log.timestamp).toLocaleString()}
@@ -161,7 +154,7 @@ export const AuditLog: React.FC = () => {
           <div className="sm:hidden flex flex-col divide-y divide-slate-100">
             {history.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</div>
-            ) : pagedHistory.map((log: any) => (
+            ) : history.map((log: any) => (
               <div key={log.id} className="p-4 hover:bg-brand/5 flex flex-col gap-2.5 transition-colors">
                 <div className="flex items-center justify-between text-[10px]">
                   <span className="text-slate-500 font-mono">{new Date(log.timestamp).toLocaleString()}</span>
@@ -204,31 +197,23 @@ export const AuditLog: React.FC = () => {
           </div>
         </div>
         
-        {/* Pagination */}
+        {/* Pagination visually represented */}
         <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between sm:px-6">
           <div className="flex-1 flex items-center justify-between">
             <div>
               <p className="text-[10px] text-slate-500">
-                Showing <span className="font-extrabold text-slate-900">{history.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}</span> to <span className="font-extrabold text-slate-900">{Math.min(currentPage * PAGE_SIZE, history.length)}</span> of <span className="font-extrabold text-slate-900">{history.length}</span> results
+                Showing <span className="font-extrabold text-slate-900">1</span> to <span className="font-extrabold text-slate-900">{history.length}</span> of <span className="font-extrabold text-slate-900">{history.length}</span> results
               </p>
             </div>
             <div>
               <nav className="relative z-0 inline-flex rounded shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-1.5 rounded-l border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
-                >
+                <button className="relative inline-flex items-center px-2 py-1.5 rounded-l border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
                   <CaretLeft className="h-3.5 w-3.5" />
                 </button>
-                <button className="relative inline-flex items-center px-3 py-1.5 border border-slate-300 bg-white text-xs font-extrabold text-blue-600 font-display">
-                  {currentPage} / {totalPages}
+                <button className="relative inline-flex items-center px-3 py-1.5 border border-slate-300 bg-white text-xs font-extrabold text-brand font-display">
+                  1
                 </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-1.5 rounded-r border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
-                >
+                <button className="relative inline-flex items-center px-2 py-1.5 rounded-r border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
                   <CaretRight className="h-3.5 w-3.5" />
                 </button>
               </nav>

@@ -2,21 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, LiquidationVarianceType } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { KPICard } from './KPICard';
-import { MyRequestsCards } from './MyRequestsCards';
+import { MetricCard } from './MetricCard';
+import { DashboardPeriodFilter } from './DashboardPeriodFilter';
 import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
-import { RecentActivityTable } from './RecentActivityTable';
+import { CashAdvanceLiquidationSection } from '../CashAdvanceLiquidationSection';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleLineChart, DonutChart } from './AnalyticsCharts';
-import { FileText, Bank, Money, CalendarPlus, Receipt, ReceiptX } from '@phosphor-icons/react';
+import { FileText, Bank, CalendarPlus, Receipt, ReceiptX, Money } from '@phosphor-icons/react';
 import { formatPHP } from '../../utils';
+import { metricsForRole, MetricContext } from '../../metrics/registry';
+import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
+import { UserRole } from '../../types';
 
 export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [cadvs, setCadvs] = useState<CashAdvance[]>([]);
   const [liqs, setLiqs] = useState<Liquidation[]>([]);
   const [loading, setLoading] = useState(true);
+  const { resolveMetricRange, effectiveScope } = useDashboardPeriod();
 
   useEffect(() => {
     Promise.all([
@@ -77,45 +81,15 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   const totalReimbursed = completedClaims.reduce((acc, c) => acc + c.total_amount, 0);
 
   const quickActions = [
-    { label: 'New Reimbursement', icon: Receipt, path: '/claims/new', colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50', group: 'Start New' },
-    { label: 'New Cash Advance', icon: Money, path: '/cash-advances/new', colorClass: 'text-emerald-600', bgColorClass: 'bg-emerald-50', group: 'Start New' },
-    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-amber-600', bgColorClass: 'bg-amber-50', group: 'Manage / Schedule' },
-    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-blue-600', bgColorClass: 'bg-blue-50', group: 'Manage / Schedule' },
+    { label: 'New Reimbursement', icon: Receipt, path: '/claims/new', colorClass: 'text-white', bgColorClass: 'bg-brand', group: 'Start New' },
+    { label: 'New Cash Advance', icon: Money, path: '/claims/new?type=cash_advance', colorClass: 'text-white', bgColorClass: 'bg-emerald-600', group: 'Start New' },
+    { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-white', bgColorClass: 'bg-amber-500', group: 'Manage / Schedule' },
+    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-slate-600', group: 'Manage / Schedule' },
   ];
-
-  const recentItems = [
-    ...claims.map(c => ({
-      id: c.id,
-      reference: `REIM-${c.id.substring(0, 6)}`,
-      type: 'Reimbursement',
-      status: c.status,
-      amount: c.total_amount,
-      date: c.created_at,
-      path: `/claims/${c.id}`
-    })),
-    ...cadvs.map(c => ({
-      id: c.id,
-      reference: `CADV-${c.id.substring(0, 6)}`,
-      type: 'Cash Advance',
-      status: c.status,
-      amount: c.amount,
-      date: c.createdAt,
-      path: `/cash-advances/${c.id}`
-    })),
-    ...liqs.map(l => ({
-      id: l.id,
-      reference: `LIQ-${l.id.substring(0, 6)}`,
-      type: 'Liquidation',
-      status: l.status,
-      amount: l.totalSpent,
-      date: l.createdAt,
-      path: `/liquidations/${l.id}`
-    }))
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
 
   const statusDistribution = [
     { name: 'Draft', value: claims.filter(c => c.status === ClaimStatus.DRAFT).length, color: '#cbd5e1' },
-    { name: 'Pending', value: claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length, color: '#3b82f6' },
+    { name: 'Pending', value: claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length, color: '#64748b' },
     { name: 'Processing', value: claims.filter(c => [ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM].includes(c.status)).length, color: '#f59e0b' },
     { name: 'Completed', value: completedClaims.length, color: '#10b981' },
     { name: 'Rejected', value: claims.filter(c => c.status === ClaimStatus.REJECTED).length, color: '#ef4444' }
@@ -148,24 +122,55 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
     return months;
   };
 
+  const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users: [], currentUser: user };
+  const requestorMetricDefs = metricsForRole(UserRole.REQUESTOR);
+  const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
+    requestor_my_claims: { actionLabel: 'View All', actionPath: '/history' },
+    requestor_pending_claims: { actionLabel: 'View Pending', actionPath: '/history?status=Pending Approval' },
+    requestor_approved_this_month: { actionLabel: 'View Processing', actionPath: '/history?status=Processing' },
+    requestor_rejected_this_month: { actionLabel: 'View Rejected', actionPath: '/history?status=Rejected' },
+    requestor_amount_reimbursed_ytd: { actionLabel: 'View Completed', actionPath: '/history?status=Completed' },
+  };
+
   return (
     <div>
-      <DashboardHeader user={user} summaryText={`You currently have ${activeClaims.length} active claims and ${activeCadvs.length} pending cash advances.`} />
-      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={claims.filter(c => c.status === ClaimStatus.RETURNED && c.requestor_id === user.id).length} />
-      
-      <QuickActionsCard actions={quickActions} layout="horizontal" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <DashboardHeader user={user} summaryText={`You currently have ${activeClaims.length} active claims and ${activeCadvs.length} pending cash advances.`} />
+        <DashboardPeriodFilter role={UserRole.REQUESTOR} />
+      </div>
+
+      {/* Level 1: things needing action today (drafts to finish, returned
+          items to fix, funds ready to collect) surface before any KPI or
+          chart — this is the section the requestor should see first. */}
+      <div className="mb-8">
+        <CashAdvanceLiquidationSection />
+      </div>
 
       <div className="mb-8">
-        <RecentActivityTable 
-          title="Recent Requests" 
-          items={recentItems} 
-          action={
-            <Link to="/history" className="text-xs font-bold text-brand hover:underline transition-all">
-              View All
-            </Link>
-          }
-        />
+        <h2 className="text-lg font-bold text-slate-800 mb-1">My Requests</h2>
+        <p className="text-sm text-slate-500 mb-4">Track the status of your submitted requests, each scoped to its own relevant period</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {requestorMetricDefs.map(metric => {
+            const scope = effectiveScope(metric);
+            const range = resolveMetricRange(metric);
+            const value = metric.compute(ctx, range);
+            const action = metricActionMap[metric.id];
+            return (
+              <MetricCard
+                key={metric.id}
+                metric={metric}
+                ctx={ctx}
+                scope={scope}
+                value={value}
+                actionLabel={action?.actionLabel}
+                actionPath={action?.actionPath}
+              />
+            );
+          })}
+        </div>
       </div>
+
+      <QuickActionsCard actions={quickActions} layout="horizontal" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">

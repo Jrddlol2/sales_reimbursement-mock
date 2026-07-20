@@ -3,12 +3,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
-import { Liquidation, LiquidationStatus, User, UserRole } from '../types';
+import { Liquidation, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { ArrowLeft, CurrencyDollar, Calendar, FileText, User as UserIcon, Question, Lifebuoy } from '@phosphor-icons/react';
 import { StatusBadge } from '../components/StatusBadge';
+import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { DetailHeader } from '../components/DetailHeader';
 import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
@@ -95,7 +96,7 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
         <DetailHeader
           eyebrow="Liquidation Report"
           title={`LIQ-${liq.id.substring(0, 6).toUpperCase()}`}
-          status={<StatusBadge status={liq.status} label={liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : undefined} />}
+          status={<><StatusBadge status={liq.status} /><WorkflowOwnerTag status={liq.status} className="ml-1.5" /></>}
           actions={
              <Link to={`/support?new=true&entityType=Liquidation&entityId=${liq.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
                 <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
@@ -128,7 +129,7 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
 
               <div>
                 <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Variance Result</span>
-                <span className={`text-xl font-extrabold font-display block mt-1 ${liq.varianceAmount === 0 ? 'text-green-600' : liq.varianceAmount < 0 ? 'text-amber-600' : 'text-indigo-600'}`}>
+                <span className={`text-xl font-extrabold font-display block mt-1 ${liq.varianceAmount === 0 ? 'text-green-600' : liq.varianceAmount < 0 ? 'text-amber-600' : 'text-slate-700'}`}>
                   {liq.varianceAmount === 0
                     ? 'Settled (₱0.00)'
                     : liq.varianceAmount < 0

@@ -8,6 +8,7 @@ import { formatPHP } from '../utils';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { ArrowLeft, Clock, Calendar, FileText, User as UserIcon, Link as LinkIcon, Lifebuoy } from '@phosphor-icons/react';
 import { StatusBadge } from '../components/StatusBadge';
+import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { DetailHeader } from '../components/DetailHeader';
 import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
@@ -98,7 +99,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
         <DetailHeader
           eyebrow="Cash Advance Request"
           title={`CADV-${ca.id.substring(0, 6).toUpperCase()}`}
-          status={<StatusBadge status={ca.status} />}
+          status={<><StatusBadge status={ca.status} /><WorkflowOwnerTag status={ca.status} className="ml-1.5" /></>}
           actions={
              <Link to={`/support?new=true&entityType=CashAdvance&entityId=${ca.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
                 <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
@@ -124,7 +125,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
               <div>
                 <span className="text-slate-400 block uppercase text-[10px] tracking-wider font-extrabold font-display">Assigned Approver</span>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-600 border border-indigo-100">
+                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
                     <UserIcon className="w-3.5 h-3.5" />
                   </div>
                   <span className="font-bold text-slate-800">{ca.approver?.name || 'Loading...'}</span>

@@ -1,15 +1,8 @@
 import React from 'react';
 import { StatusBadge } from '../StatusBadge';
-import { formatPHP, getStatusDisplayLabel } from '../../utils';
+import { formatPHP } from '../../utils';
 import { useNavigate } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
-
-// Some source records (older seeded Cash Advances/Liquidations) don't carry
-// a createdAt timestamp - render a dash instead of "Invalid Date".
-const formatItemDate = (date: string): string => {
-  const d = new Date(date);
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
-};
 
 interface ActivityItem {
   id: string;
@@ -28,7 +21,7 @@ interface RecentActivityTableProps {
   action?: React.ReactNode;
 }
 
-export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "No recent activity found.", action }) => {
+export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "Nothing here yet — activity will appear as requests move through the workflow.", action }) => {
   const navigate = useNavigate();
 
   return (
@@ -74,10 +67,10 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                         <span className="font-semibold">{formatPHP(item.amount)}</span>
                       </td>
                       <td>
-                        <span className="text-slate-500">{formatItemDate(item.date)}</span>
+                        <span className="text-slate-500">{new Date(item.date).toLocaleDateString()}</span>
                       </td>
                       <td>
-                        <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
+                        <StatusBadge status={item.status} size="sm" />
                       </td>
                       <td className="text-right">
                         <CaretRight size={16} weight="bold" className="text-slate-400 inline-block" />
@@ -98,7 +91,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold text-brand">{item.reference}</span>
-                    <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
+                    <StatusBadge status={item.status} size="sm" />
                   </div>
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                     <div>
@@ -111,7 +104,7 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                     </div>
                     <div>
                       <span className="text-slate-400 font-medium mr-1">Date:</span>
-                      <span className="text-slate-700">{formatItemDate(item.date)}</span>
+                      <span className="text-slate-700">{new Date(item.date).toLocaleDateString()}</span>
                     </div>
                     <div className="text-right flex items-center justify-end gap-0.5 text-brand font-bold">
                       <span>View details</span>

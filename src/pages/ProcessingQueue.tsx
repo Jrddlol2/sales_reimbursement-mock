@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { format, differenceInCalendarDays, differenceInHours } from 'date-fns';
+import { format } from 'date-fns';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { Claim, ClaimStatus, User } from '../types';
 import { 
   CaretDown, CaretRight, ArrowsClockwise,
   Key, Check, CurrencyDollar, ArrowSquareOut, Calendar, User as UserIcon,
-  Tag, Info, Bank, Question, FileText, Tray, FolderOpen, WarningCircle, Pulse, Clock
+  Tag, Info, Bank, Question, FileText, Tray, FolderOpen, WarningCircle, Pulse, Clock, Wallet
 } from '@phosphor-icons/react';
-import { KPITile } from '../components/KPITile';
+import { KPICard } from '../components/dashboard/KPICard';
 import { formatPHP, getClaimNumber, getApproverInfo } from '../utils';
+import { getAgingInfo } from '../statusConfig';
+import { SourceLiquidationTag } from '../components/SourceLiquidationTag';
 import { ClaimMomSummary } from '../components/ClaimMomSummary';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 import { ClaimApprovalInfo } from '../components/ClaimApprovalInfo';
@@ -107,12 +109,7 @@ export const ProcessingQueue: React.FC = () => {
     }).catch(console.error);
   }, []);
 
-  const now = new Date();
-
-  const getAgingDays = (claim: ClaimWithDetails) => {
-    const baseDate = claim.approved_at || claim.created_at;
-    return differenceInCalendarDays(now, new Date(baseDate));
-  };
+  const getClaimAging = (claim: ClaimWithDetails) => getAgingInfo(claim.approved_at || claim.created_at);
 
   const isMissingReceipt = (c: ClaimWithDetails) => {
     if (c.expenses && c.expenses.length > 0) {
@@ -141,15 +138,8 @@ export const ProcessingQueue: React.FC = () => {
   let oldestProcessingDays = 0;
   const processingClaims = claims.filter(c => c.status === ClaimStatus.PROCESSING);
   if (processingClaims.length > 0) {
-    oldestProcessingDays = Math.max(...processingClaims.map(c => getAgingDays(c)));
+    oldestProcessingDays = Math.max(...processingClaims.map(c => getClaimAging(c).days));
   }
-
-  const getAgingBadge = (days: number) => {
-    const label = days <= 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'} ago`;
-    if (days >= 5) return { label, color: 'bg-red-50 text-red-700 border-red-200' };
-    if (days >= 3) return { label, color: 'bg-amber-50 text-amber-700 border-amber-200' };
-    return { label, color: 'bg-gray-100 text-gray-700 border-gray-200' };
-  };
 
   const toggleExpand = (claim: ClaimWithDetails) => {
     if (expandedId === claim.id) {
@@ -222,28 +212,38 @@ export const ProcessingQueue: React.FC = () => {
         </p>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KPITile
-          label="Missing Receipts"
+      {/* Metrics Cards - same KPICard component/sizing as the Dashboard, for visual consistency */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <KPICard
+          title="Missing Receipts"
           value={missingReceiptsCount}
           description={filterMissingReceipts ? "Claims without receipts. (Filtered)" : "Claims without receipts. (Click to filter)"}
           icon={WarningCircle}
           onClick={() => setFilterMissingReceipts(!filterMissingReceipts)}
-          isActive={filterMissingReceipts}
+          variant={filterMissingReceipts ? "action" : "info"}
         />
-        <KPITile
-          label="Total Pending Disbursement"
-          value={<div className="flex flex-col"><span className="text-lg font-extrabold text-slate-900 font-display">{formatPHP(totalAmountProcessing)} <span className="text-[10px] font-normal text-slate-500 uppercase tracking-wider font-sans">Processing</span></span></div>}
-          subValue={<span className="text-sm font-extrabold text-brand font-display">{formatPHP(totalAmountReady)} <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-sans">Ready</span></span>}
+        <KPICard
+          title="Total Pending Disbursement"
+          value={formatPHP(totalAmountProcessing)}
+          subValue={<span>{formatPHP(totalAmountReady)} <span className="text-[10px] font-semibold uppercase tracking-wider">Ready</span></span>}
           description="Value of claims awaiting disbursement."
           icon={Pulse}
+          variant="info"
         />
-        <KPITile
-          label="Oldest In Processing"
-          value={<span>{oldestProcessingDays} <span className="text-xs font-semibold text-slate-500 font-sans">d</span></span>}
+        <KPICard
+          title="Oldest In Processing"
+          value={`${oldestProcessingDays}d`}
           description="Longest waiting claim in Processing status."
           icon={Clock}
+          variant="info"
+        />
+        <KPICard
+          title="Advances & Liquidations"
+          value={approvedAdvances.length + reviewedLiqs.length}
+          description="Cash Advances to release and Liquidation refunds to collect."
+          icon={Wallet}
+          variant={approvedAdvances.length + reviewedLiqs.length > 0 ? "action" : "success"}
+          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }}
         />
       </div>
 
@@ -425,8 +425,7 @@ export const ProcessingQueue: React.FC = () => {
                   ) : (
                     pendingClaims.map(claim => {
                       const isExpanded = expandedId === claim.id;
-                      const agingDays = getAgingDays(claim);
-                      const aging = getAgingBadge(agingDays);
+                      const aging = getClaimAging(claim);
                       const claimNumber = getClaimNumber(claim);
 
                       return (
@@ -452,9 +451,7 @@ export const ProcessingQueue: React.FC = () => {
                               <div>{claim.expense_category || 'Meals'}</div>
                               {claim.sourceLiquidationId && (
                                 <div className="mt-1">
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                    Auto-generated from Cash Advance Shortfall
-                                  </span>
+                                  <SourceLiquidationTag />
                                 </div>
                               )}
                             </td>
@@ -462,7 +459,7 @@ export const ProcessingQueue: React.FC = () => {
                               {formatPHP(claim.total_amount)}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-center">
-                              <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.color}`}>
+                              <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
                                 {aging.label}
                               </span>
                             </td>
@@ -509,7 +506,7 @@ export const ProcessingQueue: React.FC = () => {
 
                                   {/* Column 2: Disbursement Input */}
                                   <div className="bg-white border border-brand rounded p-5 space-y-4">
-                                    <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-blue-100 pb-2">
+                                    <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-brand/10 pb-2">
                                       Generate Claim Code
                                     </span>
 
@@ -593,8 +590,7 @@ export const ProcessingQueue: React.FC = () => {
               ) : (
                 pendingClaims.map(claim => {
                   const isExpanded = expandedId === claim.id;
-                  const agingDays = getAgingDays(claim);
-                  const aging = getAgingBadge(agingDays);
+                  const aging = getClaimAging(claim);
                   const claimNumber = getClaimNumber(claim);
 
                   return (
@@ -605,7 +601,7 @@ export const ProcessingQueue: React.FC = () => {
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-brand text-xs">{claimNumber}</span>
-                          <span className={`px-2 py-0.5 inline-flex text-[9px] font-bold rounded-full border ${aging.color}`}>
+                          <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
                             {aging.label}
                           </span>
                         </div>
@@ -657,7 +653,7 @@ export const ProcessingQueue: React.FC = () => {
 
                           {/* Disbursement Input */}
                           <div className="bg-white border border-brand rounded p-4 space-y-4">
-                            <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-blue-100 pb-2 font-display">
+                            <span className="text-[10px] text-brand font-bold uppercase tracking-widest block border-b border-brand/10 pb-2 font-display">
                               Generate Claim Code
                             </span>
 
@@ -823,10 +819,10 @@ export const ProcessingQueue: React.FC = () => {
                             <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-900 text-xs">{formatPHP(claim.total_amount)}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600 font-bold">{claim.payment_method || 'Cash'}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-center">
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
                                 isClaimed 
                                   ? 'bg-green-50 border-green-200 text-green-700' 
-                                  : 'bg-blue-50 border-blue-200 text-blue-700'
+                                  : 'bg-amber-50 border-amber-200 text-amber-700'
                               }`}>
                                 {isClaimed ? 'Completed (Claimed)' : 'Ready to Claim'}
                               </span>
@@ -871,10 +867,10 @@ export const ProcessingQueue: React.FC = () => {
                             <span className="font-mono font-bold text-brand text-xs block">{claimNumber}</span>
                             <span className="text-[10px] text-gray-400 font-bold font-mono uppercase">CODE: {claim.release_code || '—'}</span>
                           </div>
-                          <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
                             isClaimed 
                               ? 'bg-green-50 border-green-200 text-green-700' 
-                              : 'bg-blue-50 border-blue-200 text-blue-700'
+                              : 'bg-amber-50 border-amber-200 text-amber-700'
                           }`}>
                             {isClaimed ? 'Claimed' : 'Ready'}
                           </span>

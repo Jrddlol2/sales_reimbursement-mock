@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, LiquidationVarianceType } from '../../types';
+import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, LiquidationVarianceType, UserRole } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { KPICard } from './KPICard';
-import { MyRequestsCards } from './MyRequestsCards';
-import { MyRecentSubmissionsTable } from './MyRecentSubmissionsTable';
+import { MetricCard } from './MetricCard';
+import { DashboardPeriodFilter } from './DashboardPeriodFilter';
 import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
 import { RecentActivityTable } from './RecentActivityTable';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleBarChart, DonutChart } from './AnalyticsCharts';
-import { Bank, CurrencyDollar, ArrowDownLeft, Clock, ArrowsClockwise } from '@phosphor-icons/react';
+import { Bank, CurrencyDollar, ArrowDownLeft, Clock, ArrowsClockwise, Receipt, WarningCircle } from '@phosphor-icons/react';
+import { formatPHP } from '../../utils';
+import { metricsForRole, MetricContext } from '../../metrics/registry';
+import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
 
 export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [cadvs, setCadvs] = useState<CashAdvance[]>([]);
   const [liqs, setLiqs] = useState<Liquidation[]>([]);
   const [loading, setLoading] = useState(true);
+  const { resolveMetricRange, effectiveScope } = useDashboardPeriod();
 
   useEffect(() => {
     Promise.all([
@@ -71,14 +75,19 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
   const pendingProcessing = claims.filter(c => c.status === ClaimStatus.PROCESSING);
   const pendingCadvReleases = cadvs.filter(c => c.status === CashAdvanceStatus.APPROVED);
   const pendingRefunds = liqs.filter(l => l.status === LiquidationStatus.REVIEWED && l.varianceType === LiquidationVarianceType.REFUND_DUE);
-  const pendingShortfalls = claims.filter(c => c.status === ClaimStatus.PROCESSING && c.expense_category === 'Reimbursement Due (Liquidation)');
+  const pendingShortfalls = claims.filter(c => c.status === ClaimStatus.PROCESSING && c.expense_category === 'Cash Advance Shortfall');
   
   const pendingTotal = pendingProcessing.length + pendingCadvReleases.length + pendingRefunds.length;
 
+  const pendingProcessingAmt = pendingProcessing.reduce((sum, c) => sum + (c.total_amount || 0), 0);
+  const pendingCadvReleasesAmt = pendingCadvReleases.reduce((sum, c) => sum + (c.amount || 0), 0);
+  const pendingRefundsAmt = pendingRefunds.reduce((sum, l) => sum + Math.abs(l.varianceAmount || 0), 0);
+  const pendingShortfallsAmt = pendingShortfalls.reduce((sum, c) => sum + (c.total_amount || 0), 0);
+
   const quickActions = [
-    { label: 'Process Claims', icon: ArrowsClockwise, path: '/processing', colorClass: 'text-indigo-600', bgColorClass: 'bg-indigo-50' },
-    { label: 'Release Advances', icon: CurrencyDollar, path: '/processing', colorClass: 'text-emerald-600', bgColorClass: 'bg-emerald-50' },
-    { label: 'Collect Refunds', icon: ArrowDownLeft, path: '/processing', colorClass: 'text-rose-600', bgColorClass: 'bg-rose-50' }
+    { label: 'Process Claims', icon: ArrowsClockwise, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
+    { label: 'Release Advances', icon: CurrencyDollar, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-emerald-600' },
+    { label: 'Collect Refunds', icon: ArrowDownLeft, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-rose-500' }
   ];
 
   const recentItems = [
@@ -118,27 +127,114 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
     { name: 'Shortfalls', count: pendingShortfalls.length }
   ];
 
+  const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users: [], currentUser: user };
+  const custodianMetricDefs = metricsForRole(UserRole.CUSTODIAN);
+  const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
+    custodian_pending_payments: { actionLabel: 'Process Claims', actionPath: '/processing' },
+    custodian_outstanding_amount: { actionLabel: 'Process Claims', actionPath: '/processing' },
+    custodian_payments_this_week: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
+    custodian_payments_this_month: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
+    custodian_monthly_reimbursement_total: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
+    custodian_avg_processing_time: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
+  };
+
   return (
     <div>
-      <DashboardHeader 
-        user={user} 
-        summaryText={`You have ${pendingTotal} items pending finance operation actions.`}
-      />
-      
-      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={pendingTotal} />
-      
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <DashboardHeader
+          user={user}
+          summaryText={`You have ${pendingTotal} items pending finance operation actions.`}
+        />
+        <DashboardPeriodFilter role={UserRole.CUSTODIAN} />
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-lg font-bold text-slate-800 mb-1">Operations Overview</h2>
+        <p className="text-sm text-slate-500 mb-4">Monitor and process pending financial transactions — live, right now</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard
+            title="Pending Reimbursements"
+            value={formatPHP(pendingProcessingAmt)}
+            icon={Receipt}
+            variant="warning"
+            description="Approved claims to be processed"
+            additionalContext={`${pendingProcessing.length} claims ready for payment • Live`}
+            actionLabel="Process Claims"
+            actionPath="/processing"
+          />
+          <KPICard
+            title="Approved Cash Advances"
+            value={formatPHP(pendingCadvReleasesAmt)}
+            icon={CurrencyDollar}
+            variant={pendingCadvReleases.length > 0 ? "action" : "success"}
+            description="Approved cash advances to release"
+            additionalContext={`${pendingCadvReleases.length} advances to release • Live`}
+            actionLabel="Release Advances"
+            actionPath="/processing?tab=cadv"
+          />
+          <KPICard
+            title="Pending Refunds"
+            value={formatPHP(pendingRefundsAmt)}
+            icon={ArrowDownLeft}
+            variant={pendingRefunds.length > 0 ? "warning" : "success"}
+            description="Refunds due from liquidations"
+            additionalContext={`${pendingRefunds.length} collections pending • Live`}
+            actionLabel="Collect Refunds"
+            actionPath="/processing?tab=cadv"
+          />
+          <KPICard
+            title="Active Shortfalls"
+            value={formatPHP(pendingShortfallsAmt)}
+            icon={WarningCircle}
+            variant="danger"
+            description="Shortfalls requiring claims"
+            additionalContext={`${pendingShortfalls.length} outstanding shortfalls • Live`}
+            actionLabel="View Details"
+            actionPath="/processing"
+          />
+        </div>
+      </div>
+
+      {/* Level 1: the actual disbursement/refund queue, right after the
+          live Operations Overview KPIs — previously this sat below the
+          analytics chart, behind the work it's summarizing. */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
+        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="No finance operations are waiting — you're caught up." />
+      </div>
+
       <QuickActionsCard actions={quickActions} layout="horizontal" />
 
-      <MyRecentSubmissionsTable user={user} claims={claims} cadvs={cadvs} liqs={liqs} />
+      {/* Level 3: workflow-health metrics scoped to a period, below the
+          live action queue. */}
+      <div className="mb-8">
+        <h2 className="text-lg font-bold text-slate-800 mb-1">Payment Performance</h2>
+        <p className="text-sm text-slate-500 mb-4">Each card scoped to its own relevant period</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {custodianMetricDefs.map(metric => {
+            const scope = effectiveScope(metric);
+            const range = resolveMetricRange(metric);
+            const value = metric.compute(ctx, range);
+            const action = metricActionMap[metric.id];
+            return (
+              <MetricCard
+                key={metric.id}
+                metric={metric}
+                ctx={ctx}
+                scope={scope}
+                value={value}
+                actionLabel={action?.actionLabel}
+                actionPath={action?.actionPath}
+              />
+            );
+          })}
+        </div>
+      </div>
 
+      {/* Level 4: analytics — last. */}
       <div className="mb-8">
         <AnalyticsCard title="Finance Operations Queue">
           <SimpleBarChart data={workloadData} dataKey="count" color="#2563eb" name="Pending Items" />
         </AnalyticsCard>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
-        <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="No finance operations required." />
       </div>
     </div>
   );

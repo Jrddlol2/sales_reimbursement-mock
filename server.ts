@@ -289,25 +289,6 @@ async function startServer() {
     return false;
   };
 
-  // Given a manager's id, resolves who should actually act as approver right
-  // now: the manager themself, or their active delegate if a delegation
-  // window currently covers today. Mirrors logic already duplicated at claim
-  // submission and the approver-schedule endpoints; used where a claim's
-  // routing needs to be freshly re-resolved (e.g. on resubmit).
-  const resolveActiveApprover = (managerId: string): { currentApproverId: string; originalApproverId?: string } => {
-    const manager = users.find(u => u.id === managerId);
-    if (manager?.delegation) {
-      const now = new Date();
-      const start = new Date(manager.delegation.start_date);
-      const end = new Date(manager.delegation.end_date);
-      end.setHours(23, 59, 59, 999);
-      if (now >= start && now <= end) {
-        return { currentApproverId: manager.delegation.delegate_id, originalApproverId: manager.id };
-      }
-    }
-    return { currentApproverId: managerId };
-  };
-
   // Auth endpoints (Mock)
   app.get('/api/users', (req, res) => res.json(users));
 
@@ -1247,16 +1228,6 @@ Please log in to the system and confirm or decline this new time.`
     claim.updated_at = new Date().toISOString();
     claim.flagged_high_value = itemsToCreate.some(item => item.amount > systemSettings.highValueThreshold);
 
-    // Re-resolve the approver at resubmit time - a delegation window that
-    // was active at original submission may have ended by now (or a new
-    // one may have started), and the claim shouldn't route to a stale
-    // delegate/manager.
-    if (user.reports_to) {
-      const { currentApproverId, originalApproverId } = resolveActiveApprover(user.reports_to);
-      claim.current_approver_id = currentApproverId;
-      claim.original_approver_id = originalApproverId;
-    }
-
     addHistory(claim.id, oldStatus, ClaimStatus.PENDING_APPROVAL, user.id, 'Revised and resubmitted by requestor after being returned');
 
     const claimNumber = claim.claim_number || `REIM-${claim.id.substring(0, 6)}`;
@@ -1760,10 +1731,6 @@ BSM Assistant | BSD - IT Security Business`;
     const ca = cashAdvances.find(c => c.id === req.params.id);
     if (!ca) return res.status(404).json({ error: 'Cash Advance not found' });
 
-    if (ca.requestorId !== user.id && user.role !== UserRole.ADMIN) {
-      return res.status(403).json({ error: 'You do not have permission to modify this Cash Advance.' });
-    }
-
     const { amount, purpose, momId } = req.body;
 
     // Rule 3: Once a CashAdvance reaches Released: amount, purpose, and linked MOM become locked. Only Admin can override.
@@ -1856,11 +1823,6 @@ BSM Assistant | BSD - IT Security Business`;
 
     if (ca.approverId !== user.id) {
       return res.status(403).json({ error: 'You are not the designated approver for this Cash Advance.' });
-    }
-
-    // Segregation of duties: Requestors cannot approve their own Cash Advances
-    if (ca.requestorId === user.id) {
-      return res.status(403).json({ error: 'Segregation of Duties: You cannot approve your own Cash Advance.' });
     }
 
     if (ca.status !== CashAdvanceStatus.SUBMITTED) {
@@ -2190,11 +2152,6 @@ BSM Assistant | BSD - IT Security Business`;
       return res.status(403).json({ error: 'You are not the designated approver/reviewer for this Liquidation.' });
     }
 
-    // Segregation of duties: Requestors cannot review their own Liquidations
-    if (l.requestorId === user.id) {
-      return res.status(403).json({ error: 'Segregation of Duties: You cannot review your own Liquidation.' });
-    }
-
     if (l.status !== LiquidationStatus.SUBMITTED) {
       return res.status(400).json({ error: 'Only Submitted Liquidations can be reviewed.' });
     }
@@ -2354,26 +2311,11 @@ BSM Assistant | BSD - IT Security Business`;
     
     const { delegate_id, start_date, end_date } = req.body;
     const targetUser = users.find(u => u.id === user.id);
-
+    
     if (targetUser) {
       if (!delegate_id) {
         targetUser.delegation = undefined;
       } else {
-        if (delegate_id === user.id) {
-          return res.status(400).json({ error: 'You cannot delegate to yourself.' });
-        }
-        const delegate = users.find(u => u.id === delegate_id);
-        if (!delegate) {
-          return res.status(400).json({ error: 'Delegate must be an existing user.' });
-        }
-        const start = new Date(start_date);
-        const end = new Date(end_date);
-        if (!start_date || !end_date || isNaN(start.getTime()) || isNaN(end.getTime())) {
-          return res.status(400).json({ error: 'A valid start and end date are required.' });
-        }
-        if (start > end) {
-          return res.status(400).json({ error: 'Start date must be on or before the end date.' });
-        }
         targetUser.delegation = { delegate_id, start_date, end_date };
       }
     }
@@ -2387,14 +2329,13 @@ BSM Assistant | BSD - IT Security Business`;
     
     const { new_approver_id, reason } = req.body;
     if (!new_approver_id || !reason) return res.status(400).json({ error: 'Missing required fields' });
-    
-    const claim = claims.find(c => c.id === req.params.id);
-    if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
     const newApprover = users.find(u => u.id === new_approver_id);
-    if (!newApprover || newApprover.role !== UserRole.APPROVER) {
-      return res.status(400).json({ error: 'The new approver must be an existing user with the Approver role.' });
-    }
+    if (!newApprover) return res.status(400).json({ error: 'New approver not found.' });
+    if (newApprover.role !== UserRole.APPROVER) return res.status(400).json({ error: 'New approver must have the Approver role.' });
+
+    const claim = claims.find(c => c.id === req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
     const oldApproverId = claim.current_approver_id;
     const oldApproverName = users.find(u => u.id === oldApproverId)?.name || oldApproverId;
@@ -4929,7 +4870,8 @@ BSM Assistant | BSD - IT Security Business`;
   app.post('/api/support', (req, res) => {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    
+    if (user.role === UserRole.ADMIN) return res.status(403).json({ error: 'Admins manage support requests and cannot file their own.' });
+
     const { subject, description, related_entity_type, related_entity_id, priority } = req.body;
     
     const newRequest: SupportRequest = {

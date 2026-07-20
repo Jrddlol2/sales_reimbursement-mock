@@ -248,6 +248,12 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col md:flex-row text-sm font-sans overflow-hidden">
+      {/* Decorative background glow - fixed to the viewport, not tied to any
+          scroll container's content height, so it can never crop no matter
+          how long a page gets. Always the first child so everything else
+          (sidebar, header, main) paints on top of it in normal stacking order. */}
+      <div className="app-bg-fixed" style={{ '--bokeh-x': '0px', '--bokeh-y': `${bgOffset}px` } as React.CSSProperties} />
+
       {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div 
@@ -361,7 +367,7 @@ export const Layout: React.FC = () => {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 autoFocus
-                className="w-full bg-slate-100 text-slate-900 placeholder-slate-400 text-sm px-4 py-2 pl-10 rounded-lg border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
+                className="w-full bg-slate-100 text-slate-900 placeholder-slate-400 text-sm px-4 py-2 pl-10 rounded-lg border border-slate-200 focus:bg-white focus:border-brand focus:ring-4 focus:ring-brand/10 focus:outline-none"
                 id="mobile_search_input"
               />
               <MagnifyingGlass className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
@@ -419,7 +425,7 @@ export const Layout: React.FC = () => {
                         id={`mobile_search_result_cadv_${ca.id}`}
                       >
                         <div>
-                          <span className="font-bold text-indigo-700 block">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
+                          <span className="font-bold text-slate-700 block">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
                           <span className="text-slate-500 font-semibold truncate max-w-[200px] block">{ca.purpose}</span>
                         </div>
                         <span className="font-extrabold text-slate-950">{formatPHP(ca.amount)}</span>
@@ -487,10 +493,10 @@ export const Layout: React.FC = () => {
                   setIsSearching(true);
                 }}
                 onFocus={() => { handleSearchFocus(); setIsSearching(true); }}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 placeholder-slate-400 text-sm px-4 py-2 pl-10 rounded-lg border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none transition-all duration-200 relative z-50"
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 placeholder-slate-400 text-sm px-4 py-2 pl-10 rounded-lg border border-transparent focus:bg-white focus:border-brand focus:ring-4 focus:ring-brand/10 focus:outline-none transition-all duration-200 relative z-50"
                 id="global_search_input"
               />
-              <MagnifyingGlass className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 transition-colors group-focus-within:text-blue-500 z-50" />
+              <MagnifyingGlass className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 transition-colors group-focus-within:text-brand z-50" />
             </div>
 
             {/* Results dropdown */}
@@ -536,7 +542,7 @@ export const Layout: React.FC = () => {
                             id={`search_result_cadv_${ca.id}`}
                           >
                             <div>
-                              <span className="font-bold text-indigo-700 block">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
+                              <span className="font-bold text-slate-700 block">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
                               <span className="text-slate-500 font-semibold truncate max-w-[200px] block">{ca.purpose}</span>
                             </div>
                             <span className="font-extrabold text-slate-950">{formatPHP(ca.amount)}</span>
@@ -604,17 +610,16 @@ export const Layout: React.FC = () => {
 
         {/* Main scrollable content */}
         <main
-          className={`flex-1 app-canvas p-4 sm:p-6 md:p-8 ${
-            location.pathname === '/emails' || location.pathname === '/moms'
+          className={`relative flex-1 p-4 sm:p-6 md:p-8 ${
+            location.pathname === '/emails' || (location.pathname === '/moms' && !location.search.includes('create=true'))
               ? 'flex flex-col overflow-hidden'
               : 'overflow-auto'
           }`}
-          style={{ '--bokeh-x': '0px', '--bokeh-y': `${bgOffset}px` } as React.CSSProperties}
         >
-          <div 
-            key={location.pathname} 
-            className={`max-w-7xl mx-auto animate-page-fade-in w-full ${
-              location.pathname === '/emails' || location.pathname === '/moms'
+          <div
+            key={location.pathname}
+            className={`relative z-[1] max-w-7xl mx-auto animate-page-fade-in w-full ${
+              location.pathname === '/emails' || (location.pathname === '/moms' && !location.search.includes('create=true'))
                 ? 'flex flex-col flex-1 min-h-0 h-full'
                 : ''
             }`}

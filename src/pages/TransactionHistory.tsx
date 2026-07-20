@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { Claim, CashAdvance, Liquidation } from '../types';
-import { formatPHP, getStatusDisplayLabel } from '../utils';
+import { formatPHP } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { ClockCounterClockwise, CaretRight, Funnel } from '@phosphor-icons/react';
@@ -344,7 +344,7 @@ export const TransactionHistory: React.FC = () => {
                           </span>
                         </td>
                         <td>
-                          <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
+                          <StatusBadge status={item.status} size="sm" />
                         </td>
                         <td className="text-right">
                           <CaretRight size={16} weight="bold" className="text-slate-400 inline-block" />
@@ -365,7 +365,7 @@ export const TransactionHistory: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-brand">{item.reference}</span>
-                      <StatusBadge status={item.status} label={getStatusDisplayLabel(item.status)} size="sm" />
+                      <StatusBadge status={item.status} size="sm" />
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                       <div>

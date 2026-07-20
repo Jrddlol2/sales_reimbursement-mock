@@ -16,7 +16,7 @@ export const Support: React.FC = () => {
 
   // New Request Form State
   const urlParams = new URLSearchParams(window.location.search);
-  const [showNew, setShowNew] = useState(urlParams.get('new') === 'true');
+  const [showNew, setShowNew] = useState(urlParams.get('new') === 'true' && user?.role !== UserRole.ADMIN);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<SupportRequestPriority>(SupportRequestPriority.LOW);
@@ -74,7 +74,7 @@ export const Support: React.FC = () => {
             {user?.role === UserRole.ADMIN ? 'Manage all system support requests' : 'Your support history and active tickets'}
           </p>
         </div>
-        {!showNew && (
+        {!showNew && user?.role !== UserRole.ADMIN && (
           <button onClick={() => setShowNew(true)} className="corp-btn-primary whitespace-nowrap">
             <Plus className="w-4 h-4" /> New Request
           </button>

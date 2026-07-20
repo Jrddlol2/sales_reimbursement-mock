@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 import { SupportRequest, SupportRequestMessage, SupportRequestStatus, SupportRequestPriority, UserRole } from '../types';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
+import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { format } from 'date-fns';
 import { ArrowLeft, Lifebuoy, PaperPlaneRight, User as UserIcon, ShieldCheck } from '@phosphor-icons/react';
 import { useToast } from '../components/Toast';
@@ -107,7 +108,10 @@ export const SupportDetail: React.FC = () => {
               <Lifebuoy className="w-6 h-6 text-brand" />
               {request.subject}
             </h1>
-            <StatusBadge status={request.status} />
+            <span className="flex items-center gap-1.5 shrink-0">
+              <StatusBadge status={request.status} />
+              <WorkflowOwnerTag status={request.status} />
+            </span>
           </div>
           
           <div className="text-sm text-gray-700 bg-gray-50 p-4 rounded border border-gray-100 whitespace-pre-wrap">
@@ -175,8 +179,8 @@ export const SupportDetail: React.FC = () => {
             {messages.map(msg => {
               const isAdmin = msg.sender_id !== request.requestor_id;
               return (
-                <div key={msg.id} className={`flex gap-3 ${isAdmin ? 'bg-blue-50/50' : 'bg-gray-50'} p-4 rounded-lg border ${isAdmin ? 'border-blue-100' : 'border-gray-100'}`}>
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isAdmin ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'}`}>
+                <div key={msg.id} className={`flex gap-3 ${isAdmin ? 'bg-slate-100/70' : 'bg-gray-50'} p-4 rounded-lg border ${isAdmin ? 'border-slate-200' : 'border-gray-100'}`}>
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isAdmin ? 'bg-slate-200 text-slate-700' : 'bg-gray-200 text-gray-600'}`}>
                      {isAdmin ? <ShieldCheck className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
                    </div>
                    <div className="flex-1 min-w-0">

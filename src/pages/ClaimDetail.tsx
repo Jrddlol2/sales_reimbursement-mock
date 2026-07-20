@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, createPortal } from 'react-dom';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
@@ -7,9 +7,10 @@ import { ClaimStatus, UserRole, ReviewMeetingStatus } from '../types';
 import {
   FileText, CheckCircle, Question, Warning,
   MapPin, Calendar, Clock, CurrencyDollar, Shield, Check, Info, ArrowRight,
-  PencilSimple, Download, ArrowCounterClockwise, Lifebuoy
+  PencilSimple, Download, ArrowCounterClockwise, Lifebuoy, Printer
 } from '@phosphor-icons/react';
-import { formatPHP, getClaimNumber, getStatusDisplayLabel } from '../utils';
+import { formatPHP, getClaimNumber } from '../utils';
+import { CLAIM_WORKFLOW_STAGES, getWorkflowStageIndex, getStatusConfig } from '../statusConfig';
 import { MomEditForm } from '../components/MomEditForm';
 import { ClaimMomSummary } from '../components/ClaimMomSummary';
 import { ClaimLineItems } from '../components/ClaimLineItems';
@@ -18,6 +19,7 @@ import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
 import { StatusBadge } from '../components/StatusBadge';
+import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { WorkflowTimeline } from '../components/WorkflowTimeline';
 import { DetailHeader } from '../components/DetailHeader';
 import { SummaryCard } from '../components/SummaryCard';
@@ -25,25 +27,9 @@ import { Attachments } from '../components/Attachments';
 import { Comments, CommentEntry } from '../components/Comments';
 import { EmptyState } from '../components/EmptyState';
 
-const WORKFLOW_STEPS = [
-  { key: 'draft', label: 'Draft' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'processing', label: 'Processing' },
-  { key: 'ready', label: 'Ready' },
-  { key: 'completed', label: 'Completed' },
-];
-
 const workflowStepIndex = (status: ClaimStatus) => {
-  switch (status) {
-    case ClaimStatus.DRAFT: return 0;
-    case ClaimStatus.PENDING_APPROVAL: return 1;
-    case ClaimStatus.PROCESSING: return 2;
-    case ClaimStatus.READY_FOR_CLAIM: return 3;
-    case ClaimStatus.COMPLETED: return 4;
-    case ClaimStatus.REJECTED: return 1;
-    case ClaimStatus.RETURNED: return 1;
-    default: return 0;
-  }
+  if (status === ClaimStatus.REJECTED || status === ClaimStatus.RETURNED) return 1;
+  return getWorkflowStageIndex(CLAIM_WORKFLOW_STAGES, status);
 };
 
 interface ClaimDetailProps {
@@ -229,7 +215,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
           <DetailHeader
             eyebrow="Reimbursement Request"
             title={claimNumber}
-            status={claim && <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} />}
+            status={claim && <><StatusBadge status={claim.status} /><WorkflowOwnerTag status={claim.status} className="ml-1.5" /></>}
             onClose={onClose}
             actions={
               <>
@@ -279,7 +265,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
             <>
               {/* STATUS BADGE + WORKFLOW TIMELINE */}
               <WorkflowTimeline
-                steps={WORKFLOW_STEPS}
+                steps={CLAIM_WORKFLOW_STAGES}
                 currentIndex={workflowStepIndex(claim.status)}
                 variant={claim.status === ClaimStatus.REJECTED ? 'error' : claim.status === ClaimStatus.RETURNED ? 'warning' : 'default'}
                 variantLabel={claim.status === ClaimStatus.REJECTED ? 'REJECTED' : claim.status === ClaimStatus.RETURNED ? 'RETURNED TO REQUESTOR' : undefined}
@@ -322,7 +308,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                     <span className="font-extrabold text-brand text-sm font-display">{formatPHP(claim.total_amount)}</span>
                   </div>
                   {(claim.release_code || claim.payment_method) && (
-                    <div className="pt-3 border-t border-brand/10 bg-blue-50/30 -mx-4 -mb-4 px-4 pb-4 space-y-2">
+                    <div className="pt-3 border-t border-brand/10 bg-brand-active/30 -mx-4 -mb-4 px-4 pb-4 space-y-2">
                       <div className="grid grid-cols-2 gap-3 pt-3">
                         <div>
                           <span className="text-gray-500 font-semibold block">Payment Method</span>
@@ -330,11 +316,11 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                         </div>
                         <div>
                           <span className="text-gray-500 font-semibold block">Claim Code</span>
-                          <span className="font-mono font-bold text-blue-800 tracking-wider text-sm">{claim.release_code || '—'}</span>
+                          <span className="font-mono font-bold text-brand tracking-wider text-sm">{claim.release_code || '—'}</span>
                         </div>
                       </div>
                       {claim.status === ClaimStatus.READY_FOR_CLAIM && user?.id === claim.requestor_id && (
-                        <div className="pt-3 border-t border-blue-100 space-y-2">
+                        <div className="pt-3 border-t border-brand/10 space-y-2">
                           <p className="text-[10px] text-gray-600 leading-normal font-medium">
                             The Custodian has marked your funds as ready! Present your unique Claim Code to claim cash. Click below once you have collected the money.
                           </p>
@@ -400,15 +386,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                         <div className="text-xs text-slate-500 mt-0.5">Internal review call with your Approver — separate from the client meeting.</div>
                       </div>
                     </div>
-                    <StatusBadge
-                      status={claim.reviewMeeting.status}
-                      label={
-                        claim.reviewMeeting.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? 'Pending Confirmation'
-                        : claim.reviewMeeting.status === ReviewMeetingStatus.CONFIRMED ? 'Confirmed'
-                        : claim.reviewMeeting.status === ReviewMeetingStatus.DECLINE_REQUESTED ? 'Declined — Please Reschedule'
-                        : 'Completed'
-                      }
-                    />
+                    <StatusBadge status={claim.reviewMeeting.status} />
                   </div>
 
                   {claim.reviewMeeting.status === ReviewMeetingStatus.DECLINE_REQUESTED && claim.reviewMeeting.decline_reason && (
@@ -547,7 +525,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
               {claim.status === ClaimStatus.RETURNED && user?.id === claim.requestor_id && (
                 <div className="border border-amber-300 rounded p-5 space-y-3 bg-amber-50 shadow-sm">
                   <span className="text-xs font-bold text-amber-700 uppercase tracking-wider block border-b border-amber-100 pb-1.5">
-                    Returned for Revision
+                    {getStatusConfig(ClaimStatus.RETURNED).label}
                   </span>
                   <p className="text-xs text-gray-700 leading-relaxed">
                     Your Approver returned this claim - see their comment above. Update the details and resubmit; it will go back to Pending Approval and your Approver will be notified.

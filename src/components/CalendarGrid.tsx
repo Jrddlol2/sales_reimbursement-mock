@@ -3,6 +3,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isTod
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Mom, MomStatus, UserRole, ReviewMeetingStatus } from '../types';
+import { getStatusConfig, getStatusBadgeClass } from '../statusConfig';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -80,7 +81,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                   "min-h-[80px] p-2 border-r border-b border-gray-100 relative group transition-colors",
                   !isSameMonth(day, currentDate) && "bg-gray-50 text-gray-400",
                   onDateSelect && "cursor-pointer hover:bg-gray-50",
-                  isSelected && "bg-blue-50/50"
+                  isSelected && "bg-brand-active/50"
                 )}
               >
                 <div className={cn(
@@ -108,26 +109,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ moms, reviewMeetings
                   })}
                   {dayReviewMeetings.map(rm => {
                     const withName = rm.approver_name || rm.requestor_name || 'Approver';
-                    const statusSuffix = rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? ' (Pending)'
-                      : rm.status === ReviewMeetingStatus.DECLINE_REQUESTED ? ' (Declined)'
+                    const rmConfig = getStatusConfig(rm.status);
+                    const statusSuffix = rmConfig.colorKey === 'pending' ? ' (Pending)'
+                      : rmConfig.colorKey === 'rejected' ? ' (Declined)'
                       : '';
                     const displayLabel = `${rm.meeting_time || 'Review'} - ${withName}${statusSuffix}`;
-                    const statusLabel = rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION ? 'awaiting Approver confirmation'
-                      : rm.status === ReviewMeetingStatus.DECLINE_REQUESTED ? 'declined by the Approver - needs a new time'
-                      : rm.status === ReviewMeetingStatus.CONFIRMED ? 'confirmed by the Approver'
-                      : 'completed';
                     return (
                       <div
                         key={rm.id}
                         className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block",
-                          rm.status === ReviewMeetingStatus.DECLINE_REQUESTED
-                            ? "border border-dashed border-red-300 bg-red-50/60 text-red-700"
-                            : rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION
-                              ? "border border-dashed border-slate-300 bg-slate-50 text-slate-500"
-                              : "shadow-xs corp-badge-info"
+                          "text-[10px] px-1.5 py-0.5 rounded truncate font-medium block shadow-xs",
+                          getStatusBadgeClass(rm.status)
                         )}
-                        title={`Review Meeting with ${withName} at ${rm.meeting_time || 'unspecified time'} - ${statusLabel}. Your internal claim review call, not the client meeting.`}
+                        title={`Review Meeting with ${withName} at ${rm.meeting_time || 'unspecified time'} - ${rmConfig.description} Your internal claim review call, not the client meeting.`}
                       >
                         {displayLabel}
                       </div>

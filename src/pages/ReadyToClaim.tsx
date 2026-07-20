@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
-import { getClaimNumber, formatPHP, getStatusDisplayLabel } from '../utils';
+import { getClaimNumber, formatPHP } from '../utils';
 import { Wallet, Key, Calendar, Tag, ArrowRight, CurrencyDollar } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
@@ -137,7 +137,7 @@ export const ReadyToClaim: React.FC = () => {
                             {formatPHP(claim.total_amount)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-center">
-                            <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} size="sm" />
+                            <StatusBadge status={claim.status} size="sm" />
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <button
@@ -163,7 +163,7 @@ export const ReadyToClaim: React.FC = () => {
                     <div key={claim.id} className="p-4 hover:bg-slate-50 flex flex-col gap-3 transition-colors">
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-brand">{claimNumber}</span>
-                        <StatusBadge status={claim.status} label={getStatusDisplayLabel(claim.status)} size="sm" />
+                        <StatusBadge status={claim.status} size="sm" />
                       </div>
 
                       <div className="grid grid-cols-2 gap-y-1.5 text-xs text-slate-600">

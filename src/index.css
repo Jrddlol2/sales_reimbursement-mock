@@ -23,6 +23,45 @@
   --color-info-hover: var(--color-brand-hover);
   --color-info-light: var(--color-brand-active);
 
+  /* Neutral accent — for decorative emphasis that isn't an interactive
+     control (e.g. a third status distinct from success/warning/danger).
+     Reuse this instead of reaching for an ad-hoc indigo/blue shade. */
+  --color-accent-neutral: #334155;
+  --color-accent-neutral-hover: #1e293b;
+  --color-accent-neutral-light: #f1f5f9;
+
+  /* Workflow status tokens — single source of truth for every status pill,
+     icon container, and progress indicator across Claims/Cash Advances/
+     Liquidations/Support/Review Meetings. See src/statusConfig.tsx, which is
+     the only place a status string should ever be mapped to one of these
+     colorKeys. Do not reference raw Tailwind color utilities for status UI —
+     add a new key here instead. Draft/pending/complete/rejected alias the
+     existing semantic tokens above; approved/processing/ready/returned are
+     workflow-specific hues not covered by the base success/warning/danger set. */
+  --color-status-draft: var(--color-accent-neutral);
+  --color-status-draft-light: var(--color-accent-neutral-light);
+
+  --color-status-pending: var(--color-warning);
+  --color-status-pending-light: var(--color-warning-light);
+
+  --color-status-approved: #059669;
+  --color-status-approved-light: #ecfdf5;
+
+  --color-status-processing: #7c3aed;
+  --color-status-processing-light: #f5f3ff;
+
+  --color-status-ready: #0d9488;
+  --color-status-ready-light: #f0fdfa;
+
+  --color-status-complete: var(--color-success);
+  --color-status-complete-light: var(--color-success-light);
+
+  --color-status-rejected: var(--color-danger);
+  --color-status-rejected-light: var(--color-danger-light);
+
+  --color-status-returned: #6d5d99;
+  --color-status-returned-light: #f5f3fa;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
@@ -35,34 +74,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app-canvas {
-  background-color: #fbfaf9;
-  position: relative;
-}
-
-.app-canvas::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  left: -40px;
-  right: -40px;
-  bottom: -40px;
+/*
+ * Decorative background glow. Deliberately position: fixed and sized to the
+ * viewport (not the scrollable content) — a content-height-relative version
+ * of this kept getting cropped as pages grew taller than one screen. A fixed
+ * viewport-relative layer physically cannot run out, on any page, of any
+ * length, ever. Rendered once as the first child of the app shell so every
+ * other element paints on top of it in normal DOM stacking order.
+ */
+.app-bg-fixed {
+  position: fixed;
+  inset: 0;
   pointer-events: none;
   z-index: 0;
+  background-color: #fbfaf9;
   background-repeat: no-repeat;
   transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
   transform: translate(var(--bokeh-x, 0px), var(--bokeh-y, 0px));
   background-image:
-    radial-gradient(circle at 2% 380px, rgba(96, 165, 250, 0.16) 0px, transparent 480px),
-    radial-gradient(circle at 85% 20px, rgba(96, 165, 250, 0.20) 0px, transparent 320px),
-    radial-gradient(circle at 94% 700px, rgba(96, 165, 250, 0.18) 0px, transparent 260px),
-    radial-gradient(circle at 90% 1350px, rgba(129, 140, 248, 0.16) 0px, transparent 260px),
-    radial-gradient(circle at 92% 2050px, rgba(96, 165, 250, 0.15) 0px, transparent 240px),
-    radial-gradient(circle at 88% 2750px, rgba(129, 140, 248, 0.15) 0px, transparent 240px);
-}
-.app-canvas > * {
-  position: relative;
-  z-index: 1;
+    radial-gradient(circle at 6% 12%, rgba(148, 163, 184, 0.14) 0px, transparent 42%),
+    radial-gradient(circle at 92% 8%, rgba(148, 163, 184, 0.12) 0px, transparent 38%),
+    radial-gradient(circle at 96% 60%, rgba(148, 163, 184, 0.10) 0px, transparent 36%),
+    radial-gradient(circle at 4% 88%, rgba(148, 163, 184, 0.10) 0px, transparent 40%),
+    radial-gradient(circle at 60% 96%, rgba(148, 163, 184, 0.08) 0px, transparent 34%);
 }
 
 /* Institutional Headings - Inter bold, tracking tight */
@@ -85,7 +119,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-panel {
-  background-color: rgba(224, 236, 254, 0.22);
+  background-color: rgba(241, 245, 249, 0.5);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
@@ -95,35 +129,35 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
 }
-.corp-card-glass.tint-neutral { background-color: rgba(255, 255, 255, 0.78); }
-.corp-card-glass.tint-emerald { background-color: rgba(209, 250, 229, 0.62); }
-.corp-card-glass.tint-amber   { background-color: rgba(254, 243, 199, 0.62); }
-.corp-card-glass.tint-red     { background-color: rgba(254, 226, 226, 0.68); }
-.corp-card-glass.tint-indigo  { background-color: rgba(224, 231, 255, 0.62); }
+.corp-card-glass.tint-neutral { background-color: rgba(255, 255, 255, 0.85); }
+.corp-card-glass.tint-emerald { background-color: rgba(167, 243, 208, 0.55); }
+.corp-card-glass.tint-amber   { background-color: rgba(253, 230, 138, 0.50); }
+.corp-card-glass.tint-red     { background-color: rgba(252, 165, 165, 0.45); }
+.corp-card-glass.tint-brand    { background-color: rgba(37, 99, 235, 0.08); }
 
 /* Solid Corporate Input/Select Class */
 .corp-input {
-  border: 1px solid #e2e8f0; /* slate-200 */
+  border: 1px solid var(--color-slate-200);
   border-radius: 10px;
   padding: 0.625rem 0.875rem;
   font-size: 0.875rem;
   line-height: 1.25rem;
   background-color: #ffffff;
-  color: #0f172a;
+  color: var(--color-slate-900);
   transition: all 200ms ease;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.01);
 }
 .corp-input:hover:not(:disabled) {
-  border-color: #cbd5e1;
+  border-color: var(--color-slate-300);
 }
 .corp-input:focus {
   outline: none;
   border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 .corp-input:disabled {
-  background-color: #f8fafc;
-  color: #94a3b8;
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-400);
   cursor: not-allowed;
 }
 
@@ -168,8 +202,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .corp-btn-secondary {
   background-color: #ffffff;
-  color: #334155;
-  border: 1px solid #e2e8f0;
+  color: var(--color-slate-700);
+  border: 1px solid var(--color-slate-200);
   font-weight: 600;
   font-size: 0.875rem;
   border-radius: 10px;
@@ -182,9 +216,9 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
 }
 .corp-btn-secondary:hover:not(:disabled) {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  background-color: var(--color-slate-50);
+  border-color: var(--color-slate-300);
+  color: var(--color-slate-900);
 }
 .corp-btn-secondary:disabled {
   opacity: 0.6;
@@ -193,7 +227,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .corp-btn-ghost {
   background-color: transparent;
-  color: #475569;
+  color: var(--color-slate-600);
   font-weight: 600;
   font-size: 0.875rem;
   border-radius: 10px;
@@ -205,8 +239,8 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
 }
 .corp-btn-ghost:hover:not(:disabled) {
-  background-color: #f1f5f9;
-  color: #0f172a;
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-900);
 }
 .corp-btn-ghost:disabled {
   opacity: 0.6;
@@ -234,6 +268,56 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-danger-hover);
 }
 .corp-btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.corp-btn-success {
+  background-color: #ffffff;
+  color: var(--color-success);
+  border: 1px solid var(--color-success-light);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 10px;
+  padding: 0.625rem 1.25rem;
+  transition: all 200ms ease;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.corp-btn-success:hover:not(:disabled) {
+  background-color: var(--color-success-light);
+  border-color: var(--color-success);
+  color: var(--color-success-hover);
+}
+.corp-btn-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.corp-btn-warning {
+  background-color: #ffffff;
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-light);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 10px;
+  padding: 0.625rem 1.25rem;
+  transition: all 200ms ease;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.corp-btn-warning:hover:not(:disabled) {
+  background-color: var(--color-warning-light);
+  border-color: var(--color-warning);
+  color: var(--color-warning-hover);
+}
+.corp-btn-warning:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -274,7 +358,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: background-color 150ms ease;
 }
 .corp-table tr:hover td {
-  background-color: var(--color-brand-active) !important;
+  background-color: #f8fafc !important;
 }
 .corp-table tr:last-child td {
   border-bottom: none;
@@ -310,6 +394,29 @@ h1, h2, h3, h4, h5, h6 {
   background-color: var(--color-info-light);
   color: var(--color-info-hover);
 }
+
+/* Workflow status badge tints, one per statusConfig colorKey. StatusBadge is
+   the only component that should apply these classes — see src/statusConfig.tsx. */
+.corp-badge-draft      { background-color: var(--color-status-draft-light);      color: var(--color-status-draft); }
+.corp-badge-pending     { background-color: var(--color-status-pending-light);    color: var(--color-status-pending-hover, var(--color-warning-hover)); }
+.corp-badge-approved    { background-color: var(--color-status-approved-light);   color: var(--color-status-approved); }
+.corp-badge-processing  { background-color: var(--color-status-processing-light); color: var(--color-status-processing); }
+.corp-badge-ready       { background-color: var(--color-status-ready-light);      color: var(--color-status-ready); }
+.corp-badge-complete    { background-color: var(--color-status-complete-light);   color: var(--color-success-hover); }
+.corp-badge-rejected    { background-color: var(--color-status-rejected-light);   color: var(--color-danger-hover); }
+.corp-badge-returned    { background-color: var(--color-status-returned-light);   color: var(--color-status-returned); }
+
+/* Workflow status icon containers — solid color + white icon, per the
+   Phase 1.5 "colored container, not colored icon" rule. Used wherever a
+   status needs a standalone icon badge rather than a text pill. */
+.status-icon-draft      { background-color: var(--color-status-draft); color: #fff; }
+.status-icon-pending    { background-color: var(--color-status-pending); color: #fff; }
+.status-icon-approved   { background-color: var(--color-status-approved); color: #fff; }
+.status-icon-processing { background-color: var(--color-status-processing); color: #fff; }
+.status-icon-ready      { background-color: var(--color-status-ready); color: #fff; }
+.status-icon-complete   { background-color: var(--color-status-complete); color: #fff; }
+.status-icon-rejected   { background-color: var(--color-status-rejected); color: #fff; }
+.status-icon-returned   { background-color: var(--color-status-returned); color: #fff; }
 
 @keyframes slideInRight {
   from { transform: translateX(100%); }
@@ -425,7 +532,9 @@ h1, h2, h3, h4, h5, h6 {
 .corp-btn-primary:active:not(:disabled),
 .corp-btn-secondary:active:not(:disabled),
 .corp-btn-ghost:active:not(:disabled),
-.corp-btn-danger:active:not(:disabled) {
+.corp-btn-danger:active:not(:disabled),
+.corp-btn-success:active:not(:disabled),
+.corp-btn-warning:active:not(:disabled) {
   transform: scale(0.98);
 }
 .corp-btn-primary:active:not(:disabled) {

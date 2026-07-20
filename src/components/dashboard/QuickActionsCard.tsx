@@ -26,8 +26,8 @@ const ActionButton: React.FC<{ action: QuickAction; onClick: () => void }> = ({ 
       onClick={onClick}
       className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-slate-200 transition-all hover:bg-slate-50 group text-left w-full"
     >
-      <div className={`p-2 rounded-lg transition-transform group-hover:scale-105 shrink-0 ${action.bgColorClass} ${action.colorClass}`}>
-        <IconComp size={20} weight="duotone" />
+      <div className={`p-2 rounded-lg shadow-sm transition-transform group-hover:scale-105 shrink-0 ${action.bgColorClass} ${action.colorClass}`}>
+        <IconComp size={20} weight="fill" />
       </div>
       <span className="text-xs md:text-sm font-semibold text-slate-700 tracking-tight leading-tight">{action.label}</span>
     </button>
@@ -87,8 +87,8 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({ actions, lay
               onClick={() => navigate(action.path)}
               className="flex flex-col items-center justify-center p-4 rounded-xl border border-transparent hover:border-slate-200 transition-all hover:bg-slate-50 group text-center"
             >
-              <div className={`p-3 rounded-full mb-3 transition-transform group-hover:scale-110 ${action.bgColorClass} ${action.colorClass}`}>
-                <IconComp size={24} weight="duotone" />
+              <div className={`p-3 rounded-full mb-3 shadow-sm transition-transform group-hover:scale-110 ${action.bgColorClass} ${action.colorClass}`}>
+                <IconComp size={24} weight="fill" />
               </div>
               <span className="text-sm font-medium text-slate-700">{action.label}</span>
             </button>

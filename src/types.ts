@@ -178,15 +178,6 @@ export interface Email {
   timestamp: string;
 }
 
-export interface Notification {
-  id: string;
-  recipient_id: string;
-  claim_id: string;
-  type: string;
-  read: boolean;
-  timestamp: string;
-}
-
 export enum CashAdvanceStatus {
   DRAFT = 'Draft',
   SUBMITTED = 'Submitted',
@@ -208,7 +199,7 @@ export interface CashAdvance {
   releaseReference?: string;
   status: CashAdvanceStatus;
   reminderSent?: boolean;
-  createdAt?: string;
+  createdAt: string;
 }
 
 export enum LiquidationVarianceType {
@@ -233,7 +224,7 @@ export interface Liquidation {
   varianceAmount: number;
   varianceType: LiquidationVarianceType;
   status: LiquidationStatus;
-  createdAt?: string;
+  createdAt: string;
 }
 
 export enum SupportRequestPriority {

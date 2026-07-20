@@ -13,7 +13,8 @@ import {
 import { ClaimLineItems } from './ClaimLineItems';
 import { ExpenseLineItemEditor } from './ExpenseLineItemEditor';
 import { ClaimActivityTimeline } from './ClaimActivityTimeline';
-import { formatPHP, getStatusColor, getClaimNumber } from '../utils';
+import { formatPHP, getClaimNumber } from '../utils';
+import { StatusBadge } from './StatusBadge';
 import { 
   Plus, Trash, CloudArrowUp, X, WarningCircle, FileText, Check, ArrowLeft, PaperPlaneRight, Sparkle, MagnifyingGlass
 } from '@phosphor-icons/react';
@@ -32,6 +33,10 @@ interface LocalLineItem {
   or_number?: string;
   isDragOver?: boolean;
 }
+
+// Dashboard shows recent activity only; the full record lives on the
+// Transaction History page (/history), not duplicated here in full.
+const RECENT_LIMIT = 8;
 
 const LIQUIDATION_CATEGORIES = [
   { value: 'Client Meals', label: 'Client Meals' },
@@ -455,7 +460,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
     ...userAdvances.map(ca => ({
       uniqueId: `ca-${ca.id}`,
       id: ca.id,
-      date: ca.releaseDate || ca.created_at, // Sort by release date if released, else creation date
+      date: ca.releaseDate || ca.createdAt, // Sort by release date if released, else creation date
       type: 'Cash Advance' as const,
       purpose: ca.purpose,
       amount: ca.amount,
@@ -558,7 +563,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           </div>
           <button
             onClick={handleQuickFillLiquidation}
-            className="inline-flex items-center text-xs font-bold text-brand bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 uppercase font-display tracking-wider"
+            className="inline-flex items-center text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded hover:bg-slate-200 uppercase font-display tracking-wider"
           >
             <Sparkle className="w-3.5 h-3.5 mr-1" /> Quick Fill Draft
           </button>
@@ -575,7 +580,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           </div>
           <div>
             <span className="text-slate-400 block">Liquidation Variance</span>
-            <span className={`text-sm font-bold block ${variance === 0 ? 'text-green-600' : variance < 0 ? 'text-amber-600' : 'text-indigo-600'}`}>
+            <span className={`text-sm font-bold block ${variance === 0 ? 'text-green-600' : variance < 0 ? 'text-amber-600' : 'text-slate-700'}`}>
               {varianceText()}
             </span>
           </div>
@@ -660,47 +665,75 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Warning/Banner if have open cash advance */}
+      {/* Needs Your Action - every item that requires a click from this user, always
+          shown in full regardless of the history table's recency cap below. This is
+          the fix for "filing a liquidation is hard to find": the action lives here,
+          not buried as a small button in a long table. */}
       {(() => {
-        const activeAdv = userAdvances.find(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED);
-        const isOverdue = activeAdv && activeAdv.status === CashAdvanceStatus.RELEASED && activeAdv.releaseDate && (() => {
-          const releasedAt = new Date(activeAdv.releaseDate).getTime();
-          const deadlineMs = 7 * 24 * 60 * 60 * 1000;
-          return Date.now() > (releasedAt + deadlineMs);
-        })();
+        const draftAdvances = userAdvances.filter(ca => ca.status === CashAdvanceStatus.DRAFT);
+        const releasedAdvances = userAdvances.filter(ca => {
+          if (ca.status !== CashAdvanceStatus.RELEASED) return false;
+          const liq = liquidations.find(l => l.cashAdvanceId === ca.id);
+          return !liq || liq.status === LiquidationStatus.DRAFT || liq.status === LiquidationStatus.RETURNED_FOR_REVISION;
+        });
+        const readyToClaim = userClaims.filter(c => c.status === ClaimStatus.READY_FOR_CLAIM);
+        const returnedClaims = userClaims.filter(c => c.status === ClaimStatus.RETURNED);
 
-        if (!activeAdv) return null;
+        const actionCount = draftAdvances.length + releasedAdvances.length + readyToClaim.length + returnedClaims.length;
+        if (actionCount === 0) return null;
 
         return (
-          <div className="bg-amber-50 border border-amber-200 rounded p-4 flex gap-2.5 items-start animate-fade-in shadow-sm">
-            <WarningCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-800 leading-normal font-semibold">
-              <span className="block font-bold uppercase tracking-wider text-[10px] text-amber-900 mb-0.5">Active Cash Advance Notice</span>
-              You already have an active Cash Advance that has not been liquidated (CADV-{activeAdv.id.substring(0,6).toUpperCase()}).
-              {isOverdue && (
-                <span className="block mt-1 text-red-600 font-bold">
-                  Your liquidation is overdue — please complete it before requesting another Cash Advance.
-                </span>
-              )}
+          <div className="bg-amber-50 border border-amber-200 rounded shadow-sm animate-fade-in overflow-hidden">
+            <div className="px-4 py-3 border-b border-amber-200 flex items-center gap-2">
+              <WarningCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <h3 className="font-bold text-amber-900 text-xs uppercase tracking-wider">Needs Your Action ({actionCount})</h3>
+            </div>
+            <div className="divide-y divide-amber-100">
+              {draftAdvances.map(ca => (
+                <div key={ca.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <span className="font-mono font-bold text-slate-800">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
+                    <span className="text-slate-500 ml-2">Draft — submit for approval ({formatPHP(ca.amount)})</span>
+                  </div>
+                  <button onClick={() => handleActionOnAdvance(ca.id, 'submit')} className="corp-btn-primary text-[10px] px-3 py-1.5 shrink-0">Submit</button>
+                </div>
+              ))}
+              {releasedAdvances.map(ca => {
+                const liq = liquidations.find(l => l.cashAdvanceId === ca.id);
+                return (
+                  <div key={ca.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="text-xs">
+                      <span className="font-mono font-bold text-slate-800">CADV-{ca.id.substring(0, 6).toUpperCase()}</span>
+                      <span className="text-slate-500 ml-2">Released — file your Liquidation report ({formatPHP(ca.amount)})</span>
+                    </div>
+                    <button onClick={() => handleStartLiquidation(ca)} className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-3 py-1.5 rounded shrink-0 uppercase font-display shadow-sm">
+                      {liq ? 'Resume' : 'File'} Liquidation
+                    </button>
+                  </div>
+                );
+              })}
+              {readyToClaim.map(c => (
+                <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <span className="font-mono font-bold text-slate-800">{getClaimNumber(c)}</span>
+                    <span className="text-slate-500 ml-2">Ready to Claim — present your Claim Code ({formatPHP(c.total_amount)})</span>
+                  </div>
+                  <button onClick={() => setActiveClaimPrompt(c.id)} className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-3 py-1.5 rounded shrink-0 uppercase font-display shadow-sm">Collect Fund</button>
+                </div>
+              ))}
+              {returnedClaims.map(c => (
+                <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <span className="font-mono font-bold text-slate-800">{getClaimNumber(c)}</span>
+                    <span className="text-slate-500 ml-2">Returned for revision ({formatPHP(c.total_amount)})</span>
+                  </div>
+                  <Link to={`/claims/${c.id}/resubmit`} className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-3 py-1.5 rounded shrink-0 uppercase font-display shadow-sm">Revise</Link>
+                </div>
+              ))}
             </div>
           </div>
         );
       })()}
-
-      {/* Ready to Claim Attention Items Banner */}
-      {userClaims.some(c => c.status === ClaimStatus.READY_FOR_CLAIM) && (
-        <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-3 shadow-sm animate-fade-in">
-          <div className="flex items-start gap-2.5">
-            <WarningCircle className="w-5 h-5 text-brand shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-bold text-slate-900 text-[10px] uppercase tracking-wider mb-0.5">Action Required: Ready to Claim</h3>
-              <p className="text-xs text-slate-700 leading-normal font-semibold">
-                You have approved reimbursement claims that are Ready to Claim! Coordinate with the Custodian, present your Claim Code, and complete redemption below.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Request Form Toggle */}
       {showRequestForm ? (
@@ -828,10 +861,11 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         </div>
       )}
 
-      {/* Unified request history ledger table */}
+      {/* Recent request history - capped; full history lives on the Transaction
+          History page, not duplicated here in full on the dashboard. */}
       <div className="corp-card flex flex-col overflow-hidden">
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Your Requests & History Ledger</h3>
+          <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Recent Requests</h3>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-grow max-w-xl justify-end">
             <div className="relative flex-grow">
               <input
@@ -918,7 +952,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredUnifiedList.map(item => {
+                filteredUnifiedList.slice(0, RECENT_LIMIT).map(item => {
                   const isClaim = item.type === 'Reimbursement';
                   const claim = isClaim ? (item.rawItem as Claim) : null;
                   const ca = !isClaim ? (item.rawItem as CashAdvance) : null;
@@ -951,9 +985,9 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                       {/* Type Badge */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          isClaim 
-                            ? 'bg-blue-50 text-blue-700 border-blue-150' 
-                            : 'bg-indigo-50 text-brand border-indigo-150'
+                          isClaim
+                            ? 'bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-slate-200 text-slate-800 border-slate-300'
                         }`}>
                           {item.type}
                         </span>
@@ -988,7 +1022,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                             to={`/liquidations/${claim.sourceLiquidationId}`}
                             className="inline-flex items-center gap-1 text-[10px] text-brand hover:underline font-bold"
                           >
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-150">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                               Shortfall Claim
                             </span>
                           </Link>
@@ -998,14 +1032,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                               to={`/liquidations/${liq.id}`}
                               className="flex flex-col gap-0.5 items-center hover:opacity-85"
                             >
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                liq.status === LiquidationStatus.DRAFT ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                liq.status === LiquidationStatus.SUBMITTED ? 'bg-indigo-50 text-brand border border-indigo-200' :
-                                liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-                                'bg-green-50 text-green-700 border border-green-200'
-                              }`}>
-                                {liq.status === LiquidationStatus.RETURNED_FOR_REVISION ? 'Returned' : liq.status}
-                              </span>
+                              <StatusBadge status={liq.status} size="sm" />
                               <span className="text-[10px] text-slate-400 font-bold hover:underline">
                                 {formatPHP(liq.totalSpent)} spent
                               </span>
@@ -1022,19 +1049,11 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
 
                       {/* Status Badge */}
                       <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full ${
-                          isClaim && claim ? getStatusColor(claim.status) :
-                          ca ? (
-                            ca.status === CashAdvanceStatus.DRAFT ? 'bg-gray-100 text-gray-700 border border-gray-200' :
-                            ca.status === CashAdvanceStatus.SUBMITTED ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                            ca.status === CashAdvanceStatus.APPROVED ? 'bg-indigo-100 text-brand border border-indigo-200' :
-                            ca.status === CashAdvanceStatus.REJECTED ? 'bg-rose-100 text-rose-700 border border-rose-200' :
-                            ca.status === CashAdvanceStatus.RELEASED ? 'bg-green-100 text-green-700 border border-green-200' :
-                            'bg-slate-100 text-slate-500 border border-slate-200'
-                          ) : ''
-                        }`}>
-                          {item.status === ClaimStatus.PROCESSING ? 'Processing' : item.status === ClaimStatus.READY_FOR_CLAIM ? 'Ready to Claim' : item.status}
-                        </span>
+                        {isClaim && claim ? (
+                          <StatusBadge status={claim.status} size="sm" />
+                        ) : ca ? (
+                          <StatusBadge status={ca.status} size="sm" />
+                        ) : null}
                       </td>
 
                       {/* Row Action Actions */}
@@ -1118,6 +1137,13 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {filteredUnifiedList.length > RECENT_LIMIT && (
+          <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 text-right">
+            <Link to="/history" className="text-xs font-bold text-brand hover:underline">
+              View all {filteredUnifiedList.length} requests in Transaction History →
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

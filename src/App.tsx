@@ -5,7 +5,8 @@
 
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { IconContext } from '@phosphor-icons/react';
+import { IconContext, Warning } from '@phosphor-icons/react';
+import { EmptyState } from './components/EmptyState';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmModal';
@@ -126,6 +127,11 @@ export default function App() {
                   <Route path="settings" element={<Settings />} />
                   <Route path="settings/import" element={<HistoricalImport />} />
                   <Route path="scenarios" element={<ScenarioGuide />} />
+                  <Route path="*" element={
+                    <div className="p-8">
+                      <EmptyState icon={Warning} title="Page not found" description="This page doesn't exist or you don't have access to it." />
+                    </div>
+                  } />
                 </Route>
               </Routes>
               <DebugRoleSwitcher />

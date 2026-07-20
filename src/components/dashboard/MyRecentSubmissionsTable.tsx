@@ -35,7 +35,7 @@ export const MyRecentSubmissionsTable: React.FC<{ user: User; claims: Claim[]; c
 
   return (
     <div className="mb-8">
-      <RecentActivityTable title="My Recent Submissions" items={myRecentItems} emptyMessage="You haven't submitted any requests recently." />
+      <RecentActivityTable title="My Recent Submissions" items={myRecentItems} emptyMessage="No requests submitted recently — new reimbursements and cash advances you file will show up here." />
     </div>
   );
 };

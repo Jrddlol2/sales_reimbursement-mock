@@ -381,7 +381,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
               onDragLeave={() => onChange('isDragOver', false)}
               onDrop={handleFileDrop}
               className={`border border-dashed rounded px-3 py-2 text-center cursor-pointer transition-colors text-xs ${
-                item.isDragOver ? 'border-brand bg-blue-50/50' : 'border-gray-300 hover:border-brand'
+                item.isDragOver ? 'border-brand bg-brand-active/50' : 'border-gray-300 hover:border-brand'
               }`}
             >
               <input

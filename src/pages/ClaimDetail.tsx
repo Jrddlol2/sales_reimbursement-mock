@@ -55,6 +55,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
 
   const [comment, setComment] = useState('');
   const [editingMom, setEditingMom] = useState(false);
+  const [isSubmittingDecision, setIsSubmittingDecision] = useState(false);
 
   // Admin re-assignment state
   const [users, setUsers] = useState<any[]>([]);
@@ -102,6 +103,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
     if ((action === 'reject' || action === 'return') && !comment) {
       return toast.error('A brief comment is required to return or reject this claim.');
     }
+    if (isSubmittingDecision) return;
     const ok = await confirmAction({
       title: decision === 'Approved' ? 'Approve this claim?' : decision === 'Rejected' ? 'Reject this claim?' : 'Return this claim for revision?',
       message: decision === 'Approved'
@@ -114,6 +116,12 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
       tone: decision === 'Rejected' ? 'danger' : 'default',
     });
     if (!ok) return;
+    setIsSubmittingDecision(true);
+    // Close immediately once the user has confirmed — the request continues
+    // in the background instead of leaving the panel open (and its buttons
+    // clickable) for the whole round-trip. The toast still fires from the
+    // global Toast context if this ends up failing after the panel is gone.
+    onClose();
     try {
       await apiFetch(`/api/claims/${claimId}/approve`, {
         method: 'POST',
@@ -121,9 +129,11 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
       });
       toast.success(`Claim has been successfully ${decision.toLowerCase()}!`);
       onUpdate();
-      onClose();
     } catch (err: any) {
       toast.error(err.message || 'Failed to update approval decision.');
+      onUpdate();
+    } finally {
+      setIsSubmittingDecision(false);
     }
   };
 
@@ -628,9 +638,9 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                        />
                    </div>
                    <div className="flex gap-2 w-full sm:w-auto shrink-0">
-                       <button onClick={() => handleApproveReject('Returned')} className="corp-btn-secondary border-amber-300 text-amber-700 hover:bg-amber-50">Return</button>
-                       <button onClick={() => handleApproveReject('Rejected')} className="corp-btn-danger">Reject</button>
-                       <button onClick={() => handleApproveReject('Approved')} className="corp-btn-primary bg-green-600 hover:bg-green-700 shadow-sm flex-1 sm:flex-none"><Check className="w-4 h-4" /> Approve</button>
+                       <button onClick={() => handleApproveReject('Returned')} disabled={isSubmittingDecision} className="corp-btn-secondary border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50">Return</button>
+                       <button onClick={() => handleApproveReject('Rejected')} disabled={isSubmittingDecision} className="corp-btn-danger disabled:opacity-50">Reject</button>
+                       <button onClick={() => handleApproveReject('Approved')} disabled={isSubmittingDecision} className="corp-btn-primary bg-green-600 hover:bg-green-700 shadow-sm flex-1 sm:flex-none disabled:opacity-50"><Check className="w-4 h-4" /> Approve</button>
                    </div>
                </div>
            </div>

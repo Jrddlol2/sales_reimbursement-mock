@@ -569,7 +569,7 @@ export const Moms: React.FC = () => {
   );
 
   return (
-    <div className={`flex flex-col w-full px-4 py-6 space-y-6 ${creationStep === 'none' ? 'flex-1 h-full min-h-0' : ''}`} id="moms_root_container">
+    <div className="flex flex-col w-full px-4 py-6 space-y-6" id="moms_root_container">
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-5 shrink-0">
         <div className="space-y-1">
@@ -1146,7 +1146,7 @@ export const Moms: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex flex-col flex-1 min-h-0 space-y-6"
+            className="flex flex-col space-y-6"
           >
             {loading ? (
               <div className="text-center py-12 text-gray-500 italic">Loading meeting documents...</div>
@@ -1166,7 +1166,7 @@ export const Moms: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="flex flex-col flex-1 min-h-0 space-y-6">
+              <div className="flex flex-col space-y-6">
                 {/* Filter controls */}
                 <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-4">
                   {/* Status Select */}
@@ -1239,9 +1239,9 @@ export const Moms: React.FC = () => {
                 </div>
 
                 {/* Two-Pane Master-Detail Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-0" id="moms_master_detail">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start" id="moms_master_detail">
                   {/* Left pane: Company list with search */}
-                  <div className={`md:col-span-4 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col h-full min-h-0 shadow-sm ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
+                  <div className={`md:col-span-4 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col shadow-sm ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
                     {/* Left Pane Header / Company Search */}
                     <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex flex-col gap-2">
                       <div className="flex items-center justify-between">
@@ -1272,8 +1272,8 @@ export const Moms: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Scrollable Companies List */}
-                    <div className="flex-1 overflow-y-auto divide-y divide-gray-100 min-h-0">
+                    {/* Companies List */}
+                    <div className="divide-y divide-gray-100">
                       {companiesList.length === 0 ? (
                         <div className="p-8 text-center text-gray-400 text-xs italic">
                           No matching companies
@@ -1318,7 +1318,7 @@ export const Moms: React.FC = () => {
                   </div>
 
                   {/* Right pane: Detail View */}
-                  <div className={`md:col-span-8 bg-slate-50 md:bg-transparent rounded-xl flex flex-col h-full min-h-0 ${mobileShowDetail ? 'flex' : 'hidden md:flex'}`}>
+                  <div className={`md:col-span-8 bg-slate-50 md:bg-transparent rounded-xl flex flex-col ${mobileShowDetail ? 'flex' : 'hidden md:flex'}`}>
                     {/* Mobile Back Button */}
                     {mobileShowDetail && (
                       <button
@@ -1333,7 +1333,7 @@ export const Moms: React.FC = () => {
                       const currentCompanyData = companiesList.find(c => c.company === selectedCompany);
                       if (currentCompanyData) {
                         return (
-                          <div className="flex flex-col h-full overflow-hidden">
+                          <div className="flex flex-col">
                             {/* Selected Company Header */}
                             <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1346,8 +1346,8 @@ export const Moms: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Scrollable detail list */}
-                            <div className="flex-1 overflow-y-auto space-y-6 pr-1 pb-4 min-h-0">
+                            {/* Detail list */}
+                            <div className="space-y-6 pb-4">
                               {currentCompanyData.filteredCount === 0 ? (
                                 <div className="bg-white border border-gray-200 p-12 text-center rounded-xl shadow-sm">
                                   <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -1376,7 +1376,7 @@ export const Moms: React.FC = () => {
                         );
                       } else {
                         return (
-                          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center h-full">
+                          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
                             <FileText className="w-12 h-12 text-gray-300 mb-4" />
                             <h3 className="text-sm font-semibold text-gray-900 mb-1">Select a Company</h3>
                             <p className="text-xs text-gray-500 max-w-xs">
@@ -1401,10 +1401,10 @@ export const Moms: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded border border-gray-200 shadow-xl max-w-3xl w-full overflow-hidden"
+              className="bg-white rounded border border-gray-200 shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="bg-gray-900 p-4 text-white flex items-center justify-between">
+              <div className="bg-gray-900 p-4 text-white flex items-center justify-between shrink-0">
                 <h3 className="font-semibold text-sm tracking-wider uppercase flex items-center gap-2">
                   <FileText className="w-4 h-4 text-brand" />
                   {previewMom.minutes_source === MinutesSource.UPLOADED ? 'Uploaded Minutes of Meeting' : 'Official Minutes of Meeting Transcript'}
@@ -1419,7 +1419,7 @@ export const Moms: React.FC = () => {
 
               {previewMom.minutes_source === MinutesSource.UPLOADED ? (
                 /* Modal Body / Uploaded Minutes Metadata Summary */
-                <div className="p-8 max-h-[600px] overflow-y-auto space-y-6">
+                <div className="p-8 flex-1 min-h-0 overflow-y-auto space-y-6">
                   <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-xs text-gray-800 pb-4 border-b border-gray-200">
                     <div>
                       <span className="font-bold uppercase tracking-wider block text-[10px] text-gray-400">Meeting Title / Client</span>
@@ -1487,7 +1487,7 @@ export const Moms: React.FC = () => {
                 </div>
               ) : (
                 /* Modal Body / Transcript Content */
-                <div className="p-8 max-h-[600px] overflow-y-auto space-y-6">
+                <div className="p-8 flex-1 min-h-0 overflow-y-auto space-y-6">
                   <div className="text-center border-b-2 border-gray-900 pb-4">
                     <h1 className="text-xl font-bold tracking-widest uppercase">MICROGENESIS</h1>
                     <p className="text-xs tracking-wider text-gray-500 uppercase">

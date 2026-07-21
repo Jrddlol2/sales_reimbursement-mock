@@ -37,9 +37,6 @@ export const SystemEmails: React.FC = () => {
     apiFetch('/api/outbox/read', {
       method: 'PUT',
       body: JSON.stringify({ ids: [emailId] })
-    }).then(() => {
-      // Trigger a sidebar refresh event so Layout updates badge counts instantly
-      window.dispatchEvent(new CustomEvent('refresh-activity'));
     }).catch(console.error);
   };
 

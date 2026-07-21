@@ -6,7 +6,7 @@ import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
 import { SourceLiquidationTag } from '../components/SourceLiquidationTag';
-import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck, Wallet } from '@phosphor-icons/react';
+import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck, Wallet, ArrowsClockwise } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { KPICard } from '../components/dashboard/KPICard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -15,6 +15,7 @@ import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
 import { ClaimLineItems } from '../components/ClaimLineItems';
 import { EmptyState } from '../components/EmptyState';
+import { useNewDataAvailable } from '../hooks/useNewDataAvailable';
 
 export const ApprovalQueue: React.FC = () => {
   const navigate = useNavigate();
@@ -39,6 +40,20 @@ export const ApprovalQueue: React.FC = () => {
   const [reviewMeetings, setReviewMeetings] = useState<any[]>([]);
   const [meetingComment, setMeetingComment] = useState<Record<string, string>>({});
   const [isProcessingMeeting, setIsProcessingMeeting] = useState<string | null>(null);
+  const [isProcessingAdvance, setIsProcessingAdvance] = useState<string | null>(null);
+  const [isProcessingLiq, setIsProcessingLiq] = useState<string | null>(null);
+
+  // Optimistic UI: ids of items already actioned locally but not yet
+  // reflected in a fresh fetch — hidden from their pending lists immediately
+  // on click instead of waiting for the round-trip, then reconciled (or
+  // un-hidden on error) once the request settles.
+  const [pendingRemovalIds, setPendingRemovalIds] = useState<Set<string>>(new Set());
+  const hideOptimistically = (id: string) => setPendingRemovalIds(prev => new Set(prev).add(id));
+  const unhideOptimistically = (id: string) => setPendingRemovalIds(prev => {
+    const next = new Set(prev);
+    next.delete(id);
+    return next;
+  });
 
   // Bulk actions
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
@@ -87,13 +102,29 @@ export const ApprovalQueue: React.FC = () => {
     });
   };
 
+  // Background check for new/changed inbox items from other users' actions
+  // (e.g. a new claim routed to this approver) — never replaces the list on
+  // its own, just surfaces a banner the user can act on when ready.
+  const { hasNewData: hasNewInboxData, dismiss: dismissNewInboxData } = useNewDataAvailable({
+    intervalMs: 60000,
+    currentIds: inboxClaims.map(c => c.id),
+    fetchIds: async () => {
+      const claimsData = await apiFetch('/api/claims');
+      const pending = claimsData.filter((c: Claim) => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === user?.id);
+      const returned = claimsData.filter((c: Claim) => c.status === ClaimStatus.RETURNED && c.requestor_id === user?.id);
+      return [...pending, ...returned].map((c: Claim) => c.id);
+    },
+  });
+
   const handleConfirmMeeting = async (id: string) => {
     setIsProcessingMeeting(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/review-meetings/${id}/confirm`, { method: 'POST' });
       toast.success('Review Meeting confirmed. The requestor has been notified.');
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to confirm the Review Meeting.');
     } finally {
       setIsProcessingMeeting(null);
@@ -102,6 +133,7 @@ export const ApprovalQueue: React.FC = () => {
 
   const handleDeclineMeeting = async (id: string) => {
     setIsProcessingMeeting(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/review-meetings/${id}/decline`, {
         method: 'POST',
@@ -111,6 +143,7 @@ export const ApprovalQueue: React.FC = () => {
       setMeetingComment(p => ({ ...p, [id]: '' }));
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to decline the Review Meeting.');
     } finally {
       setIsProcessingMeeting(null);
@@ -122,6 +155,8 @@ export const ApprovalQueue: React.FC = () => {
     if (decision === 'Rejected' && !comment.trim()) {
       return toast.error('A comment is required when rejecting a Cash Advance.');
     }
+    setIsProcessingAdvance(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/cash-advances/${id}/approve`, {
         method: 'POST',
@@ -130,7 +165,10 @@ export const ApprovalQueue: React.FC = () => {
       toast.success(`Cash Advance successfully ${decision.toLowerCase()}.`);
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to submit decision.');
+    } finally {
+      setIsProcessingAdvance(null);
     }
   };
 
@@ -139,6 +177,8 @@ export const ApprovalQueue: React.FC = () => {
     if (decision === 'Returned' && !comment.trim()) {
       return toast.error('A comment is required when returning a Liquidation for revision.');
     }
+    setIsProcessingLiq(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/liquidations/${id}/review`, {
         method: 'POST',
@@ -147,20 +187,24 @@ export const ApprovalQueue: React.FC = () => {
       toast.success(`Liquidation successfully ${decision === 'Approved' ? 'approved' : 'returned for revision'}.`);
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to submit decision.');
+    } finally {
+      setIsProcessingLiq(null);
     }
   };
 
-  const pendingAdvances = cashAdvances.filter(ca => ca.status === 'Submitted' && ca.approverId === user?.id);
-  const pendingLiqs = liquidations.filter(l => l.status === 'Submitted' && cashAdvances.find(ca => ca.id === l.cashAdvanceId)?.approverId === user?.id);
-  const pendingMeetingConfirmations = reviewMeetings.filter(rm => rm.approver_id === user?.id && rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION);
+  const pendingAdvances = cashAdvances.filter(ca => ca.status === 'Submitted' && ca.approverId === user?.id && !pendingRemovalIds.has(ca.id));
+  const pendingLiqs = liquidations.filter(l => l.status === 'Submitted' && cashAdvances.find(ca => ca.id === l.cashAdvanceId)?.approverId === user?.id && !pendingRemovalIds.has(l.id));
+  const pendingMeetingConfirmations = reviewMeetings.filter(rm => rm.approver_id === user?.id && rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION && !pendingRemovalIds.has(rm.id));
+  const visibleInboxClaims = inboxClaims.filter(c => !pendingRemovalIds.has(c.id));
 
   const toggleBulkSelection = (id: string) => {
     setSelectedForBulk(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const selectAllBulk = () => {
-    const pendings = inboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
+    const pendings = visibleInboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
     if (selectedForBulk.length === pendings.length) {
       setSelectedForBulk([]); // deselect all
     } else {
@@ -179,20 +223,23 @@ export const ApprovalQueue: React.FC = () => {
     
     if (!ok) return;
 
+    const idsBeingActioned = selectedForBulk;
+    idsBeingActioned.forEach(hideOptimistically);
     setIsProcessingBulk(true);
     try {
-      await Promise.all(selectedForBulk.map(id => 
+      await Promise.all(idsBeingActioned.map(id =>
         apiFetch(`/api/claims/${id}/approve`, {
           method: 'POST',
           body: JSON.stringify({ decision: action, comment: bulkComment || `Bulk ${action}` })
         })
       ));
-      toast.success(`Successfully ${action.toLowerCase()} ${selectedForBulk.length} claims.`);
+      toast.success(`Successfully ${action.toLowerCase()} ${idsBeingActioned.length} claims.`);
       setBulkAction(null);
       setBulkComment('');
       setSelectedForBulk([]);
       fetchClaims();
     } catch (err: any) {
+      idsBeingActioned.forEach(unhideOptimistically);
       toast.error(err.message || `Failed to process bulk action`);
     } finally {
       setIsProcessingBulk(false);
@@ -250,8 +297,8 @@ export const ApprovalQueue: React.FC = () => {
   }
 
   // Derive stats
-  const pendingApprovals = inboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
-  const returnedClaims = inboxClaims.filter(c => c.status === ClaimStatus.RETURNED);
+  const pendingApprovals = visibleInboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
+  const returnedClaims = visibleInboxClaims.filter(c => c.status === ClaimStatus.RETURNED);
   
   const approverClaims = allClaims.filter(c => c.current_approver_id === user?.id || c.original_approver_id === user?.id);
   const spendByRequestor = approverClaims
@@ -299,6 +346,18 @@ export const ApprovalQueue: React.FC = () => {
         <p className="mt-1 text-xs text-slate-500">Unified action list: Reimbursement claims, Cash Advances, and Liquidations awaiting your decision, plus your own claims returned for revision.</p>
       </div>
 
+      {hasNewInboxData && (
+        <div className="bg-brand/10 border border-brand/30 text-brand text-xs font-semibold rounded-lg px-4 py-2.5 flex items-center justify-between gap-3">
+          <span>New items are available in your inbox.</span>
+          <button
+            onClick={() => { dismissNewInboxData(); fetchClaims(); }}
+            className="flex items-center gap-1.5 font-bold underline decoration-2 underline-offset-2 hover:text-brand-hover shrink-0"
+          >
+            <ArrowsClockwise className="w-3.5 h-3.5" /> Refresh
+          </button>
+        </div>
+      )}
+
       {/* Stats Cards - same KPICard component/sizing as the Dashboard, for visual consistency */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard
@@ -340,7 +399,7 @@ export const ApprovalQueue: React.FC = () => {
             tab === 'inbox' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          Pending ({inboxClaims.length})
+          Pending ({visibleInboxClaims.length})
         </button>
         <button
           onClick={() => { setTab('meetings'); searchParams.set('tab', 'meetings'); setSearchParams(searchParams); }}
@@ -411,13 +470,15 @@ export const ApprovalQueue: React.FC = () => {
                         <div className="flex gap-1.5 w-full sm:w-auto">
                           <button
                             onClick={() => handleApproveAdvance(ca.id, 'Rejected')}
-                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider"
+                            disabled={isProcessingAdvance === ca.id}
+                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                           >
                             Reject
                           </button>
                           <button
                             onClick={() => handleApproveAdvance(ca.id, 'Approved')}
-                            className="corp-btn-primary"
+                            disabled={isProcessingAdvance === ca.id}
+                            className="corp-btn-primary disabled:opacity-50"
                           >
                             Approve
                           </button>
@@ -511,13 +572,15 @@ export const ApprovalQueue: React.FC = () => {
                         <div className="flex gap-1.5 w-full sm:w-auto">
                           <button
                             onClick={() => handleReviewLiquidation(l.id, 'Returned')}
-                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider"
+                            disabled={isProcessingLiq === l.id}
+                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                           >
                             Return for Revision
                           </button>
                           <button
                             onClick={() => handleReviewLiquidation(l.id, 'Approved')}
-                            className="corp-btn-primary"
+                            disabled={isProcessingLiq === l.id}
+                            className="corp-btn-primary disabled:opacity-50"
                           >
                             Approve & Close
                           </button>
@@ -625,13 +688,13 @@ export const ApprovalQueue: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
-                {inboxClaims.length === 0 ? (
+                {visibleInboxClaims.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-4">
                       <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
                     </td>
                   </tr>
-                ) : inboxClaims.map((claim: any) => {
+                ) : visibleInboxClaims.map((claim: any) => {
                   const claimNumber = getClaimNumber(claim);
                   const isReturned = claim.status === ClaimStatus.RETURNED;
                   return (
@@ -688,9 +751,9 @@ export const ApprovalQueue: React.FC = () => {
 
           {/* Mobile Stacked Card View */}
           <div className="sm:hidden flex flex-col divide-y divide-slate-100">
-            {inboxClaims.length === 0 ? (
+            {visibleInboxClaims.length === 0 ? (
               <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
-            ) : inboxClaims.map((claim: any) => {
+            ) : visibleInboxClaims.map((claim: any) => {
               const claimNumber = getClaimNumber(claim);
               const isReturned = claim.status === ClaimStatus.RETURNED;
               return (
@@ -743,10 +806,10 @@ export const ApprovalQueue: React.FC = () => {
           </div>
         </div>
         
-        {inboxClaims.length > 0 && (
+        {visibleInboxClaims.length > 0 && (
           <div className="bg-white px-4 py-2 border-t border-gray-200 sm:px-6">
             <p className="text-[10px] text-gray-500">
-              Showing all <span className="font-medium text-gray-900">{inboxClaims.length}</span> result{inboxClaims.length === 1 ? '' : 's'}
+              Showing all <span className="font-medium text-gray-900">{visibleInboxClaims.length}</span> result{visibleInboxClaims.length === 1 ? '' : 's'}
             </p>
           </div>
         )}

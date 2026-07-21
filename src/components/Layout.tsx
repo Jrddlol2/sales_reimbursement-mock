@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { UserRole } from '../types';
+import { UserRole, Email } from '../types';
 import { apiFetch } from '../lib/api';
 import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy } from '@phosphor-icons/react';
 import { formatPHP, IS_DEMO_MODE } from '../utils';
+import { formatDistanceToNowStrict } from 'date-fns';
 
 export const navItems = [
     { label: 'Dashboard', path: '/', icon: SquaresFour, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
@@ -39,6 +40,8 @@ export const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifPreview, setNotifPreview] = useState<Email[]>([]);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activityStatus, setActivityStatus] = useState<Record<string, number>>({});
 
@@ -187,12 +190,21 @@ export const Layout: React.FC = () => {
     if (user) {
       apiFetch('/api/outbox').then(data => {
         setUnreadCount(data.filter((n: any) => !n.read).length);
+        setNotifPreview(data.slice(0, 5));
       }).catch(console.error);
 
       apiFetch('/api/activity/status').then(data => {
         setActivityStatus(data || {});
       }).catch(console.error);
     }
+  };
+
+  const markNotificationRead = (id: string) => {
+    setNotifPreview(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    apiFetch('/api/outbox/read', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: [id] })
+    }).catch(console.error);
   };
 
   useEffect(() => {
@@ -595,12 +607,62 @@ export const Layout: React.FC = () => {
               <MagnifyingGlass className="w-5 h-5" />
             </button>
 
-            <Link to="/notifications" className="text-slate-400 hover:text-slate-700 relative p-1.5 rounded-full hover:bg-slate-50 transition-colors shrink-0" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}>
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            {isNotifOpen && (
+              <div className="fixed inset-0 z-40" onClick={() => setIsNotifOpen(false)} id="notif_overlay_dismiss" />
+            )}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setIsNotifOpen(o => !o)}
+                className="text-slate-400 hover:text-slate-700 relative p-1.5 rounded-full hover:bg-slate-50 transition-colors"
+                aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
+              </button>
+
+              {isNotifOpen && (
+                <div className="absolute top-full right-0 mt-1 w-80 bg-white border border-slate-200 rounded-md shadow-xl max-h-[420px] overflow-y-auto z-50 text-slate-800 animate-dropdown-in" id="notif_dropdown">
+                  <div className="px-3 py-2.5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
+                    <span className="text-xs font-bold text-slate-700">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] font-bold text-red-600">{unreadCount} unread</span>
+                    )}
+                  </div>
+                  {notifPreview.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 italic">No notifications yet.</div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {notifPreview.map(n => (
+                        <button
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.read) markNotificationRead(n.id);
+                            setIsNotifOpen(false);
+                            navigate('/notifications');
+                          }}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 flex gap-2 items-start ${!n.read ? 'bg-brand/5' : ''}`}
+                        >
+                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-brand mt-1.5 shrink-0" />}
+                          <div className={`min-w-0 ${n.read ? 'pl-3.5' : ''}`}>
+                            <div className={`text-xs truncate ${!n.read ? 'font-bold text-slate-900' : 'font-medium text-slate-600'}`}>{n.subject}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{formatDistanceToNowStrict(new Date(n.timestamp), { addSuffix: true })}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <Link
+                    to="/notifications"
+                    onClick={() => setIsNotifOpen(false)}
+                    className="block px-3 py-2 text-center text-[11px] font-bold text-brand hover:bg-slate-50 border-t border-slate-100 sticky bottom-0 bg-white"
+                  >
+                    View all
+                  </Link>
+                </div>
               )}
-            </Link>
+            </div>
             <div className="flex items-center gap-2 sm:gap-3 border-l border-slate-200 pl-3 sm:pl-5 shrink-0">
               <div className="text-right leading-tight">
                 <div className="text-xs sm:text-sm font-semibold text-slate-900 max-w-[85px] sm:max-w-none truncate">{user?.name}</div>
@@ -618,7 +680,7 @@ export const Layout: React.FC = () => {
         {/* Main scrollable content */}
         <main
           className={`relative flex-1 p-4 sm:p-6 md:p-8 ${
-            location.pathname === '/emails' || (location.pathname === '/moms' && !location.search.includes('create=true'))
+            location.pathname === '/emails'
               ? 'flex flex-col overflow-hidden'
               : 'overflow-auto'
           }`}
@@ -626,7 +688,7 @@ export const Layout: React.FC = () => {
           <div
             key={location.pathname}
             className={`relative z-[1] max-w-7xl mx-auto animate-page-fade-in w-full ${
-              location.pathname === '/emails' || (location.pathname === '/moms' && !location.search.includes('create=true'))
+              location.pathname === '/emails'
                 ? 'flex flex-col flex-1 min-h-0 h-full'
                 : ''
             }`}

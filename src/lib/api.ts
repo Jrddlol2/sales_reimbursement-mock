@@ -19,5 +19,14 @@ export const apiFetch = async (url: string, options: RequestInit = {}) => {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || 'API request failed');
   }
+
+  // Any successful mutation can change sidebar badge counts (pending
+  // approvals, processing queue, etc.) elsewhere in the app — refresh them
+  // here instead of relying on every call site to remember to do it.
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    window.dispatchEvent(new CustomEvent('refresh-activity'));
+  }
+
   return response.json();
 };

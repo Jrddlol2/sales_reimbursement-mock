@@ -19,6 +19,7 @@ import { ClaimApprovalInfo } from '../components/ClaimApprovalInfo';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
 import { EmptyState } from '../components/EmptyState';
+import { useNewDataAvailable } from '../hooks/useNewDataAvailable';
 
 type ClaimWithDetails = Claim & { requestor?: User; mom?: any; expenses?: any[]; approvals?: any[] };
 
@@ -50,6 +51,21 @@ export const ProcessingQueue: React.FC = () => {
 
   const [filterMissingReceipts, setFilterMissingReceipts] = useState(false);
 
+  const [isProcessingAdvance, setIsProcessingAdvance] = useState<string | null>(null);
+  const [isProcessingRefund, setIsProcessingRefund] = useState<string | null>(null);
+
+  // Optimistic UI: ids of items already actioned locally but not yet
+  // reflected in a fresh fetch — hidden from their pending lists immediately
+  // on click instead of waiting for the round-trip, then reconciled (or
+  // un-hidden on error) once the request settles.
+  const [pendingRemovalIds, setPendingRemovalIds] = useState<Set<string>>(new Set());
+  const hideOptimistically = (id: string) => setPendingRemovalIds(prev => new Set(prev).add(id));
+  const unhideOptimistically = (id: string) => setPendingRemovalIds(prev => {
+    const next = new Set(prev);
+    next.delete(id);
+    return next;
+  });
+
   const fetchClaims = () => {
     setLoading(true);
     setLoadError(false);
@@ -74,11 +90,25 @@ export const ProcessingQueue: React.FC = () => {
       });
   };
 
+  // Background check for new/changed claims entering Processing (e.g. an
+  // Approver just approved one elsewhere) — never replaces the list on its
+  // own, just surfaces a banner the user can act on when ready.
+  const { hasNewData: hasNewProcessingData, dismiss: dismissNewProcessingData } = useNewDataAvailable({
+    intervalMs: 60000,
+    currentIds: claims.filter(c => c.status === ClaimStatus.PROCESSING).map(c => c.id),
+    fetchIds: async () => {
+      const claimsData = await apiFetch('/api/claims');
+      return claimsData.filter((c: Claim) => c.status === ClaimStatus.PROCESSING).map((c: Claim) => c.id);
+    },
+  });
+
   const handleReleaseAdvance = async (id: string) => {
     const reference = releaseVouchers[id] || '';
     if (!reference.trim()) {
       return toast.error('A Release Voucher Reference is required to release cash advance funds.');
     }
+    setIsProcessingAdvance(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/cash-advances/${id}/release`, {
         method: 'POST',
@@ -87,11 +117,16 @@ export const ProcessingQueue: React.FC = () => {
       toast.success('Cash Advance funds released successfully.');
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to release Cash Advance.');
+    } finally {
+      setIsProcessingAdvance(null);
     }
   };
 
   const handleCollectRefund = async (id: string) => {
+    setIsProcessingRefund(id);
+    hideOptimistically(id);
     try {
       await apiFetch(`/api/liquidations/${id}/collect-refund`, {
         method: 'POST'
@@ -99,12 +134,15 @@ export const ProcessingQueue: React.FC = () => {
       toast.success('Refund collected and liquidation report successfully closed.');
       fetchClaims();
     } catch (err: any) {
+      unhideOptimistically(id);
       toast.error(err.message || 'Failed to collect refund.');
+    } finally {
+      setIsProcessingRefund(null);
     }
   };
 
-  const approvedAdvances = cashAdvances.filter(ca => ca.status === 'Approved');
-  const reviewedLiqs = liquidations.filter(l => l.status === 'Reviewed');
+  const approvedAdvances = cashAdvances.filter(ca => ca.status === 'Approved' && !pendingRemovalIds.has(ca.id));
+  const reviewedLiqs = liquidations.filter(l => l.status === 'Reviewed' && !pendingRemovalIds.has(l.id));
 
   useEffect(() => {
     fetchClaims();
@@ -123,7 +161,7 @@ export const ProcessingQueue: React.FC = () => {
     return !c.receipt_url || c.receipt_url === '';
   };
 
-  const pendingClaims = claims.filter(c => c.status === ClaimStatus.PROCESSING && (!filterMissingReceipts || isMissingReceipt(c)));
+  const pendingClaims = claims.filter(c => c.status === ClaimStatus.PROCESSING && !pendingRemovalIds.has(c.id) && (!filterMissingReceipts || isMissingReceipt(c)));
   const historyClaims = claims.filter(c => 
     [ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(c.status) && (!filterMissingReceipts || isMissingReceipt(c))
   );
@@ -177,6 +215,8 @@ export const ProcessingQueue: React.FC = () => {
       return toast.error('Please generate or enter a Claim Code first.');
     }
     setIsProcessingAction(true);
+    setExpandedId(null);
+    hideOptimistically(claimId);
     try {
       // 1. Ensure the code is saved
       await apiFetch(`/api/claims/${claimId}/claim-code`, {
@@ -190,10 +230,11 @@ export const ProcessingQueue: React.FC = () => {
         body: JSON.stringify({ payment_method: paymentMethod })
       });
 
-      setExpandedId(null);
       fetchClaims();
       toast.success('Claim marked as Ready to Claim! The requestor has been notified with their Claim Code.');
     } catch (err: any) {
+      unhideOptimistically(claimId);
+      setExpandedId(claimId);
       toast.error(err.message || 'Failed to process claim');
     } finally {
       setIsProcessingAction(false);
@@ -232,6 +273,18 @@ export const ProcessingQueue: React.FC = () => {
         </p>
       </div>
 
+      {hasNewProcessingData && (
+        <div className="bg-brand/10 border border-brand/30 text-brand text-xs font-semibold rounded-lg px-4 py-2.5 flex items-center justify-between gap-3">
+          <span>New claims are available in the disbursement queue.</span>
+          <button
+            onClick={() => { dismissNewProcessingData(); fetchClaims(); }}
+            className="flex items-center gap-1.5 font-bold underline decoration-2 underline-offset-2 hover:text-brand-hover shrink-0"
+          >
+            <ArrowsClockwise className="w-3.5 h-3.5" /> Refresh
+          </button>
+        </div>
+      )}
+
       {/* Metrics Cards - same KPICard component/sizing as the Dashboard, for visual consistency */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <KPICard
@@ -269,29 +322,39 @@ export const ProcessingQueue: React.FC = () => {
 
       {/* Navigation tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        <button 
-          onClick={() => { setTab('queue'); searchParams.set('tab', 'queue'); setSearchParams(searchParams); }} 
-          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
+        <button
+          onClick={() => { setTab('queue'); searchParams.set('tab', 'queue'); setSearchParams(searchParams); }}
+          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display flex items-center gap-1.5 ${
             tab === 'queue' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
           Disbursement Queue ({pendingClaims.length})
+          {pendingClaims.length > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-center shrink-0">
+              {pendingClaims.length}
+            </span>
+          )}
         </button>
-        <button 
-          onClick={() => { setTab('history'); searchParams.set('tab', 'history'); setSearchParams(searchParams); }} 
+        <button
+          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }}
+          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display flex items-center gap-1.5 ${
+            tab === 'cadv' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Advances & Liquidations ({approvedAdvances.length + reviewedLiqs.length})
+          {(approvedAdvances.length + reviewedLiqs.length) > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-center shrink-0">
+              {approvedAdvances.length + reviewedLiqs.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => { setTab('history'); searchParams.set('tab', 'history'); setSearchParams(searchParams); }}
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'history' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
           Disbursement History ({historyClaims.length})
-        </button>
-        <button 
-          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }} 
-          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
-            tab === 'cadv' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Advances & Liquidations ({approvedAdvances.length + reviewedLiqs.length})
         </button>
       </div>
 
@@ -337,7 +400,8 @@ export const ProcessingQueue: React.FC = () => {
                         />
                         <button
                           onClick={() => handleReleaseAdvance(ca.id)}
-                          className="corp-btn-primary px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider w-full sm:w-auto text-center"
+                          disabled={isProcessingAdvance === ca.id}
+                          className="corp-btn-primary px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider w-full sm:w-auto text-center disabled:opacity-50"
                         >
                           Release Cash Funds
                         </button>
@@ -401,7 +465,8 @@ export const ProcessingQueue: React.FC = () => {
                       <div className="flex justify-end pt-2">
                         <button
                           onClick={() => handleCollectRefund(l.id)}
-                          className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider"
+                          disabled={isProcessingRefund === l.id}
+                          className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                         >
                           Collect Refund & Close
                         </button>

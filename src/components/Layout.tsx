@@ -9,11 +9,15 @@ import { formatDistanceToNowStrict } from 'date-fns';
 
 export const navItems = [
     { label: 'Dashboard', path: '/', icon: SquaresFour, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
-  { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
+  { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
   { label: 'My Inbox', path: '/approvals', icon: Tray, group: 'PRIMARY', roles: [UserRole.APPROVER] },
   { label: 'Processing Queue', path: '/processing', icon: ListChecks, group: 'PRIMARY', roles: [UserRole.CUSTODIAN] },
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
-  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN] },
+  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.CUSTODIAN] },
+  // Approver's own submitted requests are split into their own sidebar
+  // group so they're never confused with the "My Inbox" approval queue.
+  { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
+  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -311,7 +315,7 @@ export const Layout: React.FC = () => {
               return acc;
             }, {} as Record<string, typeof navItems[0][]>);
 
-            const groupOrder = ['PRIMARY', 'COMMUNICATION', 'PLANNING', 'COMPLIANCE', 'SYSTEM', 'RESOURCES', 'OTHER'];
+            const groupOrder = ['PRIMARY', 'MY REQUESTS', 'COMMUNICATION', 'PLANNING', 'COMPLIANCE', 'SYSTEM', 'RESOURCES', 'OTHER'];
             const activeGroups = groupOrder.filter(g => groupedItems[g] && groupedItems[g].length > 0);
             const showLabels = activeGroups.length > 1;
 

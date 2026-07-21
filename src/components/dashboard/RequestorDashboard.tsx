@@ -141,14 +141,8 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
         <DashboardPeriodFilter role={UserRole.REQUESTOR} />
       </div>
 
-      {/* Recent requests, drafts, and items needing attention — rendered
-          before the KPI cards below so "Needs Your Action" (inside this
-          section) is the first thing a Requestor sees, not buried under
-          a row of summary metrics. */}
-      <div className="mb-8">
-        <CashAdvanceLiquidationSection />
-      </div>
-
+      {/* My Requests KPIs come first — the top-line status of what a
+          Requestor has already submitted, before anything else on the page. */}
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-800 mb-1">My Requests</h2>
         <p className="text-sm text-slate-500 mb-4">Track the status of your submitted requests, each scoped to its own relevant period</p>
@@ -171,6 +165,10 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
             );
           })}
         </div>
+      </div>
+
+      <div className="mb-8">
+        <CashAdvanceLiquidationSection />
       </div>
 
       <QuickActionsCard actions={quickActions} layout="horizontal" />

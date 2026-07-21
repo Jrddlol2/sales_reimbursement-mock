@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole, Email } from '../types';
 import { apiFetch } from '../lib/api';
-import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy } from '@phosphor-icons/react';
+import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy, ChartBar } from '@phosphor-icons/react';
 import { formatPHP, IS_DEMO_MODE } from '../utils';
 import { formatDistanceToNowStrict } from 'date-fns';
 
@@ -22,6 +22,7 @@ export const navItems = [
   { label: 'User Accounts', path: '/users', icon: UsersThree, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Company Directory', path: '/companies', icon: Buildings, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Audit Log', path: '/audit', icon: ShieldCheck, group: 'SYSTEM', roles: [UserRole.ADMIN] },
+  { label: 'System Reporting', path: '/reporting', icon: ChartBar, group: 'SYSTEM', roles: [UserRole.ADMIN] },
   { label: 'Settings', path: '/settings', icon: Gear, group: 'SYSTEM', roles: [UserRole.APPROVER, UserRole.ADMIN] },
   IS_DEMO_MODE ? { label: 'Scenario Guide', path: '/scenarios', icon: BookOpen, group: 'RESOURCES', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] } : null,
   ].filter(Boolean) as any[];
@@ -245,6 +246,7 @@ export const Layout: React.FC = () => {
     if (path.startsWith('/processing')) return 'Processing Queue';
     if (path.startsWith('/ready-to-claim')) return 'Ready to Claim';
     if (path.startsWith('/audit')) return 'Audit Log';
+    if (path.startsWith('/reporting')) return 'System Reporting';
     if (path.startsWith('/receipts')) return 'Receipt Archive';
     if (path.startsWith('/moms')) return 'Meeting Minutes';
     if (path.startsWith('/claims/new')) return 'New Request';

@@ -742,7 +742,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-5 animate-fade-in">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="font-extrabold text-slate-950 font-display uppercase tracking-wider text-xs">Request Sales Cash Advance</h3>
-            <button onClick={() => setShowRequestForm(false)} className="text-gray-400 hover:text-gray-600">
+            <button onClick={() => setShowRequestForm(false)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
               <X className="w-4 h-4" />
             </button>
           </div>

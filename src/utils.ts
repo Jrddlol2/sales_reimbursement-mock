@@ -60,11 +60,26 @@ export const uploadFile = async (file: File): Promise<string> => {
   });
   
   if (!res.ok) {
-    throw new Error('Failed to upload file');
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to upload file');
   }
   const data = await res.json();
   return data.url;
 };
 
+
+// TEMPORARY (Phase 0 interim upload access gate — see server.ts's
+// /uploads/:filename route) — appends the current mock user id as a query
+// param so direct browser resource loads (<img src>, <iframe src>,
+// window.open, <a href>) still carry an identity the server can check, since
+// those requests can't attach the X-User-Id header apiFetch() uses. Wrap any
+// receipt/MOM attachment URL with this before handing it to the DOM. Safe to
+// call on an already-external or empty URL — passes it through unchanged.
+export const getUploadUrl = (url?: string | null): string => {
+  if (!url || !url.startsWith('/uploads/')) return url || '';
+  const userId = localStorage.getItem('mockUserId');
+  if (!userId) return url;
+  return `${url}?uid=${encodeURIComponent(userId)}`;
+};
 
 export const IS_DEMO_MODE = (import.meta as any).env?.VITE_IS_DEMO_MODE !== 'false';

@@ -183,6 +183,94 @@ export const SubmitClaim: React.FC = () => {
     slot => slot.meeting_date === meetingDate && slot.meeting_time === meetingTime
   );
 
+  // Duplicate detection — a warning, never a submit blocker (a real repeat
+  // client meeting can legitimately produce a similar-looking expense).
+  // pastClaims is already scoped to this Requestor's own claims by the
+  // server (GET /api/claims), so "same requestor" is implicit here.
+  const DUPLICATE_DATE_WINDOW_DAYS = 3;
+  const DUPLICATE_AMOUNT_TOLERANCE = 1; // PHP 1.00 — trivial rounding only
+  const selectedMomMeetingDate = moms.find(m => m.id === selectedMomId)?.meeting_date;
+
+  const isLikelyDuplicateLineItem = (item: LineItem): boolean => {
+    if (!item.category || !item.amount) return false;
+    const amount = parseFloat(item.amount);
+    if (isNaN(amount)) return false;
+
+    return pastClaims.some((c: any) => {
+      if (c.id === resubmitClaimId || !c.expenses) return false;
+      return c.expenses.some((e: any) => {
+        // Strong, independent signal: a real Official Receipt number should
+        // never legitimately repeat across two different claims.
+        if (item.or_number && e.or_number && item.or_number === e.or_number) {
+          return true;
+        }
+        // Otherwise: same category + a near-exact amount + a MOM meeting
+        // date close to this claim's, so a recurring "Transportation -
+        // ₱600" expense from months apart doesn't false-positive.
+        if (e.category !== item.category) return false;
+        if (Math.abs(e.amount - amount) > DUPLICATE_AMOUNT_TOLERANCE) return false;
+        if (selectedMomMeetingDate && c.mom?.meeting_date) {
+          const daysApart = Math.abs(
+            (new Date(selectedMomMeetingDate).getTime() - new Date(c.mom.meeting_date).getTime())
+            / (1000 * 60 * 60 * 24)
+          );
+          return daysApart <= DUPLICATE_DATE_WINDOW_DAYS;
+        }
+        // No meeting date to compare yet (e.g. MOM not selected) — fall
+        // back to the category+amount signal alone.
+        return true;
+      });
+    });
+  };
+
+  // Inline validation — mirrors the checks in handleSubmit exactly, so
+  // there's one source of truth for "what's wrong," but computed reactively
+  // instead of only surfacing one-at-a-time toasts after a failed submit.
+  // Errors only render once the user has attempted a submit at least once,
+  // so a blank fresh form doesn't greet them with a wall of red text.
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+
+  interface FormErrors {
+    mom?: string;
+    lineItems: Record<string, string>;
+    meeting?: string;
+  }
+
+  const computeErrors = (): FormErrors => {
+    const errors: FormErrors = { lineItems: {} };
+
+    if (!selectedMomId) {
+      errors.mom = 'A Completed Minutes of Meeting must be attached to file a reimbursement claim.';
+    }
+
+    for (const item of lineItems) {
+      if (!item.category) {
+        errors.lineItems[item.id] = 'Select an expense category.';
+        continue;
+      }
+      const parsedAmount = parseFloat(item.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        errors.lineItems[item.id] = 'Enter a valid amount greater than zero.';
+        continue;
+      }
+      if (!item.receiptName) {
+        errors.lineItems[item.id] = 'A receipt upload is required.';
+      }
+    }
+
+    if (!isResubmit) {
+      if (!meetingDate || !meetingTime) {
+        errors.meeting = 'Please schedule a Review Meeting date and time with your Approver.';
+      } else if (hasMeetingConflict) {
+        errors.meeting = 'Your Approver already has a Review Meeting scheduled at that date and time. Please choose another slot.';
+      }
+    }
+
+    return errors;
+  };
+
+  const formErrors = hasAttemptedSubmit ? computeErrors() : { lineItems: {} as Record<string, string> };
+
   useEffect(() => {
     // Fetch completed MOMs
     apiFetch('/api/moms')
@@ -320,24 +408,12 @@ export const SubmitClaim: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMomId) {
-      return toast.error('A Completed Minutes of Meeting must be attached to file a reimbursement claim.');
-    }
-    
-    for (const item of lineItems) {
-      if (!item.category) return toast.error('Please select an expense category for all items.');
-      const parsedAmount = parseFloat(item.amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) return toast.error('Please enter a valid numeric amount for all items.');
-      if (!item.receiptName) return toast.error('Official receipt image or document upload is required for all expense items.');
-    }
 
-    if (!isResubmit) {
-      if (!meetingDate || !meetingTime) {
-        return toast.error('Please schedule a Review Meeting date and time with your Approver.');
-      }
-      if (hasMeetingConflict) {
-        return toast.error('Your Approver already has a Review Meeting scheduled at that date and time. Please choose another slot.');
-      }
+    const errors = computeErrors();
+    const hasAnyError = !!errors.mom || !!errors.meeting || Object.keys(errors.lineItems).length > 0;
+    if (hasAnyError) {
+      setHasAttemptedSubmit(true);
+      return toast.error('Please fix the highlighted fields before submitting.');
     }
 
     setLoading(true);
@@ -683,7 +759,7 @@ export const SubmitClaim: React.FC = () => {
             </motion.div>
           ) : (
             /* Form view */
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Form Fields Left Side */}
               <div className="lg:col-span-2 space-y-6">
                 <div className="bg-white rounded border border-slate-200 p-6 shadow-sm space-y-6">
@@ -699,7 +775,10 @@ export const SubmitClaim: React.FC = () => {
                         required
                         value={selectedMomId}
                         onChange={e => setSelectedMomId(e.target.value)}
-                        className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:ring-brand focus:outline-none"
+                        aria-invalid={!!formErrors.mom}
+                        className={`block w-full border rounded px-3 py-2 text-sm focus:ring-brand focus:outline-none ${
+                          formErrors.mom ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
+                        }`}
                       >
                         <option value="">-- Select Completed MOM --</option>
                         {moms.map(mom => (
@@ -715,9 +794,15 @@ export const SubmitClaim: React.FC = () => {
                         <Plus className="w-4 h-4" /> Create New MOM
                       </Link>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      Only Completed MOMs verified and dispatched to clients are listed here.
-                    </p>
+                    {formErrors.mom ? (
+                      <p className="text-[10px] text-red-600 font-semibold mt-1 flex items-center gap-1">
+                        <WarningCircle className="w-3 h-3 shrink-0" /> {formErrors.mom}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Only Completed MOMs verified and dispatched to clients are listed here.
+                      </p>
+                    )}
                   </div>
 
                   {/* Line Items */}
@@ -734,7 +819,7 @@ export const SubmitClaim: React.FC = () => {
                     </div>
                     
                     {lineItems.map((item, index) => {
-                      const isDuplicate = item.amount && item.category && pastClaims.some(c => c.id !== resubmitClaimId && c.expenses && c.expenses.some((e: any) => e.category === item.category && e.amount === parseFloat(item.amount)));
+                      const isDuplicate = isLikelyDuplicateLineItem(item);
                       return (
                         <ExpenseLineItemEditor
                           key={item.id}
@@ -744,6 +829,7 @@ export const SubmitClaim: React.FC = () => {
                           categories={expenseCategories.length > 0 ? expenseCategories : REIMBURSEMENT_CATEGORIES}
                           showRemove={lineItems.length > 1}
                           isDuplicate={!!isDuplicate}
+                          error={formErrors.lineItems[item.id]}
                           onRemove={() => removeLineItem(item.id)}
                           onChange={(field, value) => updateLineItem(item.id, field as any, value)}
                         />
@@ -770,7 +856,10 @@ export const SubmitClaim: React.FC = () => {
                             required
                             value={meetingDate}
                             onChange={e => setMeetingDate(e.target.value)}
-                            className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                            aria-invalid={!!formErrors.meeting}
+                            className={`block w-full border rounded px-3 py-2 text-sm focus:outline-none ${
+                              formErrors.meeting ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
+                            }`}
                           />
                         </div>
                         <div>
@@ -782,15 +871,22 @@ export const SubmitClaim: React.FC = () => {
                             required
                             value={meetingTime}
                             onChange={e => setMeetingTime(e.target.value)}
-                            className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                            aria-invalid={!!formErrors.meeting}
+                            className={`block w-full border rounded px-3 py-2 text-sm focus:outline-none ${
+                              formErrors.meeting ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
+                            }`}
                           />
                         </div>
                       </div>
-                      {hasMeetingConflict && (
+                      {hasMeetingConflict ? (
                         <div className="flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
                           <WarningCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                           Your Approver already has a Review Meeting scheduled at that date and time. Please choose another slot.
                         </div>
+                      ) : formErrors.meeting && (
+                        <p className="text-[11px] text-red-600 font-semibold flex items-center gap-1">
+                          <WarningCircle className="w-3 h-3 shrink-0" /> {formErrors.meeting}
+                        </p>
                       )}
                     </div>
                   )}

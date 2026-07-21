@@ -10,7 +10,7 @@ import { PageSkeleton } from '../components/PageSkeleton';
 import { SummaryCard } from '../components/SummaryCard';
 import { Attachments } from '../components/Attachments';
 import { Comments } from '../components/Comments';
-import { getClaimNumber } from '../utils';
+import { getClaimNumber, getUploadUrl } from '../utils';
 import { Button } from '../components/ui/Button';
 
 interface MomDetailProps {
@@ -154,7 +154,7 @@ export const MomDetail: React.FC<MomDetailProps> = ({ id: propId, onClose }) => 
                 id: 'mom-file',
                 name: isUploaded ? 'Uploaded Minutes Document' : 'Signed Supporting Document',
                 meta: mom.file_name,
-                onView: () => mom.file_url ? window.open(mom.file_url, '_blank') : toast.info(`Downloading file: ${mom.file_name}`),
+                onView: () => mom.file_url ? window.open(getUploadUrl(mom.file_url), '_blank') : toast.info(`Downloading file: ${mom.file_name}`),
                 actionLabel: 'Download',
               }] : []}
               emptyText="No signed or uploaded document attached to this MOM."

@@ -80,6 +80,7 @@ export const MomQuickCreateModal: React.FC<MomQuickCreateModalProps> = ({ onClos
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close"
               className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
             >
               <X className="w-5 h-5" />

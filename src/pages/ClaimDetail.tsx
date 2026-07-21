@@ -9,7 +9,7 @@ import {
   MapPin, Calendar, Clock, CurrencyDollar, Shield, Check, Info, ArrowRight,
   PencilSimple, Download, ArrowCounterClockwise, Lifebuoy, Printer
 } from '@phosphor-icons/react';
-import { formatPHP, getClaimNumber } from '../utils';
+import { formatPHP, getClaimNumber, getUploadUrl } from '../utils';
 import { CLAIM_WORKFLOW_STAGES, getWorkflowStageIndex, getStatusConfig } from '../statusConfig';
 import { MomEditForm } from '../components/MomEditForm';
 import { ClaimMomSummary } from '../components/ClaimMomSummary';
@@ -236,7 +236,12 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
       )}
 
       {/* Slider / Panel (Right Side) */}
-      <div className={`bg-white shadow-2xl h-full flex flex-col relative z-10 shrink-0 transform transition-transform duration-300 translate-x-0 animate-slide-in-right ${previewFile ? 'w-full lg:w-[600px] xl:w-[700px]' : 'w-full md:w-[90%] lg:w-[80%] xl:w-[75%]'}`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${claimNumber} details`}
+        className={`bg-white shadow-2xl h-full flex flex-col relative z-10 shrink-0 transform transition-transform duration-300 translate-x-0 animate-slide-in-right ${previewFile ? 'w-full lg:w-[600px] xl:w-[700px]' : 'w-full md:w-[90%] lg:w-[80%] xl:w-[75%]'}`}
+      >
         
         {/* Sticky Header */}
         <div className="sticky top-0 z-20 bg-white border-b border-slate-200">
@@ -274,7 +279,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                 </Link>
                 {claim && claim.receipt_url && (
                   <button
-                    onClick={() => setPreviewFile(previewFile?.type === 'receipt' ? null : { type: 'receipt', url: claim.receipt_url, name: claim.receipt_url.split('/').pop() || 'Receipt' })}
+                    onClick={() => setPreviewFile(previewFile?.type === 'receipt' ? null : { type: 'receipt', url: getUploadUrl(claim.receipt_url), name: claim.receipt_url.split('/').pop() || 'Receipt' })}
                     className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors ${previewFile?.type === 'receipt' ? 'bg-brand text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   >
                     <FileText className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
@@ -283,7 +288,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                 )}
                 {claim && claim.mom?.file_url && (
                   <button
-                    onClick={() => setPreviewFile(previewFile?.type === 'mom' ? null : { type: 'mom', url: claim.mom.file_url, name: claim.mom.file_name || 'MOM Document' })}
+                    onClick={() => setPreviewFile(previewFile?.type === 'mom' ? null : { type: 'mom', url: getUploadUrl(claim.mom.file_url), name: claim.mom.file_name || 'MOM Document' })}
                     className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors ${previewFile?.type === 'mom' ? 'bg-brand text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                   >
                     <FileText className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
@@ -405,7 +410,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
 
               {/* ATTACHMENTS */}
               <SummaryCard title="Attachments" bodyClassName="p-0">
-                <ClaimLineItems expenses={claim.expenses} totalAmount={claim.total_amount} fallbackReceiptUrl={claim.receipt_url} onPreviewReceipt={(url) => setPreviewFile({ type: 'receipt', url, name: url.split('/').pop() || 'Receipt' })} />
+                <ClaimLineItems expenses={claim.expenses} totalAmount={claim.total_amount} fallbackReceiptUrl={claim.receipt_url} onPreviewReceipt={(url) => setPreviewFile({ type: 'receipt', url: getUploadUrl(url), name: url.split('/').pop() || 'Receipt' })} />
                 {claim.supporting_documents && (
                   <Attachments
                     items={[{ id: 'supporting-doc', name: 'Supporting Document', meta: claim.supporting_documents }]}
@@ -500,7 +505,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                       {claim.mom.file_url ? (
                         <button
                           type="button"
-                          onClick={() => setPreviewFile({ type: 'mom', url: claim.mom.file_url, name: claim.mom.file_name || 'MOM Document' })}
+                          onClick={() => setPreviewFile({ type: 'mom', url: getUploadUrl(claim.mom.file_url), name: claim.mom.file_name || 'MOM Document' })}
                           className="flex items-center gap-1 text-[10px] font-semibold text-gray-500 hover:text-gray-800 normal-case"
                         >
                           <FileText className="w-3 h-3" /> View Minutes

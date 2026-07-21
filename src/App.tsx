@@ -115,6 +115,7 @@ export default function App() {
                   <Route path="ready-to-claim" element={<ReadyToClaim />} />
                   <Route path="history" element={<TransactionHistory />} />
                   <Route path="audit" element={<AuditLog />} />
+                  <Route path="reporting" element={<AdminReporting />} />
                   <Route path="receipts" element={<ReceiptArchive />} />
                   <Route path="users" element={<UserAccounts />} />
                   <Route path="companies" element={<CompanyDirectory />} />

@@ -200,20 +200,88 @@ const storage = multer.diskStorage({
     cb(null, `${uuidv4()}${ext}`);
   }
 });
-const upload = multer({ storage });
+
+// Matches what the upload UI already tells users is supported: receipts
+// (image/*, PDF - see ExpenseLineItemEditor's `accept` attribute) and MOM
+// documents (PDF/DOC/DOCX - see Moms.tsx's `accept` attribute, which already
+// says "up to 10MB" even though nothing previously enforced it).
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
+      return cb(new Error('Unsupported file type. Please upload an image (JPG, PNG, GIF, WEBP), a PDF, or a Word document (DOC, DOCX).'));
+    }
+    cb(null, true);
+  }
+});
 
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
   app.use(express.json());
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-  app.post('/api/upload', upload.single('file'), (req, res) => {
+  // --- INTERIM upload access gate -------------------------------------
+  // TEMPORARY until Phase 2 (real authentication/sessions). Previously this
+  // was a bare `express.static` mount with zero access control — any
+  // receipt/MOM attachment URL, once known, was publicly fetchable by
+  // anyone. This route requires *a* logged-in identity (same mock-auth
+  // concept used everywhere else in this file — X-User-Id) before serving a
+  // file, but does NOT check that the identity actually owns/has a
+  // legitimate reason to see that specific file. That per-resource
+  // ownership check needs real sessions to be meaningful and should be
+  // built in Phase 2, not bolted onto the header-trust model here.
+  //
+  // Browsers don't attach custom headers to <img>/<iframe>/direct-navigation
+  // requests, so this also accepts the same identity via a `?uid=` query
+  // param (see getUploadUrl() in src/utils.ts) for those cases — deliberately
+  // scoped to just this route, not merged into the shared getUser() used by
+  // every other API route.
+  app.get('/uploads/:filename', (req, res) => {
+    const userId = req.header('X-User-Id') || (req.query.uid as string | undefined);
+    const user = users.find(u => u.id === userId);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    // express.static normally guards against path traversal itself;
+    // path.basename() replicates that here since this route serves files
+    // manually. Multer-generated filenames are always `${uuid}${ext}` with
+    // no path separators, so this never rejects a legitimate request.
+    const safeFilename = path.basename(req.params.filename);
+    const filePath = path.join(uploadDir, safeFilename);
+    res.sendFile(filePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: 'File not found' });
+      }
+    });
+  });
+
+  app.post('/api/upload', (req, res) => {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    res.json({ url: `/uploads/${req.file.filename}` });
+
+    // Invoked manually (rather than passed as route middleware) so multer's
+    // fileFilter rejection and file-size-limit errors land here as a normal
+    // caught error, instead of crashing past Express's default handler with
+    // an unhelpful stack trace / generic 500.
+    upload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: `File is too large. Maximum size is ${MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)}MB.` });
+        }
+        return res.status(400).json({ error: err.message || 'Upload failed.' });
+      }
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+      res.json({ url: `/uploads/${req.file.filename}` });
+    });
   });
 
   // Helper to get current user from header (mock auth)

@@ -1,1 +1,0 @@
-sed -i 's/{user?.role === UserRole.ADMIN && (/{user?.role === UserRole.ADMIN \&\& [ClaimStatus.PENDING_APPROVAL, ClaimStatus.PROCESSING, ClaimStatus.RETURNED].includes(claim.status) \&\& (/' src/pages/ClaimDetail.tsx

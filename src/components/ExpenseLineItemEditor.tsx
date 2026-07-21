@@ -27,6 +27,7 @@ interface ExpenseLineItemEditorProps {
   categories: { value: string; label: string }[];
   showRemove: boolean;
   isDuplicate?: boolean;
+  error?: string;
   onRemove: () => void;
   onChange: (field: keyof ExpenseItemState, value: any) => void;
 }
@@ -82,6 +83,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
   categories,
   showRemove,
   isDuplicate = false,
+  error,
   onRemove,
   onChange
 }) => {
@@ -267,7 +269,13 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
           {isDuplicate && (
             <div className="mt-1 flex items-start gap-1 text-[10px] text-amber-700 font-semibold">
               <Warning className="w-3 h-3 shrink-0 mt-0.5 text-amber-500" />
-              <span>A previous claim shares the exact category and amount. Verify this isn't a duplicate.</span>
+              <span>This looks similar to an expense on a previous claim (matching receipt number, or matching category/amount/meeting date). Verify this isn't a duplicate.</span>
+            </div>
+          )}
+          {error && (
+            <div className="mt-1 flex items-start gap-1 text-[10px] text-red-700 font-semibold">
+              <Warning className="w-3 h-3 shrink-0 mt-0.5 text-red-500" />
+              <span>{error}</span>
             </div>
           )}
         </div>
@@ -411,6 +419,7 @@ export const ExpenseLineItemEditor: React.FC<ExpenseLineItemEditorProps> = ({
                   onClick={handleClearReceipt}
                   className="p-1 text-slate-400 hover:text-red-600 rounded-full hover:bg-slate-50 transition-colors shrink-0"
                   title="Remove file"
+                  aria-label="Remove file"
                 >
                   <X className="w-4 h-4" />
                 </button>

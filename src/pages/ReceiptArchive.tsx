@@ -3,7 +3,7 @@ import { useAuth } from '../components/AuthContext';
 import { UserRole } from '../types';
 import { apiFetch } from '../lib/api';
 import { ReceiptThumbnail } from '../components/ReceiptThumbnail';
-import { formatPHP } from '../utils';
+import { formatPHP, getUploadUrl } from '../utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Archive, 
@@ -566,10 +566,10 @@ export const Receipts: React.FC = () => {
               {/* Image Section */}
               <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                 {previewItem.receipt_url.toLowerCase().endsWith('.pdf') ? (
-                  <iframe src={previewItem.receipt_url} className="w-full h-full border-0" title="PDF Document" />
+                  <iframe src={getUploadUrl(previewItem.receipt_url)} className="w-full h-full border-0" title="PDF Document" />
                 ) : (
                   <img
-                    src={previewItem.receipt_url}
+                    src={getUploadUrl(previewItem.receipt_url)}
                     alt={previewItem.vendor || 'Receipt'}
                     className="max-w-full max-h-full object-contain rounded shadow-lg transition-transform duration-300 group-hover:scale-[1.01]"
                   />
@@ -582,6 +582,7 @@ export const Receipts: React.FC = () => {
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Receipt Details</span>
                   <button
                     onClick={() => setPreviewItem(null)}
+                    aria-label="Close"
                     className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-full transition-colors"
                   >
                     <X className="w-4 h-4" />
@@ -663,7 +664,7 @@ export const Receipts: React.FC = () => {
 
                 <div className="pt-6 border-t border-slate-200 mt-6 flex gap-2">
                   <a
-                    href={previewItem.receipt_url}
+                    href={getUploadUrl(previewItem.receipt_url)}
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded text-center text-xs font-bold transition-colors font-display"

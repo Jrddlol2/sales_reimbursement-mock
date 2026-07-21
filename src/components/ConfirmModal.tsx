@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Warning } from '@phosphor-icons/react';
 
 interface ConfirmOptions {
@@ -17,6 +17,8 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const resolver = useRef<(value: boolean) => void>();
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElement = useRef<HTMLElement | null>(null);
 
   const confirm: ConfirmFn = useCallback((opts) => {
     setIsExiting(false);
@@ -26,15 +28,35 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, []);
 
-  const handle = (result: boolean) => {
-    if (isExiting) return;
-    setIsExiting(true);
-    setTimeout(() => {
-      setOptions(null);
-      setIsExiting(false);
-      resolver.current?.(result);
-    }, 200);
-  };
+  const handle = useCallback((result: boolean) => {
+    setIsExiting(prevExiting => {
+      if (prevExiting) return prevExiting;
+      setTimeout(() => {
+        setOptions(null);
+        setIsExiting(false);
+        resolver.current?.(result);
+        // Return focus to whatever triggered the dialog, now that it's gone.
+        previouslyFocusedElement.current?.focus?.();
+      }, 200);
+      return true;
+    });
+  }, []);
+
+  // Move focus into the dialog on open (defaulting to Cancel — the least
+  // destructive action) and restore it to the trigger on close. Escape
+  // cancels, matching the click-outside-to-cancel behavior already present.
+  useEffect(() => {
+    if (!options) return;
+    previouslyFocusedElement.current = document.activeElement as HTMLElement;
+    cancelButtonRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handle(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options]);
 
   const isDanger = options?.tone === 'danger';
 
@@ -49,7 +71,11 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }`} 
             onClick={() => handle(false)} 
           />
-          <div 
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby={options.title ? 'confirm_modal_title' : undefined}
+            aria-describedby="confirm_modal_message"
             className={`relative bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-200 ${
               isExiting ? 'animate-modal-out' : 'animate-modal-in'
             }`}
@@ -58,13 +84,14 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               <div className="flex items-start gap-3">
                 <Warning className={`w-5 h-5 shrink-0 mt-0.5 ${isDanger ? 'text-red-500' : 'text-amber-500'}`} />
                 <div>
-                  {options.title && <h3 className="font-bold text-gray-900 text-sm mb-1">{options.title}</h3>}
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{options.message}</p>
+                  {options.title && <h3 id="confirm_modal_title" className="font-bold text-gray-900 text-sm mb-1">{options.title}</h3>}
+                  <p id="confirm_modal_message" className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{options.message}</p>
                 </div>
               </div>
             </div>
             <div className="p-4 flex justify-end gap-2">
               <button
+                ref={cancelButtonRef}
                 onClick={() => handle(false)}
                 className="px-4 py-1.5 border border-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-50 transition-colors"
               >

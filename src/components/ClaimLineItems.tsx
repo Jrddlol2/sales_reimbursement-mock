@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Paperclip, X, Calendar, Tag, Info, FilePdf } from '@phosphor-icons/react';
-import { formatPHP } from '../utils';
+import { formatPHP, getUploadUrl } from '../utils';
 import { ReceiptThumbnail } from './ReceiptThumbnail';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -154,10 +154,10 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                 {/* Image Section */}
                 <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                   {previewExpense.receipt_url.toLowerCase().endsWith('.pdf') ? (
-                    <iframe src={previewExpense.receipt_url} className="w-full h-full border-0" title="PDF Document" />
+                    <iframe src={getUploadUrl(previewExpense.receipt_url)} className="w-full h-full border-0" title="PDF Document" />
                   ) : (
                     <img
-                      src={previewExpense.receipt_url}
+                      src={getUploadUrl(previewExpense.receipt_url)}
                       alt={previewExpense.vendor || 'Receipt'}
                       className="max-w-full max-h-full object-contain rounded shadow-lg transition-transform duration-300 group-hover:scale-[1.01]"
                     />
@@ -170,6 +170,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Receipt Details</span>
                     <button
                       onClick={() => setPreviewExpense(null)}
+                      aria-label="Close"
                       className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-full transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -229,7 +230,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
 
                   <div className="pt-6 border-t border-slate-200 mt-6 flex gap-2">
                     <a
-                      href={previewExpense.receipt_url}
+                      href={getUploadUrl(previewExpense.receipt_url)}
                       target="_blank"
                       rel="noreferrer"
                       className="flex-1 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded text-center text-xs font-bold transition-colors font-display"
@@ -317,10 +318,10 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                 {/* Image Section */}
                 <div className="flex-1 bg-slate-900 flex items-center justify-center p-0 relative group overflow-hidden border-b md:border-b-0 md:border-r border-slate-200">
                   {previewExpense.receipt_url?.toLowerCase().endsWith('.pdf') ? (
-                    <iframe src={previewExpense.receipt_url} className="w-full h-full border-0" title="PDF Document" />
+                    <iframe src={getUploadUrl(previewExpense.receipt_url)} className="w-full h-full border-0" title="PDF Document" />
                   ) : (
                     <img
-                      src={previewExpense.receipt_url}
+                      src={getUploadUrl(previewExpense.receipt_url)}
                       alt="Receipt"
                       className="max-w-full max-h-full object-contain rounded shadow-lg"
                     />
@@ -333,6 +334,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Receipt Details</span>
                     <button
                       onClick={() => setPreviewExpense(null)}
+                      aria-label="Close"
                       className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-full transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -355,7 +357,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
 
                   <div className="pt-6 border-t border-slate-200 mt-6 flex gap-2">
                     <a
-                      href={previewExpense.receipt_url}
+                      href={getUploadUrl(previewExpense.receipt_url)}
                       target="_blank"
                       rel="noreferrer"
                       className="flex-1 py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded text-center text-xs font-bold transition-colors font-display"

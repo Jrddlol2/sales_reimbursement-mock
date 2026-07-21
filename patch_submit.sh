@@ -1,1 +1,0 @@
-sed -i "s/if (!user || user.role !== UserRole.REQUESTOR) return res.status(403).json({ error: 'Forbidden' });/if (!user || !user.reports_to) return res.status(403).json({ error: 'Forbidden: You must have a designated manager (reports_to) to submit.' });/g" server.ts

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, UserRole, Company } from '../types';
 import { useAuth } from '../components/AuthContext';
-import { getStatusColor, uploadFile } from '../utils';
+import { getStatusColor, uploadFile, getUploadUrl } from '../utils';
 import { 
   FileText, Plus, PaperPlaneRight, CheckCircle, Calendar, Clock, MapPin, 
   User, Envelope, ArrowRight, BookOpen, CheckSquare, Pencil, Eye, 
@@ -48,6 +48,15 @@ export const Moms: React.FC = () => {
 
   // Preview State
   const [previewMom, setPreviewMom] = useState<Mom | null>(null);
+
+  useEffect(() => {
+    if (!previewMom) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewMom(null);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [previewMom]);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -612,6 +621,7 @@ export const Moms: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCreationStep('none')}
+                aria-label="Close"
                 className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
               >
                 <X className="w-5 h-5" />
@@ -659,6 +669,7 @@ export const Moms: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setCreationStep('none')}
+                  aria-label="Close"
                   className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
                 >
                   <X className="w-5 h-5" />
@@ -810,7 +821,7 @@ export const Moms: React.FC = () => {
                 {fileName && (
                   <div className="mt-2 flex items-center justify-between text-xs bg-gray-50 border border-gray-100 rounded px-3 py-2">
                     <span className="text-gray-700 font-medium truncate max-w-[250px]">{fileName}</span>
-                    <button type="button" onClick={() => setFileName('')} className="text-red-500 hover:text-red-700">
+                    <button type="button" onClick={() => setFileName('')} aria-label="Remove attached file" className="text-red-500 hover:text-red-700">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -870,6 +881,7 @@ export const Moms: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setCreationStep('none')}
+                  aria-label="Close"
                   className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
                 >
                   <X className="w-5 h-5" />
@@ -1048,7 +1060,7 @@ export const Moms: React.FC = () => {
                 {fileName && (
                   <div className="mt-2 flex items-center justify-between text-xs bg-gray-50 border border-gray-100 rounded px-3 py-2">
                     <span className="text-gray-700 font-medium truncate max-w-[250px]">{fileName}</span>
-                    <button type="button" onClick={() => setFileName('')} className="text-red-500 hover:text-red-700">
+                    <button type="button" onClick={() => setFileName('')} aria-label="Remove attached file" className="text-red-500 hover:text-red-700">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -1241,7 +1253,7 @@ export const Moms: React.FC = () => {
                 {/* Two-Pane Master-Detail Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start" id="moms_master_detail">
                   {/* Left pane: Company list with search */}
-                  <div className={`md:col-span-4 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col shadow-sm ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
+                  <div className={`md:col-span-4 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col shadow-sm md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] ${mobileShowDetail ? 'hidden md:flex' : 'flex'}`}>
                     {/* Left Pane Header / Company Search */}
                     <div className="p-4 border-b border-gray-100 bg-slate-50/50 flex flex-col gap-2">
                       <div className="flex items-center justify-between">
@@ -1273,7 +1285,7 @@ export const Moms: React.FC = () => {
                     </div>
 
                     {/* Companies List */}
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 overflow-y-auto flex-1 min-h-0">
                       {companiesList.length === 0 ? (
                         <div className="p-8 text-center text-gray-400 text-xs italic">
                           No matching companies
@@ -1398,6 +1410,9 @@ export const Moms: React.FC = () => {
         {previewMom && (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-40 flex items-center justify-center p-4">
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Minutes of Meeting transcript"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1411,6 +1426,7 @@ export const Moms: React.FC = () => {
                 </h3>
                 <button
                   onClick={() => setPreviewMom(null)}
+                  aria-label="Close"
                   className="text-gray-400 hover:text-white rounded hover:bg-gray-800 p-1"
                 >
                   <X className="w-5 h-5" />
@@ -1544,7 +1560,7 @@ export const Moms: React.FC = () => {
                             <p className="text-[10px] text-gray-500">{previewMom.file_name}</p>
                           </div>
                         </div>
-                        <a href={previewMom.file_url || '#'} target="_blank" rel="noreferrer" onClick={(e) => { if(!previewMom.file_url) e.preventDefault(); }} className="text-brand hover:text-brand-hover text-[10px] font-semibold flex items-center gap-1">
+                        <a href={previewMom.file_url ? getUploadUrl(previewMom.file_url) : '#'} target="_blank" rel="noreferrer" onClick={(e) => { if(!previewMom.file_url) e.preventDefault(); }} className="text-brand hover:text-brand-hover text-[10px] font-semibold flex items-center gap-1">
                           <Download className="w-3.5 h-3.5" /> Download
                         </a>
                       </div>

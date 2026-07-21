@@ -1,5 +1,6 @@
 import React from 'react';
 import { Paperclip, Warning, FileImage, FilePdf } from '@phosphor-icons/react';
+import { getUploadUrl } from '../utils';
 
 export interface ReceiptThumbnailProps {
   url?: string;
@@ -84,7 +85,7 @@ export const ReceiptThumbnail: React.FC<ReceiptThumbnailProps> = ({
         </div>
       ) : (
         <img
-          src={url}
+          src={getUploadUrl(url)}
           alt={vendor ? `Receipt from ${vendor}` : 'Receipt'}
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"

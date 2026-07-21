@@ -108,7 +108,7 @@ export const ScenarioGuide: React.FC = () => {
       rolesInvolved: ["Henry Approver (Manager)", "Requestor"],
       steps: [
         "Switch to Henry Approver (henry@example.com).",
-        "In 'My Inbox', find the BDO Unibank claim, which has been returned to Henry (in status 'Needs Revision').",
+        "In 'Approver Inbox', find the BDO Unibank claim, which has been returned to Henry (in status 'Needs Revision').",
         "Click 'Fix & Resubmit'. In the form, edit the remarks, categories, or amounts as needed.",
         "Click 'Revise & Resubmit Claim'. The claim's status transitions back to 'Pending Approval' for review."
       ],
@@ -136,7 +136,7 @@ export const ScenarioGuide: React.FC = () => {
       description: "Allows high-volume approvers to process multiple claims simultaneously in a single transaction from their Inbox.",
       rolesInvolved: ["Bob Approver (Approver)"],
       steps: [
-        "Switch to Bob Approver (bob@example.com) and go to 'My Inbox'.",
+        "Switch to Bob Approver (bob@example.com) and go to 'Approver Inbox'.",
         "In the 'Action Items' table, select the checkboxes next to multiple claims.",
         "Choose 'Bulk Actions' above the table, insert a comment (e.g. 'Bulk Approved'), and select 'Bulk Approve' or 'Bulk Reject'.",
         "All selected claims will be updated together in the database, with email notifications dispatched to all requestors."

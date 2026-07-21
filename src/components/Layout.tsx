@@ -3,21 +3,25 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole, Email } from '../types';
 import { apiFetch } from '../lib/api';
-import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy, ChartBar } from '@phosphor-icons/react';
+import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy, ChartBar, UserCircle } from '@phosphor-icons/react';
 import { formatPHP, IS_DEMO_MODE } from '../utils';
 import { formatDistanceToNowStrict } from 'date-fns';
 
 export const navItems = [
     { label: 'Dashboard', path: '/', icon: SquaresFour, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
-  { label: 'My Inbox', path: '/approvals', icon: Tray, group: 'PRIMARY', roles: [UserRole.APPROVER] },
   { label: 'Processing Queue', path: '/processing', icon: ListChecks, group: 'PRIMARY', roles: [UserRole.CUSTODIAN] },
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
   { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.CUSTODIAN] },
-  // Approver's own submitted requests are split into their own sidebar
-  // group so they're never confused with the "My Inbox" approval queue.
-  { label: 'New Request', path: '/claims/new', icon: PlusCircle, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
-  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
+  // Approver's own duties are split into two distinct sidebar groups —
+  // the queue of things to decide on ("APPROVAL CENTER") vs. their own
+  // submitted requests ("MY REQUESTS") — so they never blur together.
+  { label: 'Approver Inbox', path: '/approvals', icon: Tray, group: 'APPROVAL CENTER', roles: [UserRole.APPROVER] },
+  { label: 'My Requests', path: '/my-requests', icon: UserCircle, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
+  // Approvers submit and report their own claims the same as any Requestor,
+  // so they need the same "collect my processed claim" destination too —
+  // scoped to /ready-to-claim's own requestor_id filter, not a duplicate route.
+  { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -34,7 +38,7 @@ export const navItems = [
 const sectionMap: Record<string, string> = {
   'Calendar': 'calendar',
   'System Emails': 'emails',
-  'My Inbox': 'inbox',
+  'Approver Inbox': 'inbox',
   'Processing Queue': 'processing',
   'Dashboard': 'dashboard',
   'Ready to Claim': 'readyToClaim'
@@ -246,9 +250,10 @@ export const Layout: React.FC = () => {
     const path = location.pathname;
     if (path === '/') return 'Dashboard';
     if (path.startsWith('/calendar')) return 'Calendar';
-    if (path.startsWith('/approvals')) return 'My Inbox';
+    if (path.startsWith('/approvals')) return 'Approver Inbox';
     if (path.startsWith('/processing')) return 'Processing Queue';
     if (path.startsWith('/ready-to-claim')) return 'Ready to Claim';
+    if (path.startsWith('/my-requests')) return 'My Requests';
     if (path.startsWith('/audit')) return 'Audit Log';
     if (path.startsWith('/reporting')) return 'System Reporting';
     if (path.startsWith('/receipts')) return 'Receipt Archive';
@@ -315,7 +320,7 @@ export const Layout: React.FC = () => {
               return acc;
             }, {} as Record<string, typeof navItems[0][]>);
 
-            const groupOrder = ['PRIMARY', 'MY REQUESTS', 'COMMUNICATION', 'PLANNING', 'COMPLIANCE', 'SYSTEM', 'RESOURCES', 'OTHER'];
+            const groupOrder = ['PRIMARY', 'APPROVAL CENTER', 'MY REQUESTS', 'COMMUNICATION', 'PLANNING', 'COMPLIANCE', 'SYSTEM', 'RESOURCES', 'OTHER'];
             const activeGroups = groupOrder.filter(g => groupedItems[g] && groupedItems[g].length > 0);
             const showLabels = activeGroups.length > 1;
 

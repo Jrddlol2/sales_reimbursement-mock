@@ -3,14 +3,12 @@ import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, 
 import { apiFetch } from '../../lib/api';
 import { MetricCard } from './MetricCard';
 import { DashboardPeriodFilter } from './DashboardPeriodFilter';
-import { MyRequestsCards } from './MyRequestsCards';
-import { MyRecentSubmissionsTable } from './MyRecentSubmissionsTable';
 import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
 import { RecentActivityTable } from './RecentActivityTable';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleLineChart, SimpleBarChart } from './AnalyticsCharts';
-import { Tray, Clock, CalendarPlus, UserCircle } from '@phosphor-icons/react';
+import { Tray, Clock, CalendarPlus } from '@phosphor-icons/react';
 import { metricsForRole, MetricContext } from '../../metrics/registry';
 import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
 import { UserRole } from '../../types';
@@ -134,7 +132,7 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
   const approverMetricDefs = metricsForRole(UserRole.APPROVER);
   const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
     approver_pending_approvals: { actionLabel: 'Review Requests', actionPath: '/approvals?tab=inbox' },
-    approver_claims_awaiting_action: { actionLabel: 'Open My Inbox', actionPath: '/approvals' },
+    approver_claims_awaiting_action: { actionLabel: 'Open Approver Inbox', actionPath: '/approvals' },
     approver_claims_submitted: { actionLabel: 'View Claims', actionPath: '/approvals?tab=inbox' },
     approver_team_spending: { actionLabel: 'View Team Activity', actionPath: '/approvals?tab=history' },
     approver_approval_rate: { actionLabel: 'Decision History', actionPath: '/approvals?tab=history' },
@@ -185,23 +183,9 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
 
       <QuickActionsCard actions={quickActions} layout="horizontal" />
 
-      {/* Divider — everything above this line is "your job as an Approver";
-          everything below is "your own claims as an employee". Called out
-          explicitly so the two don't blur into one long scroll. */}
-      <div className="flex items-center gap-3 my-8">
-        <div className="h-px flex-1 bg-slate-200" />
-        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
-          <UserCircle className="w-4 h-4" /> Your Own Requests
-        </span>
-        <div className="h-px flex-1 bg-slate-200" />
-      </div>
-
-      {/* Level 3: the approver's own submitted requests — secondary to their
-          approval duties, so it now sits below the work queue instead of
-          directly competing with it for top-of-page attention. */}
-      <MyRequestsCards user={user} claims={claims} cadvs={cadvs} liqs={liqs} outstandingActionsCount={pendingTotal} />
-
-      <MyRecentSubmissionsTable user={user} claims={claims} cadvs={cadvs} liqs={liqs} />
+      {/* The Approver's own submitted requests live under the "MY REQUESTS"
+          sidebar group now (New Request / Transaction History), so this
+          dashboard stays scoped entirely to Approval Center duties. */}
 
       {/* Level 4: analytics — last, since it answers "how am I trending",
           not "what do I do next". */}

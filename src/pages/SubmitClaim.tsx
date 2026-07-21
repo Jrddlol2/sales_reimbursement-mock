@@ -682,7 +682,7 @@ export const SubmitClaim: React.FC = () => {
           </div>
 
           {/* Form Fields Right Side */}
-          <div className="space-y-6">
+          <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
             <div className="bg-white rounded border border-slate-200 p-6 shadow-sm space-y-4">
               <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-2 font-display">Approval Routing</h3>
               <div className="space-y-3 text-xs">
@@ -925,7 +925,7 @@ export const SubmitClaim: React.FC = () => {
               </div>
 
               {/* Guidelines Right Side */}
-              <div className="space-y-6">
+              <div className="space-y-6 lg:sticky lg:top-24 lg:self-start">
                 <div className="bg-white rounded border border-gray-200 p-5 shadow-sm space-y-4 text-xs text-gray-600">
                   <h3 className="font-bold text-gray-900 flex items-center gap-1.5 uppercase text-[10px] tracking-wider text-brand">
                     <ShieldCheck className="w-4 h-4" /> Policy Guidelines

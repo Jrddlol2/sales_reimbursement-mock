@@ -9,9 +9,13 @@ interface Props {
   cadvs: CashAdvance[];
   liqs: Liquidation[];
   outstandingActionsCount?: number;
+  // Where each KPI's "View X" action links to — defaults to the shared
+  // Transaction History page, but the Approver's "My Requests" page passes
+  // its own path so the filter stays scoped to just their own submissions.
+  basePath?: string;
 }
 
-export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, outstandingActionsCount }) => {
+export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, outstandingActionsCount, basePath = '/history' }) => {
   const myClaims = claims.filter(c => c.requestor_id === user.id);
   const myCadvs = cadvs.filter(c => c.requestorId === user.id);
   const myLiqs = liqs.filter(l => l.requestorId === user.id);
@@ -63,7 +67,7 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           variant="warning"
           description="Awaiting approval"
           actionLabel="View Pending"
-          actionPath="/history?status=Pending Approval"
+          actionPath={`${basePath}?status=Pending Approval`}
         />
         <KPICard
           title="Approved"
@@ -72,7 +76,7 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           variant="success"
           description="In processing"
           actionLabel="View Processing"
-          actionPath="/history?status=Processing"
+          actionPath={`${basePath}?status=Processing`}
         />
         <KPICard
           title="Completed"
@@ -81,16 +85,16 @@ export const MyRequestsCards: React.FC<Props> = ({ user, claims, cadvs, liqs, ou
           variant="success"
           description="Finalized"
           actionLabel="View Completed"
-          actionPath="/history?status=Completed"
+          actionPath={`${basePath}?status=Completed`}
         />
-        <KPICard 
+        <KPICard
           title="Rejected"
           value={rejected - returned}
           icon={ReceiptX}
           variant="danger"
           description="Declined requests"
           actionLabel="View Rejected"
-          actionPath="/history?status=Rejected"
+          actionPath={`${basePath}?status=Rejected`}
         />
       </div>
     </div>

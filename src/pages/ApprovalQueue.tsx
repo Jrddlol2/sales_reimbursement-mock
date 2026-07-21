@@ -342,7 +342,7 @@ export const ApprovalQueue: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">My Inbox</h2>
+        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Approver Inbox</h2>
         <p className="mt-1 text-xs text-slate-500">Unified action list: Reimbursement claims, Cash Advances, and Liquidations awaiting your decision, plus your own claims returned for revision.</p>
       </div>
 

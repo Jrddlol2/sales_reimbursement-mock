@@ -17,7 +17,10 @@ export const ReadyToClaim: React.FC = () => {
     setLoading(true);
     apiFetch('/api/claims')
       .then((data: Claim[]) => {
-        const readyToClaim = data.filter(c => c.status === ClaimStatus.READY_FOR_CLAIM);
+        // /api/claims returns an Approver's own claims *and* claims they
+        // approve for others — scope explicitly to the current user's own
+        // submissions so an Approver never sees someone else's claim code.
+        const readyToClaim = data.filter(c => c.status === ClaimStatus.READY_FOR_CLAIM && c.requestor_id === user?.id);
         setClaims(readyToClaim);
         setLoading(false);
       })

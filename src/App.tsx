@@ -18,6 +18,7 @@ import { ApprovalQueue } from './pages/ApprovalQueue';
 import { ProcessingQueue } from './pages/ProcessingQueue';
 import { ReadyToClaim } from './pages/ReadyToClaim';
 import { TransactionHistory } from './pages/TransactionHistory';
+import { MyRequests } from './pages/MyRequests';
 import { AuditLog } from './pages/AuditLog';
 import { ClaimDetail } from './pages/ClaimDetail';
 import { CashAdvanceDetail } from './pages/CashAdvanceDetail';
@@ -61,9 +62,16 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (path === '/notifications') {
     allowed = true;
   }
-  // 2. Check for claim details: "/claims/:id" (but not /claims/new), "/cash-advances/:id", "/liquidations/:id"
+  // 2. "/claims/new" itself isn't a sidebar item for every role that can
+  // reach it — Approvers get there via the "My Requests" page's button
+  // rather than a dedicated sidebar link — so it's checked explicitly
+  // instead of falling through to the navItems lookup below.
+  else if (path === '/claims/new') {
+    allowed = [UserRole.REQUESTOR, UserRole.APPROVER].includes(user.role);
+  }
+  // 3. Check for claim details: "/claims/:id", "/cash-advances/:id", "/liquidations/:id"
   else if (
-    (path.startsWith('/claims/') && path !== '/claims/new') ||
+    path.startsWith('/claims/') ||
     path.startsWith('/cash-advances/') ||
     path.startsWith('/liquidations/')
   ) {
@@ -73,15 +81,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       allowed = [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN].includes(user.role);
     }
   }
-  // 3. Match against exported navItems from Layout.tsx
+  // 4. Match against exported navItems from Layout.tsx — a path can appear
+  // as more than one entry (different roles reach it via different sidebar
+  // groups, e.g. "Ready to Claim" for Requestor vs. Approver), so check
+  // every matching entry rather than stopping at the first one.
   else {
-    const navItem = navItems.find(item => {
+    const matchingItems = navItems.filter(item => {
       const itemPath = item.path.replace(/\/$/, '') || '/';
       return itemPath === path;
     });
 
-    if (navItem) {
-      allowed = navItem.roles.includes(user.role);
+    if (matchingItems.length > 0) {
+      allowed = matchingItems.some(item => item.roles.includes(user.role));
     }
   }
 
@@ -114,6 +125,7 @@ export default function App() {
                   <Route path="processing" element={<ProcessingQueue />} />
                   <Route path="ready-to-claim" element={<ReadyToClaim />} />
                   <Route path="history" element={<TransactionHistory />} />
+                  <Route path="my-requests" element={<MyRequests />} />
                   <Route path="audit" element={<AuditLog />} />
                   <Route path="reporting" element={<AdminReporting />} />
                   <Route path="receipts" element={<ReceiptArchive />} />

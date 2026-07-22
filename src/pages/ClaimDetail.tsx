@@ -18,6 +18,7 @@ import { ClaimApprovalInfo } from '../components/ClaimApprovalInfo';
 import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
+import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { WorkflowTimeline } from '../components/WorkflowTimeline';
@@ -200,9 +201,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
   const originalApproverName = isDelegated ? users.find(u => u.id === claim!.original_approver_id)?.name : undefined;
 
   const drawerContent = (
-    <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-slate-900/40 backdrop-blur-[2px]" id="claim_detail_side_panel">
-      {/* Backdrop */}
-      <div className="absolute inset-0 transition-opacity" onClick={onClose} />
+    <div className="fixed inset-0 z-50 overflow-hidden flex bg-slate-900/40" id="claim_detail_side_panel">
       
       {/* Preview Section (Left Side) */}
       {previewFile && (
@@ -240,7 +239,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
         role="dialog"
         aria-modal="true"
         aria-label={`${claimNumber} details`}
-        className={`bg-white shadow-2xl h-full flex flex-col relative z-10 shrink-0 transform transition-transform duration-300 translate-x-0 animate-slide-in-right ${previewFile ? 'w-full lg:w-[600px] xl:w-[700px]' : 'w-full md:w-[90%] lg:w-[80%] xl:w-[75%]'}`}
+        className={`bg-white shadow-2xl h-full flex flex-col relative z-10 animate-fade-in ${previewFile ? 'w-full lg:w-[600px] xl:w-[700px] shrink-0' : 'w-full'}`}
       >
         
         {/* Sticky Header */}
@@ -379,27 +378,34 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none uppercase"
                               />
                               <div className="flex gap-2">
-                                <button
+                                <Button
                                   onClick={() => setShowClaimPrompt(false)}
-                                  className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-2 rounded shadow-sm text-xs transition-all"
+                                  variant="secondary"
+                                  size="sm"
+                                  className="flex-1"
                                 >
                                   Cancel
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   onClick={handleClaimPayment}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded shadow-sm text-xs transition-all flex justify-center items-center gap-1"
+                                  variant="success"
+                                  size="sm"
+                                  className="flex-1"
+                                  icon={<Check className="w-3 h-3" />}
                                 >
-                                  <Check className="w-3 h-3" /> Submit
-                                </button>
+                                  Submit
+                                </Button>
                               </div>
                             </div>
                           ) : (
-                            <button
+                            <Button
                               onClick={() => setShowClaimPrompt(true)}
-                              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded shadow-sm flex items-center justify-center gap-1 transition-all"
+                              variant="success"
+                              className="w-full"
+                              icon={<Check className="w-4 h-4" />}
                             >
-                              <Check className="w-4 h-4" /> Claim Reimbursement
-                            </button>
+                              Claim Reimbursement
+                            </Button>
                           )}
                         </div>
                       )}
@@ -611,14 +617,14 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                         value={reassignReason}
                         onChange={e => setReassignReason(e.target.value)}
                         placeholder="e.g. Leave of absence"
-                        className="block w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:border-purple-500"
+                        className="block w-full border border-gray-300 rounded p-1.5 text-xs focus:outline-none focus:border-slate-500"
                       />
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleReassign}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-1.5 rounded transition-colors shadow-sm"
+                    className="w-full bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold py-1.5 rounded transition-colors shadow-sm"
                   >
                     Override Assigned Approver
                   </button>
@@ -644,8 +650,8 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                    </div>
                    <div className="flex gap-2 w-full sm:w-auto shrink-0">
                        <button onClick={() => handleApproveReject('Returned')} disabled={isSubmittingDecision} className="corp-btn-secondary border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50">Return</button>
-                       <button onClick={() => handleApproveReject('Rejected')} disabled={isSubmittingDecision} className="corp-btn-danger disabled:opacity-50">Reject</button>
-                       <button onClick={() => handleApproveReject('Approved')} disabled={isSubmittingDecision} className="corp-btn-primary bg-green-600 hover:bg-green-700 shadow-sm flex-1 sm:flex-none disabled:opacity-50"><Check className="w-4 h-4" /> Approve</button>
+                       <Button onClick={() => handleApproveReject('Rejected')} disabled={isSubmittingDecision} variant="danger">Reject</Button>
+                       <Button onClick={() => handleApproveReject('Approved')} disabled={isSubmittingDecision} variant="success" className="flex-1 sm:flex-none" icon={<Check className="w-4 h-4" />}>Approve</Button>
                    </div>
                </div>
            </div>

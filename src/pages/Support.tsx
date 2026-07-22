@@ -118,6 +118,7 @@ export const Support: React.FC = () => {
         {requests.length === 0 ? (
           <EmptyState icon={Lifebuoy} title="No support requests found" />
         ) : (
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -155,6 +156,7 @@ export const Support: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

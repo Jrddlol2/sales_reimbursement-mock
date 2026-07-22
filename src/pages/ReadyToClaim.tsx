@@ -6,6 +6,7 @@ import { getClaimNumber, formatPHP } from '../utils';
 import { Wallet, Key, Calendar, Tag, ArrowRight, CurrencyDollar } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
+import { Button } from '../components/ui/Button';
 
 export const ReadyToClaim: React.FC = () => {
   const { user } = useAuth();
@@ -106,7 +107,7 @@ export const ReadyToClaim: React.FC = () => {
           ) : (
             <>
               {/* Desktop Table View */}
-              <div className="hidden sm:block">
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -143,13 +144,16 @@ export const ReadyToClaim: React.FC = () => {
                             <StatusBadge status={claim.status} size="sm" />
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right">
-                            <button
+                            <Button
                               onClick={() => setSelectedClaimId(claim.id)}
-                              className="bg-brand hover:bg-brand-hover text-white text-xs font-bold px-3 py-1.5 rounded shadow-sm flex items-center justify-center gap-1.5 ml-auto transition-colors"
+                              variant="primary"
+                              size="sm"
+                              className="ml-auto"
+                              icon={<Key className="w-3.5 h-3.5" />}
                               id={`claim_funds_btn_${claim.id}`}
                             >
-                              <Key className="w-3.5 h-3.5" /> Enter Code
-                            </button>
+                              Enter Code
+                            </Button>
                           </td>
                         </tr>
                       );

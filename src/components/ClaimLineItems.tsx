@@ -68,6 +68,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
           </div>
         )}
 
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 text-xs">
           <thead className="bg-slate-50">
             <tr>
@@ -129,6 +130,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Full-Screen Overlay Modal */}
         <AnimatePresence>

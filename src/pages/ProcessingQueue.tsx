@@ -308,7 +308,7 @@ export const ProcessingQueue: React.FC = () => {
           value={`${oldestProcessingDays}d`}
           description="Longest waiting claim in Processing status."
           icon={Clock}
-          variant="info"
+          variant="warning"
         />
         <KPICard
           title="Advances & Liquidations"

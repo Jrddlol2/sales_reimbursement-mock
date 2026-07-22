@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, UserRole, Company } from '../types';
 import { useAuth } from '../components/AuthContext';
-import { getStatusColor, uploadFile, getUploadUrl } from '../utils';
+import { uploadFile, getUploadUrl } from '../utils';
+import { StatusBadge } from '../components/StatusBadge';
 import { 
   FileText, Plus, PaperPlaneRight, CheckCircle, Calendar, Clock, MapPin, 
   User, Envelope, ArrowRight, BookOpen, CheckSquare, Pencil, Eye, 
@@ -501,13 +502,7 @@ export const Moms: React.FC = () => {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className={`px-2 py-0.5 text-[10px] font-semibold border rounded-full ${
-              mom.status === MomStatus.COMPLETED
-                ? 'bg-green-50 text-green-700 border-green-200'
-                : 'bg-gray-100 text-gray-700 border-gray-200'
-            }`}>
-              {mom.status}
-            </span>
+            <StatusBadge status={mom.status} size="sm" />
             {mom.minutes_source === MinutesSource.UPLOADED && (
               <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 flex items-center gap-1">
                 <CloudArrowUp className="w-3 h-3" /> Uploaded

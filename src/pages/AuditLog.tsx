@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import Papa from 'papaparse';
 import { DownloadSimple, CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
-import { getStatusColor, getClaimNumber } from '../utils';
+import { getClaimNumber } from '../utils';
+import { StatusBadge } from '../components/StatusBadge';
 
 // Claim-related entries have a claim_number; user-admin entries have a
 // targetUser name. Everything else (Cash Advance / Liquidation events) has
@@ -139,10 +140,10 @@ export const AuditLog: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center text-[10px]">
-                          <span className={`px-1.5 py-0.5 rounded-sm ${getStatusColor(log.old_status)} font-bold`}>{log.old_status}</span>
-                          <span className="mx-2 text-slate-400 font-bold">→</span>
-                          <span className={`px-1.5 py-0.5 rounded-sm ${getStatusColor(log.new_status)} font-bold`}>{log.new_status}</span>
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={log.old_status} size="sm" />
+                          <span className="text-slate-400 font-bold">→</span>
+                          <StatusBadge status={log.new_status} size="sm" />
                         </div>
                         {log.reason && (
                           <div className="text-[10px] text-slate-500 whitespace-normal mt-1 max-w-md italic">
@@ -184,10 +185,10 @@ export const AuditLog: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center text-[10px]">
-                  <span className={`px-1.5 py-0.5 rounded-sm ${getStatusColor(log.old_status)} font-bold`}>{log.old_status}</span>
-                  <span className="mx-2 text-slate-400 font-bold">→</span>
-                  <span className={`px-1.5 py-0.5 rounded-sm ${getStatusColor(log.new_status)} font-bold`}>{log.new_status}</span>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={log.old_status} size="sm" />
+                  <span className="text-slate-400 font-bold">→</span>
+                  <StatusBadge status={log.new_status} size="sm" />
                 </div>
 
                 {log.reason && (

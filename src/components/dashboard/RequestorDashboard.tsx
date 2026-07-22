@@ -86,7 +86,7 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   // this card only covers the actions that aren't offered anywhere else.
   const quickActions = [
     { label: 'Create Minutes', icon: FileText, path: '/moms', colorClass: 'text-white', bgColorClass: 'bg-amber-500' },
-    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
+    { label: 'Schedule Review', icon: CalendarPlus, path: '/calendar', colorClass: 'text-white', bgColorClass: 'bg-brand' },
   ];
 
   const statusDistribution = [
@@ -136,9 +136,20 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
-        <DashboardHeader user={user} summaryText={`You currently have ${activeClaims.length} active claims and ${activeCadvs.length} pending cash advances.`} />
-        <DashboardPeriodFilter role={UserRole.REQUESTOR} />
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-6">
+        <DashboardHeader
+          user={user}
+          summaryText={
+            <>
+              You currently have <strong className="font-bold text-slate-900">{activeClaims.length} active claim{activeClaims.length === 1 ? '' : 's'}</strong> and{' '}
+              <strong className="font-bold text-slate-900">{activeCadvs.length} pending cash advance{activeCadvs.length === 1 ? '' : 's'}</strong>.
+            </>
+          }
+        />
+        <div className="flex flex-col items-end gap-2.5">
+          <QuickActionsCard actions={quickActions} layout="compact" />
+          <DashboardPeriodFilter role={UserRole.REQUESTOR} />
+        </div>
       </div>
 
       {/* My Requests KPIs come first — the top-line status of what a
@@ -170,8 +181,6 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
       <div className="mb-8">
         <CashAdvanceLiquidationSection />
       </div>
-
-      <QuickActionsCard actions={quickActions} layout="horizontal" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2">

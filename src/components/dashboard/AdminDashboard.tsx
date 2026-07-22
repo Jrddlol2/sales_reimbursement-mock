@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, UserRole } from '../../types';
+import { Link } from 'react-router-dom';
+import { User, Claim, CashAdvance, Liquidation, ClaimStatus, CashAdvanceStatus, LiquidationStatus, UserRole, SupportRequest, SupportRequestStatus, SupportRequestPriority } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { KPICard } from './KPICard';
 import { MetricCard } from './MetricCard';
@@ -7,12 +8,12 @@ import { DashboardPeriodFilter } from './DashboardPeriodFilter';
 import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
 import { AnalyticsCard } from './AnalyticsCard';
-import { SimpleLineChart, SimpleBarChart, DonutChart } from './AnalyticsCharts';
-import { Users, FileText, Envelope, ShieldCheck, Heartbeat, ChartBar, Briefcase, HardDrives, Gear, Archive, Clock as ClockIcon } from '@phosphor-icons/react';
+import { SimpleLineChart, DonutChart } from './AnalyticsCharts';
+import { Users, FileText, Envelope, ShieldCheck, Heartbeat, ChartBar, Briefcase, HardDrives, Gear, Archive, ArrowRight, Lifebuoy, Clock as ClockIcon } from '@phosphor-icons/react';
 import { formatPHP, getClaimNumber } from '../../utils';
 import { metricsForRole, MetricContext } from '../../metrics/registry';
 import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
-import { resolveScope, scopeLabel } from '../../metrics/timeScope';
+import { resolveScope } from '../../metrics/timeScope';
 import { StatusBadge } from '../StatusBadge';
 
 export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
@@ -23,6 +24,7 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
   const [cadvs, setCadvs] = useState<CashAdvance[]>([]);
   const [liqs, setLiqs] = useState<Liquidation[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
   const { resolveMetricRange, effectiveScope } = useDashboardPeriod();
   const [loading, setLoading] = useState(true);
 
@@ -32,13 +34,15 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
       apiFetch('/api/liquidations'),
-      apiFetch('/api/history')
-    ]).then(([u, cl, ca, lq, hist]) => {
+      apiFetch('/api/history'),
+      apiFetch('/api/support')
+    ]).then(([u, cl, ca, lq, hist, sr]) => {
       setUsers(u);
       setClaims(cl);
       setCadvs(ca);
       setLiqs(lq);
       setHistory(hist);
+      setSupportRequests(sr);
       setLoading(false);
     }).catch(console.error);
   }, []);
@@ -83,35 +87,6 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
   // --- EXECUTIVE KPIs & DATA ---
   const completedClaims = claims.filter(c => c.status === ClaimStatus.COMPLETED);
 
-  // Top Expense Categories — This Year (matches the chart's label; not a lifetime total).
-  const topExpenseCategoriesData = () => {
-    const yearRange = resolveScope('this_year');
-    const categories: Record<string, number> = {};
-    completedClaims
-      .filter(c => new Date(c.created_at) >= yearRange.start && new Date(c.created_at) <= yearRange.end)
-      .forEach(c => {
-        const cat = c.expense_category || 'Uncategorized';
-        categories[cat] = (categories[cat] || 0) + c.total_amount;
-      });
-    return Object.entries(categories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
-  };
-
-  // Department Comparison — This Month (consistent choice per spec; operational
-  // framing over lifetime, matching every other primary metric on this page).
-  const departmentScopeRange = resolveScope('this_month');
-  const departmentData = () => {
-    const deps: Record<string, number> = {};
-    claims
-      .filter(c => new Date(c.created_at) >= departmentScopeRange.start && new Date(c.created_at) <= departmentScopeRange.end)
-      .forEach(c => {
-        const u = users.find(u => u.id === c.requestor_id);
-        if (u) {
-          deps[u.department] = (deps[u.department] || 0) + 1;
-        }
-      });
-    return Object.keys(deps).map(k => ({ name: k, count: deps[k] }));
-  };
-
   // Annual Trends — Last 12 Months, monthly granularity (per spec).
   const monthlyExpenseData = () => {
     const months = [];
@@ -141,10 +116,31 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
     return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
   });
   
+  // Open support tickets, colored by the highest-priority one waiting —
+  // High -> danger red, Medium -> warning amber, Low -> neutral slate, so
+  // the icon itself communicates urgency without opening the inbox.
+  const openTickets = supportRequests.filter(sr => sr.status !== SupportRequestStatus.RESOLVED);
+  const highestOpenPriority = openTickets.some(sr => sr.priority === SupportRequestPriority.HIGH) ? SupportRequestPriority.HIGH
+    : openTickets.some(sr => sr.priority === SupportRequestPriority.MEDIUM) ? SupportRequestPriority.MEDIUM
+    : openTickets.length > 0 ? SupportRequestPriority.LOW
+    : undefined;
+  const supportBgColorClass = highestOpenPriority === SupportRequestPriority.HIGH ? 'bg-red-500'
+    : highestOpenPriority === SupportRequestPriority.MEDIUM ? 'bg-amber-500'
+    : 'bg-slate-400';
+
   const quickActions = [
-    { label: 'Manage Users', icon: Users, path: '/settings', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
-    { label: 'Audit Log', icon: ShieldCheck, path: '/audit', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
-    { label: 'System Emails', icon: Envelope, path: '/emails', colorClass: 'text-white', bgColorClass: 'bg-amber-500' }
+    { label: 'Manage Users', icon: Users, path: '/settings', colorClass: 'text-white', bgColorClass: 'bg-brand' },
+    { label: 'Audit Log', icon: ShieldCheck, path: '/audit', colorClass: 'text-white', bgColorClass: 'bg-indigo-500' },
+    { label: 'System Emails', icon: Envelope, path: '/emails', colorClass: 'text-white', bgColorClass: 'bg-amber-500' },
+    {
+      label: `Support Requests${openTickets.length > 0 ? ` (${openTickets.length} open, highest: ${highestOpenPriority})` : ''}`,
+      icon: Lifebuoy,
+      path: '/support',
+      colorClass: 'text-white',
+      bgColorClass: supportBgColorClass,
+      badgeCount: openTickets.length,
+      badgeColorClass: supportBgColorClass,
+    }
   ];
 
   const adminStatusDistribution = [
@@ -156,6 +152,11 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
   const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users, currentUser: user };
   const adminOperationalMetrics = metricsForRole(UserRole.ADMIN).filter(m => m.section !== 'all_time');
   const adminAllTimeMetrics = metricsForRole(UserRole.ADMIN).filter(m => m.section === 'all_time');
+  // Read-only oversight only — Admin never gets actionLabel/actionPath here,
+  // since Admin can't process payments (segregation of duties, not an
+  // oversight).
+  const adminPaymentRightNow = metricsForRole(UserRole.CUSTODIAN).filter(m => m.id === 'custodian_pending_payments' || m.id === 'custodian_outstanding_amount');
+  const adminPaymentThisPeriod = metricsForRole(UserRole.CUSTODIAN).filter(m => m.id !== 'custodian_pending_payments' && m.id !== 'custodian_outstanding_amount');
   const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
     admin_pending_approvals_systemwide: { actionLabel: 'View Audit Log', actionPath: '/audit' },
     admin_monthly_claims: { actionLabel: 'View Audit Log', actionPath: '/audit' },
@@ -173,15 +174,15 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
 
   return (
     <div>
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-8">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 mb-8">
         <DashboardHeader
            user={user}
            summaryText={view === 'executive'
-             ? `Enterprise Overview: ${claims.length + cadvs.length + liqs.length} total lifetime requests.`
-             : `System Health: ${users.length} active users, ${todayHistory.length} audit events today.`}
+             ? <>Enterprise Overview: <strong className="font-bold text-slate-900">{claims.length + cadvs.length + liqs.length} total lifetime requests</strong>.</>
+             : <>System Health: <strong className="font-bold text-slate-900">{users.length} active users</strong>, <strong className="font-bold text-slate-900">{todayHistory.length} audit events</strong> today.</>}
         />
-        <div className="flex items-center gap-3">
-          {view === 'executive' && <DashboardPeriodFilter role={UserRole.ADMIN} />}
+        <div className="flex flex-col items-end gap-2.5">
+          <QuickActionsCard actions={quickActions} layout="compact" />
           <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
             <button
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${view === 'executive' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
@@ -196,6 +197,7 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
               System Admin
             </button>
           </div>
+          {view === 'executive' && <DashboardPeriodFilter role={UserRole.ADMIN} />}
         </div>
       </div>
 
@@ -232,7 +234,12 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
           </div>
 
           <div className="mb-8">
-            <h2 className="text-lg font-bold text-slate-800 mb-1">Recent System Activity</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-slate-800">Recent System Activity</h2>
+              <Link to="/audit" className="text-xs font-bold text-brand hover:text-brand-hover inline-flex items-center gap-1">
+                View Full Audit Log <ArrowRight size={12} weight="bold" />
+              </Link>
+            </div>
             <p className="text-sm text-slate-500 mb-4">Latest status changes across every claim, cash advance, and liquidation</p>
             <div className="corp-card divide-y divide-slate-100">
               {recentSystemActivity.length === 0 ? (
@@ -264,16 +271,29 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             </div>
           </div>
 
+          {/* Only the headline trend chart lives here — category breakdowns
+              and department comparisons moved to /reporting so the same
+              analysis isn't duplicated in two places with two different
+              scopes. This card is the on-ramp to that deeper view. */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <AnalyticsCard title="Annual Trends (Last 12 Months)">
-              <SimpleLineChart data={monthlyExpenseData()} dataKey="Amount" name="Expenses (PHP)" />
-            </AnalyticsCard>
-            <AnalyticsCard title="Top Expense Categories (This Year)">
-              <DonutChart data={topExpenseCategoriesData()} centerCaption="Spend" />
-            </AnalyticsCard>
-            <AnalyticsCard title={`Requests by Department (${scopeLabel('this_month')})`}>
-              <SimpleBarChart data={departmentData()} dataKey="count" color="#2563eb" name="Requests" />
-            </AnalyticsCard>
+            <div className="lg:col-span-2">
+              <AnalyticsCard title="Annual Trends (Last 12 Months)">
+                <SimpleLineChart data={monthlyExpenseData()} dataKey="Amount" name="Expenses (PHP)" />
+              </AnalyticsCard>
+            </div>
+            <Link
+              to="/reporting"
+              className="corp-card p-6 flex flex-col justify-between hover:border-slate-300 hover:shadow-md transition-all group"
+            >
+              <div>
+                <ChartBar className="w-8 h-8 text-brand mb-3" weight="duotone" />
+                <h3 className="text-sm font-bold text-slate-900 mb-1">Full Analytics Report</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">Category breakdowns, department comparisons, and claim volume — the deep-dive view.</p>
+              </div>
+              <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-brand group-hover:gap-1.5 transition-all">
+                View Full Report <ArrowRight size={14} weight="bold" />
+              </span>
+            </Link>
           </div>
 
           {/* All-Time stats — visually separated (grey, no period filter applies) so
@@ -315,7 +335,27 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             />
           </div>
 
-          <QuickActionsCard actions={quickActions} layout="horizontal" />
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-slate-800">Payment Performance</h2>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-slate-100 px-2 py-1 rounded-full">Read-only</span>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">Custodian disbursement oversight — Admin cannot process payments</p>
+
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Right Now</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+              {adminPaymentRightNow.map(metric => (
+                <MetricCard key={metric.id} metric={metric} ctx={ctx} scope={effectiveScope(metric)} value={metric.compute(ctx, resolveMetricRange(metric))} />
+              ))}
+            </div>
+
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">This Period</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {adminPaymentThisPeriod.map(metric => (
+                <MetricCard key={metric.id} metric={metric} ctx={ctx} scope={effectiveScope(metric)} value={metric.compute(ctx, resolveMetricRange(metric))} />
+              ))}
+            </div>
+          </div>
 
           <div className="mb-8">
             <AnalyticsCard title="System Data Distribution">

@@ -12,6 +12,11 @@ import {
 } from '../types';
 import { TimeScope, DateRange, isWithinRange } from './timeScope';
 import { CardVariant } from '../components/dashboard/KPICard';
+import {
+  Icon, Tray, ListChecks, PaperPlaneTilt, CurrencyCircleDollar, ChartPieSlice, Clock,
+  FileText, HourglassMedium, CheckCircle, XCircle, CalendarCheck, Receipt, Wallet,
+  Warning, ChartLineUp, UsersThree, UserCircle, Buildings, CalendarBlank, Archive,
+} from '@phosphor-icons/react';
 
 export interface MetricContext {
   claims: Claim[];
@@ -35,6 +40,11 @@ export interface MetricDefinition {
   section?: 'primary' | 'all_time';
   /** Card color, based on what the metric MEANS (actionable/positive/negative/backlog/neutral) — not derived from realtime or zero-ness. */
   variant: CardVariant;
+  /** Icon matched to what this metric specifically means, not just its data
+   *  format — several metrics share format:'number' but represent very
+   *  different things (a queue vs. a count vs. a rate), so they need to look
+   *  different at a glance. Falls back to a format-based icon if omitted. */
+  icon?: Icon;
   compute: (ctx: MetricContext, range: DateRange) => number | string;
 }
 
@@ -64,6 +74,7 @@ const approverMetrics: MetricDefinition[] = [
     roles: [UserRole.APPROVER],
     format: 'number',
     variant: 'action',
+    icon: Tray,
     description: 'Claims from direct reports awaiting your decision',
     compute: ({ claims, currentUser }) =>
       claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === currentUser.id).length,
@@ -76,6 +87,7 @@ const approverMetrics: MetricDefinition[] = [
     roles: [UserRole.APPROVER],
     format: 'number',
     variant: 'action',
+    icon: ListChecks,
     description: 'Reimbursements, Cash Advances & Liquidations needing your review',
     compute: ({ claims, cashAdvances, liquidations, currentUser }) => {
       const pendingClaims = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === currentUser.id).length;
@@ -88,13 +100,32 @@ const approverMetrics: MetricDefinition[] = [
     },
   },
   {
+    id: 'approver_oldest_pending',
+    label: 'Oldest Pending',
+    scope: 'today',
+    realtime: true,
+    roles: [UserRole.APPROVER],
+    format: 'text',
+    variant: 'warning',
+    icon: HourglassMedium,
+    description: 'Longest waiting claim in your approval queue',
+    compute: ({ claims, currentUser }) => {
+      const pending = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL && c.current_approver_id === currentUser.id);
+      if (pending.length === 0) return '0d';
+      const oldest = pending.reduce((earliest, c) => new Date(c.updated_at) < new Date(earliest.updated_at) ? c : earliest);
+      const days = Math.max(0, Math.floor((Date.now() - new Date(oldest.updated_at).getTime()) / (1000 * 60 * 60 * 24)));
+      return `${days}d`;
+    },
+  },
+  {
     id: 'approver_claims_submitted',
     label: 'Claims Submitted',
     scope: 'this_month',
     realtime: false,
     roles: [UserRole.APPROVER],
     format: 'number',
-    variant: 'info',
+    variant: 'indigo',
+    icon: PaperPlaneTilt,
     description: 'Submitted by your direct reports',
     compute: ({ claims, users, currentUser }, range) => {
       const reports = directReportIds(users, currentUser.id);
@@ -108,7 +139,7 @@ const approverMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.APPROVER],
     format: 'currency',
-    variant: 'info',
+    variant: 'teal',
     description: 'Total claim value from your direct reports',
     compute: ({ claims, users, currentUser }, range) => {
       const reports = directReportIds(users, currentUser.id);
@@ -124,7 +155,7 @@ const approverMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.APPROVER],
     format: 'percent',
-    variant: 'info',
+    variant: 'success',
     description: 'Of decisions you made',
     compute: ({ claims, currentUser }, range) => {
       const decisions = claims.flatMap(c => (c as any).approvals || [])
@@ -141,7 +172,7 @@ const approverMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.APPROVER],
     format: 'hours',
-    variant: 'info',
+    variant: 'violet',
     description: 'Submission to your decision',
     compute: ({ claims, currentUser }, range) => {
       const decided = claims.filter(c =>
@@ -170,6 +201,7 @@ const requestorMetrics: MetricDefinition[] = [
     roles: [UserRole.REQUESTOR],
     format: 'number',
     variant: 'info',
+    icon: FileText,
     description: 'Claims you submitted',
     compute: ({ claims, currentUser }, range) =>
       claims.filter(c => c.requestor_id === currentUser.id && isWithinRange(c.created_at, range)).length,
@@ -181,7 +213,8 @@ const requestorMetrics: MetricDefinition[] = [
     realtime: true,
     roles: [UserRole.REQUESTOR],
     format: 'number',
-    variant: 'action',
+    variant: 'warning',
+    icon: HourglassMedium,
     description: 'Awaiting approval or your revision',
     compute: ({ claims, currentUser }) =>
       claims.filter(c => c.requestor_id === currentUser.id && [ClaimStatus.PENDING_APPROVAL, ClaimStatus.RETURNED].includes(c.status)).length,
@@ -194,6 +227,7 @@ const requestorMetrics: MetricDefinition[] = [
     roles: [UserRole.REQUESTOR],
     format: 'number',
     variant: 'success',
+    icon: CheckCircle,
     description: 'Moved past approval this month',
     compute: ({ claims, currentUser }, range) =>
       claims.filter(c => {
@@ -210,6 +244,7 @@ const requestorMetrics: MetricDefinition[] = [
     roles: [UserRole.REQUESTOR],
     format: 'number',
     variant: 'danger',
+    icon: XCircle,
     description: 'Declined this month',
     compute: ({ claims, currentUser }, range) =>
       claims.filter(c => {
@@ -225,7 +260,7 @@ const requestorMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.REQUESTOR],
     format: 'currency',
-    variant: 'success',
+    variant: 'teal',
     description: 'Completed & paid out this year',
     compute: ({ claims, currentUser }, range) =>
       claims
@@ -246,6 +281,7 @@ const custodianMetrics: MetricDefinition[] = [
     roles: [UserRole.CUSTODIAN],
     format: 'number',
     variant: 'action',
+    icon: Tray,
     description: 'Approved claims awaiting disbursement',
     compute: ({ claims }) => claims.filter(c => c.status === ClaimStatus.PROCESSING).length,
   },
@@ -267,7 +303,8 @@ const custodianMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.CUSTODIAN],
     format: 'number',
-    variant: 'info',
+    variant: 'indigo',
+    icon: CalendarCheck,
     description: 'Marked Ready for Claim this week',
     compute: ({ claims }, range) =>
       claims.filter(c => isWithinRange(historyEnteredAt(c, ClaimStatus.READY_FOR_CLAIM), range)).length,
@@ -279,7 +316,8 @@ const custodianMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.CUSTODIAN],
     format: 'number',
-    variant: 'info',
+    variant: 'cyan',
+    icon: Receipt,
     description: 'Marked Ready for Claim this month',
     compute: ({ claims }, range) =>
       claims.filter(c => isWithinRange(historyEnteredAt(c, ClaimStatus.READY_FOR_CLAIM), range)).length,
@@ -291,7 +329,8 @@ const custodianMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.CUSTODIAN],
     format: 'currency',
-    variant: 'info',
+    variant: 'teal',
+    icon: Wallet,
     description: 'Value released this month',
     compute: ({ claims }, range) =>
       claims
@@ -305,7 +344,7 @@ const custodianMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.CUSTODIAN],
     format: 'hours',
-    variant: 'info',
+    variant: 'fuchsia',
     description: 'Approved to Ready-for-Claim',
     compute: ({ claims }, range) => {
       const processed = claims.filter(c => isWithinRange(historyEnteredAt(c, ClaimStatus.READY_FOR_CLAIM), range));
@@ -332,6 +371,7 @@ const adminMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'number',
     variant: 'warning',
+    icon: Warning,
     description: 'Claims currently awaiting an Approver decision, across every department',
     compute: ({ claims }) => claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length,
   },
@@ -342,7 +382,8 @@ const adminMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.ADMIN],
     format: 'number',
-    variant: 'info',
+    variant: 'indigo',
+    icon: FileText,
     description: 'Claims submitted this month',
     compute: ({ claims }, range) => claims.filter(c => isWithinRange(c.created_at, range)).length,
   },
@@ -353,7 +394,7 @@ const adminMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.ADMIN],
     format: 'currency',
-    variant: 'info',
+    variant: 'teal',
     description: 'Completed claims, calendar year to date',
     compute: ({ claims }, range) =>
       claims
@@ -368,7 +409,8 @@ const adminMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.ADMIN],
     format: 'number',
-    variant: 'info',
+    variant: 'cyan',
+    icon: UsersThree,
     description: 'Users with claim or approval activity this month',
     compute: ({ claims, users }, range) => {
       const active = new Set<string>();
@@ -388,7 +430,7 @@ const adminMetrics: MetricDefinition[] = [
     realtime: false,
     roles: [UserRole.ADMIN],
     format: 'percent',
-    variant: 'info',
+    variant: 'fuchsia',
     description: 'Approved vs. all decisions system-wide',
     compute: ({ claims }, range) => {
       const decisions = claims.flatMap(c => (c as any).approvals || []).filter((a: any) => isWithinRange(a.timestamp, range));
@@ -408,7 +450,8 @@ const adminAllTimeMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'number',
     section: 'all_time',
-    variant: 'info',
+    variant: 'indigo',
+    icon: UserCircle,
     compute: ({ users }) => users.length,
   },
   {
@@ -419,7 +462,8 @@ const adminAllTimeMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'number',
     section: 'all_time',
-    variant: 'info',
+    variant: 'cyan',
+    icon: Buildings,
     compute: ({ users }) => new Set(users.map(u => u.department).filter(Boolean)).size,
   },
   {
@@ -430,7 +474,8 @@ const adminAllTimeMetrics: MetricDefinition[] = [
     roles: [UserRole.ADMIN],
     format: 'number',
     section: 'all_time',
-    variant: 'info',
+    variant: 'violet',
+    icon: CalendarBlank,
     description: 'Span between earliest and latest claim record',
     compute: ({ claims }) => {
       if (claims.length === 0) return 0;
@@ -448,6 +493,7 @@ const adminAllTimeMetrics: MetricDefinition[] = [
     format: 'number',
     section: 'all_time',
     variant: 'success',
+    icon: Archive,
     description: 'Lifetime / archival total',
     compute: ({ claims }) => claims.filter(c => c.status === ClaimStatus.COMPLETED).length,
   },

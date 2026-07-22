@@ -76,11 +76,11 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             aria-modal="true"
             aria-labelledby={options.title ? 'confirm_modal_title' : undefined}
             aria-describedby="confirm_modal_message"
-            className={`relative bg-white rounded-lg shadow-2xl max-w-md w-full border border-gray-200 ${
+            className={`relative bg-white rounded-xl shadow-2xl max-w-md w-full border border-gray-200 ${
               isExiting ? 'animate-modal-out' : 'animate-modal-in'
             }`}
           >
-            <div className={`p-5 border-b ${isDanger ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'} rounded-t-lg`}>
+            <div className={`p-5 border-b ${isDanger ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'} rounded-t-xl`}>
               <div className="flex items-start gap-3">
                 <Warning className={`w-5 h-5 shrink-0 mt-0.5 ${isDanger ? 'text-red-500' : 'text-amber-500'}`} />
                 <div>
@@ -93,13 +93,13 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               <button
                 ref={cancelButtonRef}
                 onClick={() => handle(false)}
-                className="px-4 py-1.5 border border-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="px-4 py-1.5 border border-gray-300 text-gray-700 rounded-[10px] text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 {options.cancelLabel || 'Cancel'}
               </button>
               <button
                 onClick={() => handle(true)}
-                className={`px-4 py-1.5 text-white rounded text-sm font-semibold shadow-sm transition-colors ${
+                className={`px-4 py-1.5 text-white rounded-[10px] text-sm font-semibold shadow-sm transition-colors ${
                   isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand hover:bg-brand-hover'
                 }`}
               >

@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole, Email } from '../types';
 import { apiFetch } from '../lib/api';
-import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, Tray, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy, ChartBar, UserCircle } from '@phosphor-icons/react';
+import { Bell, SignOut, CaretRight, MagnifyingGlass, SquaresFour, List, PlusCircle, ListChecks, ClipboardText, CalendarBlank, EnvelopeSimple, ShieldCheck, Gear, BookOpen, UserSwitch, Database, Wallet, ClockCounterClockwise, Archive, UsersThree, Buildings, Lifebuoy, ChartBar, UserCircle } from '@phosphor-icons/react';
 import { formatPHP, IS_DEMO_MODE } from '../utils';
 import { formatDistanceToNowStrict } from 'date-fns';
 
@@ -13,15 +13,18 @@ export const navItems = [
   { label: 'Processing Queue', path: '/processing', icon: ListChecks, group: 'PRIMARY', roles: [UserRole.CUSTODIAN] },
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'PRIMARY', roles: [UserRole.REQUESTOR] },
   { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.CUSTODIAN] },
-  // Approver's own duties are split into two distinct sidebar groups —
-  // the queue of things to decide on ("APPROVAL CENTER") vs. their own
-  // submitted requests ("MY REQUESTS") — so they never blur together.
-  { label: 'Approver Inbox', path: '/approvals', icon: Tray, group: 'APPROVAL CENTER', roles: [UserRole.APPROVER] },
+  // The Approver's queue of things to decide on now lives inside the
+  // Dashboard itself (no separate "Approver Inbox" page/nav item — see
+  // ApproverDashboard.tsx) — only their own submitted requests get a
+  // distinct sidebar group, so those never blur together with the queue.
   { label: 'My Requests', path: '/my-requests', icon: UserCircle, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   // Approvers submit and report their own claims the same as any Requestor,
   // so they need the same "collect my processed claim" destination too —
   // scoped to /ready-to-claim's own requestor_id filter, not a duplicate route.
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
+  // Same page Requestors/Custodians get — TransactionHistory.tsx scopes it
+  // to the Approver's own submissions specifically (not their reports').
+  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -38,7 +41,6 @@ export const navItems = [
 const sectionMap: Record<string, string> = {
   'Calendar': 'calendar',
   'System Emails': 'emails',
-  'Approver Inbox': 'inbox',
   'Processing Queue': 'processing',
   'Dashboard': 'dashboard',
   'Ready to Claim': 'readyToClaim'
@@ -250,7 +252,6 @@ export const Layout: React.FC = () => {
     const path = location.pathname;
     if (path === '/') return 'Dashboard';
     if (path.startsWith('/calendar')) return 'Calendar';
-    if (path.startsWith('/approvals')) return 'Approver Inbox';
     if (path.startsWith('/processing')) return 'Processing Queue';
     if (path.startsWith('/ready-to-claim')) return 'Ready to Claim';
     if (path.startsWith('/my-requests')) return 'My Requests';
@@ -297,7 +298,7 @@ export const Layout: React.FC = () => {
         <div className="h-16 flex items-center px-4 border-b border-slate-100 shrink-0 bg-gradient-to-r from-brand/[0.06] to-transparent">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-md hover:bg-slate-50"
+            className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-lg hover:bg-slate-50"
             aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <List className="w-5 h-5" />
@@ -336,7 +337,10 @@ export const Layout: React.FC = () => {
                 {groupedItems[groupName].map(item => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
-                  const section = sectionMap[item.label];
+                  // The Approver's "pending items" badge used to live on the
+                  // separate Approver Inbox nav item; now that queue is part
+                  // of the Dashboard itself, its badge count follows it there.
+                  const section = (item.label === 'Dashboard' && user?.role === UserRole.APPROVER) ? 'inbox' : sectionMap[item.label];
                   const count = section ? activityStatus[section] || 0 : 0;
 
                   return (
@@ -496,7 +500,7 @@ export const Layout: React.FC = () => {
           <div className="flex items-center text-[13px] text-slate-500 font-medium min-w-0">
              <button
                onClick={() => setSidebarOpen(true)}
-               className="md:hidden text-slate-500 hover:text-slate-700 p-1.5 mr-1.5 rounded-md hover:bg-slate-50 transition-colors shrink-0"
+               className="md:hidden text-slate-500 hover:text-slate-700 p-1.5 mr-1.5 rounded-lg hover:bg-slate-50 transition-colors shrink-0"
                id="mobile_sidebar_hamburger"
                aria-label="Open sidebar menu"
              >
@@ -530,7 +534,7 @@ export const Layout: React.FC = () => {
 
             {/* Results dropdown */}
             {isSearching && searchQuery.trim() && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-xl max-h-[350px] overflow-y-auto z-50 text-slate-800 animate-dropdown-in" id="global_search_results_container">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[350px] overflow-y-auto z-50 text-slate-800 animate-dropdown-in" id="global_search_results_container">
                 {isSearchLoading ? (
                   <div className="p-4 text-center text-xs text-slate-500 italic">Searching...</div>
                 ) : searchResults.claims.length === 0 && searchResults.cadvs.length === 0 && searchResults.liqs.length === 0 ? (
@@ -634,7 +638,7 @@ export const Layout: React.FC = () => {
               </button>
 
               {isNotifOpen && (
-                <div className="absolute top-full right-0 mt-1 w-80 bg-white border border-slate-200 rounded-md shadow-xl max-h-[420px] overflow-y-auto z-50 text-slate-800 animate-dropdown-in" id="notif_dropdown">
+                <div className="absolute top-full right-0 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl max-h-[420px] overflow-y-auto z-50 text-slate-800 animate-dropdown-in" id="notif_dropdown">
                   <div className="px-3 py-2.5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
                     <span className="text-xs font-bold text-slate-700">Notifications</span>
                     {unreadCount > 0 && (

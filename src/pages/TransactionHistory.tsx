@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import { Claim, CashAdvance, Liquidation } from '../types';
+import { Claim, CashAdvance, Liquidation, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
@@ -46,8 +46,19 @@ export const TransactionHistory: React.FC = () => {
       apiFetch('/api/liquidations')
     ])
       .then(([claimsData, cadvsData, liqsData]: [Claim[], CashAdvance[], Liquidation[]]) => {
+        // /api/claims etc. return everything the caller's role can see —
+        // for an Approver that includes their direct reports' claims too
+        // (needed for the approval queue), not just their own submissions.
+        // This page is specifically the Approver's own history, so scope it
+        // down the same way MyRequests.tsx does. Requestor/Custodian keep
+        // their existing (already-correct) unfiltered behavior.
+        const isOwn = user?.role === UserRole.APPROVER;
+        const ownClaims = isOwn ? claimsData.filter(c => c.requestor_id === user!.id) : claimsData;
+        const ownCadvs = isOwn ? cadvsData.filter((c: any) => c.requestorId === user!.id) : cadvsData;
+        const ownLiqs = isOwn ? liqsData.filter((l: any) => l.requestorId === user!.id) : liqsData;
+
         const unified: UnifiedActivityItem[] = [
-          ...claimsData.map(c => ({
+          ...ownClaims.map(c => ({
             id: c.id,
             reference: c.claim_number || `REIM-${c.id.substring(0, 6)}`,
             type: 'Reimbursement' as const,
@@ -56,7 +67,7 @@ export const TransactionHistory: React.FC = () => {
             date: c.created_at,
             path: `/claims/${c.id}`
           })),
-          ...cadvsData.map((c: any) => ({
+          ...ownCadvs.map((c: any) => ({
             id: c.id,
             reference: `CADV-${c.id.substring(0, 6)}`,
             type: 'Cash Advance' as const,
@@ -65,7 +76,7 @@ export const TransactionHistory: React.FC = () => {
             date: c.createdAt || c.releaseDate || '',
             path: `/cash-advances/${c.id}`
           })),
-          ...liqsData.map((l: any) => ({
+          ...ownLiqs.map((l: any) => ({
             id: l.id,
             reference: `LIQ-${l.id.substring(0, 6)}`,
             type: 'Liquidation' as const,

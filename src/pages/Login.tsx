@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import { apiFetch } from '../lib/api';
 import { User } from '../types';
+import { Button } from '../components/ui/Button';
 
 export const Login: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -50,7 +51,7 @@ export const Login: React.FC = () => {
               className="w-full border-gray-300 rounded-md shadow-sm focus:border-brand focus:ring-brand sm:text-sm p-2 border"
               value={selectedEmail}
               onChange={e => setSelectedEmail(e.target.value)}
-              placeholder="name@example.com"
+              placeholder="name@mgenesis.com"
             />
           </div>
           <div>
@@ -63,21 +64,18 @@ export const Login: React.FC = () => {
               readOnly
             />
           </div>
-          <button 
-            type="submit"
-            className="w-full bg-brand text-white rounded py-2 px-4 text-sm font-medium hover:bg-brand-hover transition-colors shadow-sm"
-          >
+          <Button type="submit" variant="primary" className="w-full">
             Log in
-          </button>
+          </Button>
         </form>
 
         <div className="mt-8 bg-gray-50 border border-gray-200 rounded p-4">
           <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Demo Accounts</h3>
           <ul className="text-sm text-gray-600 space-y-1">
-            <li><strong>alice@example.com</strong> (Requestor)</li>
-            <li><strong>bob@example.com</strong> (Approver)</li>
-            <li><strong>carol@example.com</strong> (Custodian)</li>
-            <li><strong>dave@example.com</strong> (Admin)</li>
+            <li><strong>alice@mgenesis.com</strong> (Requestor)</li>
+            <li><strong>bob@mgenesis.com</strong> (Approver)</li>
+            <li><strong>carol@mgenesis.com</strong> (Custodian)</li>
+            <li><strong>dave@mgenesis.com</strong> (Admin)</li>
           </ul>
         </div>
       </div>

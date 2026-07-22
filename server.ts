@@ -43,27 +43,51 @@ let systemSettings = {
 let claimCounter = 123;
 
 // Company Directory - canonical master list of client companies. Seeded from
-// the same names the mock-data generators use (see SEED_COMPANY_NAMES below)
+// the same names the mock-data generators use (see SEED_COMPANIES below)
 // so seeding and the real directory share one source of truth: any client
 // name touched by seeding or by a real MOM submission funnels through
 // getOrCreateCompany() and ends up here exactly once.
-const SEED_COMPANY_NAMES = [
+const SEED_COMPANIES: { name: string; industry: string; notes: string }[] = [
   // Sales
-  'SM Prime Holdings', 'PLDT Inc', 'Jollibee Foods Corp', 'Bank of the Philippine Islands',
-  'Globe Telecom', 'San Miguel Corporation', 'Meralco', 'BDO Unibank',
+  { name: 'SM Prime Holdings', industry: 'Real Estate & Retail', notes: 'Enterprise account — mall and residential developments, decade-long relationship.' },
+  { name: 'PLDT Inc', industry: 'Telecommunications', notes: 'National telco carrier; ongoing infrastructure and connectivity contracts.' },
+  { name: 'Jollibee Foods Corp', industry: 'Food & Beverage', notes: 'Fast-food franchise group; recurring catering and supply agreements.' },
+  { name: 'Bank of the Philippine Islands', industry: 'Banking & Finance', notes: 'Long-standing corporate banking client, multiple branches engaged.' },
+  { name: 'Globe Telecom', industry: 'Telecommunications', notes: 'Competing telco account, handled by a separate sales pod.' },
+  { name: 'San Miguel Corporation', industry: 'Conglomerate', notes: 'Diversified food, beverage, and infrastructure holding company.' },
+  { name: 'Meralco', industry: 'Utilities', notes: 'Power distribution utility; regulated-sector account, longer sales cycles.' },
+  { name: 'BDO Unibank', industry: 'Banking & Finance', notes: 'Largest local bank by assets; high-value, high-touch relationship.' },
   // Marketing
-  'Creative Agency', 'Partner Promo Group', 'Media Corp',
+  { name: 'Creative Agency', industry: 'Advertising & Marketing', notes: 'Retained creative and production partner for campaign assets.' },
+  { name: 'Partner Promo Group', industry: 'Marketing & Events', notes: 'Handles promotional campaigns and in-store activations.' },
+  { name: 'Media Corp', industry: 'Media & Broadcasting', notes: 'Ad placement and sponsorship partner across TV and digital.' },
   // Engineering
-  'Internal Operations', 'Beta Testing Corp', 'DevOps Consultants',
+  { name: 'Internal Operations', industry: 'Internal', notes: 'Cross-department engineering support requests, not an external client.' },
+  { name: 'Beta Testing Corp', industry: 'Software QA', notes: 'External beta/UAT partner for pre-release builds.' },
+  { name: 'DevOps Consultants', industry: 'IT Consulting', notes: 'Infrastructure and CI/CD advisory retainer.' },
   // Operations
-  'Headquarters', 'Cebu Branch Office', 'Manila Warehouse',
+  { name: 'Headquarters', industry: 'Internal', notes: 'Main office — facilities and administrative expenses.' },
+  { name: 'Cebu Branch Office', industry: 'Internal', notes: 'Regional office covering Visayas operations.' },
+  { name: 'Manila Warehouse', industry: 'Internal', notes: 'Logistics and inventory hub serving NCR.' },
   // Used by the hand-written /api/admin/seed demo records and mkMomAndClaim
-  'Ayala Land Inc', 'Maxs Restaurant Corp', 'JG Summit', 'Robinsons Land Corp',
-  'Cebu Pacific Air', 'Metrobank', 'Internal / Partner'
+  { name: 'Ayala Land Inc', industry: 'Real Estate', notes: 'Premium property developer; executive-level relationship.' },
+  { name: 'Maxs Restaurant Corp', industry: 'Food & Beverage', notes: 'Restaurant chain; catering and corporate events account.' },
+  { name: 'JG Summit', industry: 'Conglomerate', notes: 'Diversified holdings spanning aviation, food, and petrochemicals.' },
+  { name: 'Robinsons Land Corp', industry: 'Real Estate', notes: 'Mall and mixed-use property developer.' },
+  { name: 'Cebu Pacific Air', industry: 'Aviation', notes: 'Airline partner for travel and logistics arrangements.' },
+  { name: 'Metrobank', industry: 'Banking & Finance', notes: 'Corporate banking and treasury services relationship.' },
+  { name: 'Internal / Partner', industry: 'Internal', notes: 'Catch-all bucket for internal or not-yet-classified partner meetings.' },
+  // Referenced by name only in the hand-written demo MOM records further
+  // below (mkMom calls) — listed here too so getOrCreateCompany() finds them
+  // already seeded with real detail instead of creating a bare stub.
+  { name: 'Aboitiz Equity', industry: 'Conglomerate', notes: 'Diversified holdings in power, banking, and food.' },
+  { name: 'San Miguel Corp', industry: 'Conglomerate', notes: 'Diversified food, beverage, and infrastructure holding company.' },
+  { name: 'Megaworld Corp', industry: 'Real Estate', notes: 'Township and mixed-use property developer.' },
+  { name: 'Robinsons Land', industry: 'Real Estate', notes: 'Mall and mixed-use property developer.' },
 ];
 
 const buildInitialCompanies = (): Company[] =>
-  SEED_COMPANY_NAMES.map(name => ({ id: uuidv4(), name }));
+  SEED_COMPANIES.map(c => ({ id: uuidv4(), name: c.name, industry: c.industry, notes: c.notes }));
 
 let companies: Company[] = buildInitialCompanies();
 
@@ -82,25 +106,30 @@ const getOrCreateCompany = (name?: string | null): void => {
 // chains. Shared by both /api/admin/seed and /api/admin/reset so the two
 // never drift apart.
 const buildDefaultUsers = (): User[] => [
-  { id: 'u13', name: 'Mia Requestor', email: 'mia@example.com', role: UserRole.REQUESTOR, department: 'Marketing', job_title: 'Marketing Specialist', reports_to: 'u14' },
-  { id: 'u14', name: 'Noah Approver', email: 'noah@example.com', role: UserRole.APPROVER, department: 'Marketing', job_title: 'Marketing Director', reports_to: 'u19' },
-  { id: 'u15', name: 'Olivia Requestor', email: 'olivia@example.com', role: UserRole.REQUESTOR, department: 'Engineering', job_title: 'Software Engineer', reports_to: 'u16' },
-  { id: 'u16', name: 'Peter Approver', email: 'peter@example.com', role: UserRole.APPROVER, department: 'Engineering', job_title: 'Engineering Manager', reports_to: 'u19' },
-  { id: 'u17', name: 'Quinn Requestor', email: 'quinn@example.com', role: UserRole.REQUESTOR, department: 'Operations', job_title: 'Operations Coordinator', reports_to: 'u18' },
-  { id: 'u18', name: 'Ryan Approver', email: 'ryan@example.com', role: UserRole.APPROVER, department: 'Operations', job_title: 'Operations Manager', reports_to: 'u19' },
-  { id: 'u19', name: 'Sarah Executive', email: 'sarah@example.com', role: UserRole.APPROVER, department: 'Executive', job_title: 'VP of Operations', reports_to: null },
-  { id: 'u1', name: 'Alice Requestor', email: 'alice@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
-  { id: 'u2', name: 'Bob Approver', email: 'bob@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
-  { id: 'u3', name: 'Carol Custodian', email: 'carol@example.com', role: UserRole.CUSTODIAN, department: 'Finance', job_title: 'Reimbursement Processor', reports_to: null },
-  { id: 'u4', name: 'Dave Admin', email: 'dave@example.com', role: UserRole.ADMIN, department: 'IT', job_title: 'System Admin', reports_to: null },
-  { id: 'u5', name: 'Eve Requestor', email: 'eve@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
-  { id: 'u6', name: 'Frank Requestor', email: 'frank@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
-  { id: 'u7', name: 'Grace Approver', email: 'grace@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
-  { id: 'u8', name: 'Henry Approver', email: 'henry@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
-  { id: 'u9', name: 'Ivy Senior Approver', email: 'ivy@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'VP of Sales', reports_to: null },
-  { id: 'u10', name: 'Jack Mid-Level Approver', email: 'jack@example.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Regional Sales Manager', reports_to: 'u9' },
-  { id: 'u11', name: 'Kyle Requestor', email: 'kyle@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u10' },
-  { id: 'u12', name: 'Liam Requestor', email: 'liam@example.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u10' }
+  { id: 'u13', name: 'Mia Fernandez', email: 'mia@mgenesis.com', role: UserRole.REQUESTOR, department: 'Marketing', job_title: 'Marketing Specialist', reports_to: 'u14' },
+  { id: 'u14', name: 'Noah Villanueva', email: 'noah@mgenesis.com', role: UserRole.APPROVER, department: 'Marketing', job_title: 'Marketing Director', reports_to: 'u19' },
+  { id: 'u15', name: 'Olivia Cruz', email: 'olivia@mgenesis.com', role: UserRole.REQUESTOR, department: 'Engineering', job_title: 'Software Engineer', reports_to: 'u16' },
+  { id: 'u16', name: 'Peter Aquino', email: 'peter@mgenesis.com', role: UserRole.APPROVER, department: 'Engineering', job_title: 'Engineering Manager', reports_to: 'u19' },
+  { id: 'u17', name: 'Quinn Domingo', email: 'quinn@mgenesis.com', role: UserRole.REQUESTOR, department: 'Operations', job_title: 'Operations Coordinator', reports_to: 'u18' },
+  { id: 'u18', name: 'Ryan Torres', email: 'ryan@mgenesis.com', role: UserRole.APPROVER, department: 'Operations', job_title: 'Operations Manager', reports_to: 'u19' },
+  { id: 'u19', name: 'Sarah Bautista', email: 'sarah@mgenesis.com', role: UserRole.APPROVER, department: 'Executive', job_title: 'VP of Operations', reports_to: null },
+  { id: 'u1', name: 'Alice Reyes', email: 'alice@mgenesis.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
+  { id: 'u2', name: 'Bob Santos', email: 'bob@mgenesis.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
+  { id: 'u3', name: 'Carol Ramos', email: 'carol@mgenesis.com', role: UserRole.CUSTODIAN, department: 'Finance', job_title: 'Reimbursement Processor', reports_to: null },
+  { id: 'u4', name: 'Dave Lopez', email: 'dave@mgenesis.com', role: UserRole.ADMIN, department: 'IT', job_title: 'System Admin', reports_to: null },
+  { id: 'u5', name: 'Eve Garcia', email: 'eve@mgenesis.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
+  { id: 'u6', name: 'Frank Mendoza', email: 'frank@mgenesis.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u2' },
+  { id: 'u7', name: 'Grace Navarro', email: 'grace@mgenesis.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
+  { id: 'u8', name: 'Henry Castillo', email: 'henry@mgenesis.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Sales Director', reports_to: 'u9' },
+  { id: 'u9', name: 'Ivy Salazar', email: 'ivy@mgenesis.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'VP of Sales', reports_to: null },
+  { id: 'u10', name: 'Jack Herrera', email: 'jack@mgenesis.com', role: UserRole.APPROVER, department: 'Sales', job_title: 'Regional Sales Manager', reports_to: 'u9' },
+  { id: 'u11', name: 'Kyle Ocampo', email: 'kyle@mgenesis.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u10' },
+  { id: 'u12', name: 'Liam Villareal', email: 'liam@mgenesis.com', role: UserRole.REQUESTOR, department: 'Sales', job_title: 'Sales Executive', reports_to: 'u10' },
+  // Marketing had only one requestor (Mia) under Noah, making any
+  // per-requestor comparison chart on his dashboard a single bar. These two
+  // give Marketing the same "one approver, multiple reports" shape Sales has.
+  { id: 'u20', name: 'Ella Flores', email: 'ella@mgenesis.com', role: UserRole.REQUESTOR, department: 'Marketing', job_title: 'Marketing Coordinator', reports_to: 'u14' },
+  { id: 'u21', name: 'Marco Bernardo', email: 'marco@mgenesis.com', role: UserRole.REQUESTOR, department: 'Marketing', job_title: 'Content Strategist', reports_to: 'u14' }
 ];
 
 // Email Transport Mock
@@ -113,7 +142,7 @@ const sendEmail = (toOrId: string, subject: string, body: string, ccId?: string,
   const toEmail = recipient ? recipient.email : toOrId;
   const recipientId = recipient ? recipient.id : 'external';
   const recipientName = opts?.recipientName || (recipient ? recipient.name : toOrId.split('@')[0]);
-  const fromLine = opts?.plain ? (opts.fromLabel || 'system@reimbursement.local') : "SharePoint Online <no-reply@company.com>";
+  const fromLine = opts?.plain ? (opts.fromLabel || 'system@reimbursement.local') : "SharePoint Online <no-reply@mgenesis.com>";
 
   const emailTimestamp = opts?.timestamp || new Date().toISOString();
   const sentString = new Date(emailTimestamp).toLocaleString('en-US', { timeZone: 'Asia/Manila' });
@@ -185,7 +214,21 @@ Business Support Management Assistant`;
   console.log(`----------------------------\n`);
 };
 
+// Simulated initial Entra ID sync: employment status defaults to Active, and
+// approval authority defaults to "has at least one direct report" — see
+// docs/hierarchy-sync-design.md §2-3. can_approve_reimbursements is
+// Admin-overridable afterward and won't be silently re-derived once set.
+// Called every time the user list is (re)seeded, including demo-data resets.
+const applyHierarchySyncDefaults = (userList: User[]) => {
+  userList.forEach(u => {
+    u.employment_status = 'Active';
+    // Only Approvers can hold approval authority — see PUT /api/users/:id.
+    u.can_approve_reimbursements = u.role === UserRole.APPROVER && userList.some(x => x.reports_to === u.id);
+  });
+};
+
 const users: User[] = buildDefaultUsers();
+applyHierarchySyncDefaults(users);
 
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -405,6 +448,63 @@ async function startServer() {
     return false;
   };
 
+  // --- Simulated Entra ID hierarchy sync ------------------------------
+  // See docs/hierarchy-sync-design.md. There's no real Graph API here — the
+  // Admin editing a user's `reports_to` in User Accounts stands in for a
+  // sync cycle picking up an org-chart change (promotion/demotion/transfer).
+
+  const STALE_APPROVER_FALLBACK_DAYS = 7;
+
+  // §3: approval authority is derived from headcount, not role — re-derived
+  // every time the org chart changes for this person, in either direction
+  // (gaining a first report grants it, dropping to zero revokes it). An
+  // Admin override via the "Can Approve Reimbursements" checkbox in User
+  // Accounts persists until the next headcount change for that person.
+  const recalcApprovalAuthority = (userId: string | null) => {
+    if (!userId) return;
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+    // Only an Approver can ever hold approval authority — see the role check
+    // in PUT /api/users/:id. A non-Approver gaining a direct report (an
+    // unusual org-chart state) still doesn't grant it.
+    u.can_approve_reimbursements = u.role === UserRole.APPROVER && users.some(x => x.reports_to === userId);
+  };
+
+  // §5: when a requestor's manager changes, any claim already Pending
+  // Approval under their old approver stays put — but the old approver gets
+  // notified and offered a transfer, with a 7-day fallback to Admin.
+  const detectStaleApprovers = (requestorId: string, oldManagerId: string | null, newManagerId: string | null, changedBy: string) => {
+    if (!oldManagerId || oldManagerId === newManagerId) return;
+    const requestor = users.find(u => u.id === requestorId);
+    const oldApprover = users.find(u => u.id === oldManagerId);
+    const newApprover = newManagerId ? users.find(u => u.id === newManagerId) : undefined;
+
+    const affected = claims.filter(c =>
+      c.requestor_id === requestorId &&
+      c.current_approver_id === oldManagerId &&
+      c.status === ClaimStatus.PENDING_APPROVAL
+    );
+
+    affected.forEach(claim => {
+      claim.approver_stale_since = new Date().toISOString();
+      claim.pending_transfer_to = newManagerId || null;
+      claim.approver_stale_reason = `${requestor?.name || 'This requestor'} no longer reports to ${oldApprover?.name || 'you'}.`;
+      claim.escalated_to_admin = false;
+
+      addHistory(claim.id, claim.status, claim.status, changedBy,
+        `Org change: ${requestor?.name || requestorId}'s manager changed from ${oldApprover?.name || '(none)'} to ${newApprover?.name || '(none)'}. Approver notified per hierarchy-sync policy.`);
+
+      const claimNumber = claim.claim_number || `REIM-${claim.id.substring(0, 6)}`;
+      sendEmail(oldManagerId,
+        `Org change — approver review needed for ${claimNumber}`,
+        `${requestor?.name || 'This requestor'} no longer reports to you. Their manager is now ${newApprover?.name || 'unassigned'}.
+
+You can keep reviewing ${claimNumber} yourself, or transfer it to ${newApprover?.name || 'the new manager'} from your Approver Inbox.
+
+If no action is taken within ${STALE_APPROVER_FALLBACK_DAYS} days, this will be escalated to an Admin for manual reassignment.`);
+    });
+  };
+
   // Auth endpoints (Mock)
   app.get('/api/users', (req, res) => res.json(users));
 
@@ -438,7 +538,7 @@ async function startServer() {
     const target = users.find(u => u.id === req.params.id);
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    const { role, department, job_title, reports_to, confirmOrphan } = req.body;
+    const { role, department, job_title, reports_to, confirmOrphan, employment_status, can_approve_reimbursements } = req.body;
 
     // Defense in depth - the UI also disables this, but never trust the client.
     if (target.id === admin.id && role !== undefined && role !== UserRole.ADMIN) {
@@ -472,6 +572,14 @@ async function startServer() {
       addUserHistory(target.id, target.role, role, admin.id, `Changed ${target.name}'s role`);
       target.role = role;
       changed.push('role');
+      // Approval authority only ever makes sense for the Approver role — see
+      // docs/hierarchy-sync-design.md §3 and CLAUDE.md's segregation-of-duties
+      // rule. Moving someone off Approver strips it automatically so a
+      // Requestor/Custodian/Admin can never be left showing "can approve".
+      if (role !== UserRole.APPROVER && target.can_approve_reimbursements) {
+        addUserHistory(target.id, 'true', 'false', admin.id, `Approval authority revoked — ${target.name} is no longer an Approver`);
+        target.can_approve_reimbursements = false;
+      }
     }
     if (department !== undefined && department !== target.department) {
       addUserHistory(target.id, target.department, department, admin.id, `Changed ${target.name}'s department`);
@@ -484,11 +592,42 @@ async function startServer() {
       changed.push('job_title');
     }
     if (reports_to !== undefined && reports_to !== target.reports_to) {
-      const oldManagerName = users.find(u => u.id === target.reports_to)?.name || '(none)';
+      const oldManagerId = target.reports_to;
+      const oldManagerName = users.find(u => u.id === oldManagerId)?.name || '(none)';
       const newManagerName = reports_to ? (users.find(u => u.id === reports_to)?.name || reports_to) : '(none)';
       addUserHistory(target.id, oldManagerName, newManagerName, admin.id, `Changed ${target.name}'s reporting manager`);
       target.reports_to = reports_to;
       changed.push('reports_to');
+
+      // Simulated Entra ID sync consequences — docs/hierarchy-sync-design.md §3, §5
+      recalcApprovalAuthority(oldManagerId);
+      recalcApprovalAuthority(reports_to);
+      detectStaleApprovers(target.id, oldManagerId, reports_to, admin.id);
+    }
+    if (employment_status !== undefined && employment_status !== target.employment_status) {
+      addUserHistory(target.id, target.employment_status || 'Active', employment_status, admin.id, `Changed ${target.name}'s employment status`);
+      target.employment_status = employment_status;
+      changed.push('employment_status');
+      // §9: an approver going Inactive with claims still pending under them is
+      // treated the same as a non-response — flag immediately rather than
+      // waiting on a notification nobody can act on.
+      if (employment_status === 'Inactive') {
+        claims.forEach(c => {
+          if (c.current_approver_id === target.id && c.status === ClaimStatus.PENDING_APPROVAL && !c.approver_stale_since) {
+            c.approver_stale_since = new Date().toISOString();
+            c.pending_transfer_to = null;
+            c.approver_stale_reason = `${target.name} is now marked Inactive.`;
+          }
+        });
+      }
+    }
+    if (can_approve_reimbursements !== undefined && can_approve_reimbursements !== target.can_approve_reimbursements) {
+      if (can_approve_reimbursements && target.role !== UserRole.APPROVER) {
+        return res.status(400).json({ error: `Only Approvers can be granted approval authority. ${target.name} is currently ${target.role} — change their role first.` });
+      }
+      addUserHistory(target.id, String(target.can_approve_reimbursements), String(can_approve_reimbursements), admin.id, `Admin override: ${target.name}'s approval authority`);
+      target.can_approve_reimbursements = can_approve_reimbursements;
+      changed.push('can_approve_reimbursements');
     }
 
     res.json({ user: target, changed });
@@ -787,7 +926,7 @@ Best regards,
 ${user.name}`;
 
     sendEmail(
-      mom.contact_person_email || 'client@example.com',
+      mom.contact_person_email || 'client@mgenesis.com',
       subject,
       body,
       approverId || undefined,
@@ -1382,16 +1521,20 @@ Please log in to the system and navigate to the Approval Queue to approve or rej
 
   app.post('/api/claims/:id/approve', (req, res) => {
     const user = getUser(req);
-    if (!user || user.role !== UserRole.APPROVER) return res.status(403).json({ error: 'Forbidden' });
-    
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
     const claim = claims.find(c => c.id === req.params.id);
     if (!claim) return res.status(404).json({ error: 'Not found' });
-    
+
     // Segregation of duties: Requestors cannot approve their own claims
     if (claim.requestor_id === user.id) {
       return res.status(403).json({ error: 'Segregation of Duties: You cannot approve your own reimbursement claim.' });
     }
 
+    // docs/hierarchy-sync-design.md §8: authorization is claim-scoped, not
+    // role-scoped — a user who's lost approval authority elsewhere in the org
+    // (e.g. demoted, no longer has direct reports) can still finish claims
+    // already assigned to them here.
     const requestor = users.find(u => u.id === claim.requestor_id);
     if (claim.current_approver_id !== user.id && claim.original_approver_id !== user.id) {
       return res.status(403).json({ error: 'Not your direct report' });
@@ -1466,8 +1609,84 @@ Required Action:
 ${actionText}`;
       sendEmail(claim.requestor_id, emailSubject, emailBody);
     }
-    
+
     res.json(claim);
+  });
+
+  // docs/hierarchy-sync-design.md §5: the flagged old approver (or an Admin,
+  // any time, per §7) hands a stale claim off to the suggested new approver.
+  app.post('/api/claims/:id/transfer-approver', (req, res) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const claim = claims.find(c => c.id === req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Not found' });
+
+    const isCurrentApprover = claim.current_approver_id === user.id;
+    const isAdmin = user.role === UserRole.ADMIN;
+    if (!isCurrentApprover && !isAdmin) return res.status(403).json({ error: 'Forbidden' });
+
+    const targetApproverId = req.body?.to || claim.pending_transfer_to;
+    if (!targetApproverId) return res.status(400).json({ error: 'No target approver specified.' });
+    const newApprover = users.find(u => u.id === targetApproverId);
+    if (!newApprover) return res.status(404).json({ error: 'Target approver not found.' });
+
+    const oldApprover = users.find(u => u.id === claim.current_approver_id);
+    const claimNumber = claim.claim_number || `REIM-${claim.id.substring(0, 6)}`;
+
+    claim.current_approver_id = targetApproverId;
+    claim.approver_stale_since = null;
+    claim.pending_transfer_to = null;
+    claim.approver_stale_reason = undefined;
+    claim.escalated_to_admin = false;
+    claim.updated_at = new Date().toISOString();
+
+    addHistory(claim.id, claim.status, claim.status, user.id,
+      `Approver transferred from ${oldApprover?.name || '(unknown)'} to ${newApprover.name} — org change`);
+
+    sendEmail(targetApproverId, `Reimbursement now assigned to you - ${claimNumber}`,
+      `${claimNumber} has been transferred to you for review following an organizational change.`);
+
+    res.json(claim);
+  });
+
+  // Simulates the daily/hourly Entra ID sync's fallback cron
+  // (docs/hierarchy-sync-design.md §5) — there's no real scheduler in this
+  // prototype, so an Admin can trigger a check manually. `force: true` skips
+  // the day-count gate purely so the behavior is demoable without waiting 7
+  // real days; the day-based check is what a real cron would use.
+  app.post('/api/admin/run-fallback-check', (req, res) => {
+    const admin = getUser(req);
+    if (!admin || admin.role !== UserRole.ADMIN) return res.status(403).json({ error: 'Forbidden' });
+
+    const force = !!req.body?.force;
+    const now = Date.now();
+    const escalated: Claim[] = [];
+
+    claims.forEach(claim => {
+      if (!claim.approver_stale_since || claim.escalated_to_admin) return;
+      const days = (now - new Date(claim.approver_stale_since).getTime()) / (1000 * 60 * 60 * 24);
+      if (days >= STALE_APPROVER_FALLBACK_DAYS || force) {
+        claim.escalated_to_admin = true;
+        escalated.push(claim);
+
+        const claimNumber = claim.claim_number || `REIM-${claim.id.substring(0, 6)}`;
+        const currentApprover = users.find(u => u.id === claim.current_approver_id);
+        const suggested = claim.pending_transfer_to ? users.find(u => u.id === claim.pending_transfer_to) : undefined;
+        addHistory(claim.id, claim.status, claim.status, admin.id,
+          `Fallback escalation: ${claimNumber} unresolved org-change notice sent to Admin.`);
+        sendEmail(admin.id, `Escalation: stuck approval - ${claimNumber}`,
+          `${claimNumber} has had an unresolved org-change approver notice for ${STALE_APPROVER_FALLBACK_DAYS}+ days.
+
+Current approver: ${currentApprover?.name || '(unknown)'}
+Suggested new approver: ${suggested?.name || '(unassigned)'}
+Reason: ${claim.approver_stale_reason || 'Org change'}
+
+Manual reassignment may be needed.`);
+      }
+    });
+
+    res.json({ escalatedCount: escalated.length, escalated: escalated.map(c => c.id) });
   });
 
   // Generate, Edit or Regenerate Claim Code (Release Code) - Custodian
@@ -2578,6 +2797,7 @@ BSM Assistant | BSD - IT Security Business`;
 
     users.length = 0;
     users.push(...buildDefaultUsers());
+    applyHierarchySyncDefaults(users);
 
     const rDate = (daysAgo: number) => {
       const d = new Date();
@@ -2926,7 +3146,7 @@ Please revise and resubmit your claim.`;
           claim_id: claimId,
           old_status: ClaimStatus.PROCESSING,
           new_status: ClaimStatus.READY_FOR_CLAIM,
-          changed_by: 'u3', // Carol Custodian
+          changed_by: 'u3', // Carol Ramos
           reason: `Processed. Payment method: ${opts.paymentMethod || 'GCash'}.`,
           timestamp: processedAt
         });
@@ -3149,7 +3369,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca2Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 5000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Travel to Cebu`,
+      `A Cash Advance request for PHP 5000 has been submitted by Eve Garcia for your approval.\n\nPurpose: Travel to Cebu`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -3170,7 +3390,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca3Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 7500 has been submitted by Frank Requestor for your approval.\n\nPurpose: Client Entertainment - BGC`,
+      `A Cash Advance request for PHP 7500 has been submitted by Frank Mendoza for your approval.\n\nPurpose: Client Entertainment - BGC`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3178,7 +3398,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u6',
       `Cash Advance Request Approved - CADV-${ca3Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 7500 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 7500 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -3199,7 +3419,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca4Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 12000 has been submitted by Kyle Requestor for your approval.\n\nPurpose: Team Building Advance`,
+      `A Cash Advance request for PHP 12000 has been submitted by Kyle Ocampo for your approval.\n\nPurpose: Team Building Advance`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -3207,7 +3427,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u11',
       `Cash Advance Request Rejected - CADV-${ca4Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Mid-Level Approver.\n\nComment: Rejected due to budget constraints`,
+      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Herrera.\n\nComment: Rejected due to budget constraints`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3231,7 +3451,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca5Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field surveys`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Villareal for your approval.\n\nPurpose: Field surveys`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -3239,7 +3459,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Request Approved - CADV-${ca5Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Herrera.`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3247,7 +3467,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Released - CADV-${ca5Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Ramos.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -3274,7 +3494,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca6Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field survey Liam`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Villareal for your approval.\n\nPurpose: Field survey Liam`,
       undefined,
       { timestamp: rDate(5) }
     );
@@ -3282,7 +3502,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Request Approved - CADV-${ca6Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Herrera.`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -3290,7 +3510,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Released - CADV-${ca6Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Ramos.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3331,7 +3551,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca7Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Max's Group Lunch`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Reyes for your approval.\n\nPurpose: Max's Group Lunch`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -3339,7 +3559,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Request Approved - CADV-${ca7Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(5) }
     );
@@ -3347,7 +3567,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Released - CADV-${ca7Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Ramos.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -3381,7 +3601,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq2Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
+      `A Liquidation report has been submitted by Alice Reyes for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3406,7 +3626,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca8Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 8000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Cebu Client Visit`,
+      `A Cash Advance request for PHP 8000 has been submitted by Eve Garcia for your approval.\n\nPurpose: Cebu Client Visit`,
       undefined,
       { timestamp: rDate(8) }
     );
@@ -3414,7 +3634,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u5',
       `Cash Advance Request Approved - CADV-${ca8Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 8000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 8000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(7) }
     );
@@ -3422,7 +3642,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u5',
       `Cash Advance Released - CADV-${ca8Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 8000 has been released by Carol Custodian.\n\nRelease Reference: REF-EVE-CEBU\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 8000 has been released by Carol Ramos.\n\nRelease Reference: REF-EVE-CEBU\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -3458,7 +3678,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq3Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Eve Requestor for Cash Advance CADV-${ca8Id.substring(0,6)}.\n\nTotal Spent: PHP 6000\nVariance: PHP -2000 (REFUND_DUE)`,
+      `A Liquidation report has been submitted by Eve Garcia for Cash Advance CADV-${ca8Id.substring(0,6)}.\n\nTotal Spent: PHP 6000\nVariance: PHP -2000 (REFUND_DUE)`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -3466,7 +3686,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u5',
       `Liquidation Returned - LIQ-${liq3Id.substring(0,6)}`,
-      `Your Liquidation report has been returned for revision by Bob Approver.\n\nReason: Returned: Please attach official receipts instead of booking screenshots`,
+      `Your Liquidation report has been returned for revision by Bob Santos.\n\nReason: Returned: Please attach official receipts instead of booking screenshots`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -3515,7 +3735,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca9Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 10000 has been submitted by Frank Requestor for your approval.\n\nPurpose: BGC Accounts`,
+      `A Cash Advance request for PHP 10000 has been submitted by Frank Mendoza for your approval.\n\nPurpose: BGC Accounts`,
       undefined,
       { timestamp: rDate(10) }
     );
@@ -3523,7 +3743,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u6',
       `Cash Advance Request Approved - CADV-${ca9Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 10000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 10000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(9) }
     );
@@ -3531,7 +3751,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u6',
       `Cash Advance Released - CADV-${ca9Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 10000 has been released by Carol Custodian.\n\nRelease Reference: REF-FRANK-BGC\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 10000 has been released by Carol Ramos.\n\nRelease Reference: REF-FRANK-BGC\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(8) }
     );
@@ -3544,7 +3764,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq4Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Frank Requestor for Cash Advance CADV-${ca9Id.substring(0,6)}.\n\nTotal Spent: PHP 7000\nVariance: PHP -3000 (REFUND_DUE)`,
+      `A Liquidation report has been submitted by Frank Mendoza for Cash Advance CADV-${ca9Id.substring(0,6)}.\n\nTotal Spent: PHP 7000\nVariance: PHP -3000 (REFUND_DUE)`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -3598,7 +3818,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca10Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 4000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Client Sync Taguig`,
+      `A Cash Advance request for PHP 4000 has been submitted by Alice Reyes for your approval.\n\nPurpose: Client Sync Taguig`,
       undefined,
       { timestamp: rDate(12) }
     );
@@ -3606,7 +3826,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Request Approved - CADV-${ca10Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 4000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 4000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(11) }
     );
@@ -3614,7 +3834,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Released - CADV-${ca10Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 4000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-SYNC\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 4000 has been released by Carol Ramos.\n\nRelease Reference: REF-ALICE-SYNC\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(10) }
     );
@@ -3628,7 +3848,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq5Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca10Id.substring(0,6)}.\n\nTotal Spent: PHP 3000\nVariance: PHP -1000 (REFUND_DUE)`,
+      `A Liquidation report has been submitted by Alice Reyes for Cash Advance CADV-${ca10Id.substring(0,6)}.\n\nTotal Spent: PHP 3000\nVariance: PHP -1000 (REFUND_DUE)`,
       undefined,
       { timestamp: rDate(8) }
     );
@@ -3644,7 +3864,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Liquidation Closed (Refund Collected) - LIQ-${liq5Id.substring(0,6)}`,
-      `Your Liquidation has been marked as Closed. Custodian Carol Custodian has verified collection of your refund of PHP 1000.`,
+      `Your Liquidation has been marked as Closed. Custodian Carol Ramos has verified collection of your refund of PHP 1000.`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -3692,7 +3912,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca11Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: SM Prime Partnership`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Reyes for your approval.\n\nPurpose: SM Prime Partnership`,
       undefined,
       { timestamp: rDate(9) }
     );
@@ -3700,7 +3920,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Request Approved - CADV-${ca11Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(8) }
     );
@@ -3708,7 +3928,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Released - CADV-${ca11Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-SMPRIME\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Ramos.\n\nRelease Reference: REF-ALICE-SMPRIME\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(7) }
     );
@@ -3721,7 +3941,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq6Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca11Id.substring(0,6)}.\n\nTotal Spent: PHP 6200\nVariance: PHP 1200 (REIMBURSEMENT_DUE)`,
+      `A Liquidation report has been submitted by Alice Reyes for Cash Advance CADV-${ca11Id.substring(0,6)}.\n\nTotal Spent: PHP 6200\nVariance: PHP 1200 (REIMBURSEMENT_DUE)`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -3871,7 +4091,7 @@ BSM Assistant | BSD - IT Security Business`;
         addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', actionDate);
 
         const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
-        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Ramos.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
         sendEmail(reqId, relSubject, relBody, undefined, { timestamp: actionDate });
       }
     };
@@ -3901,6 +4121,7 @@ BSM Assistant | BSD - IT Security Business`;
 
     users.length = 0;
     users.push(...buildDefaultUsers());
+    applyHierarchySyncDefaults(users);
 
     const rDate = (daysAgo: number) => {
       const d = new Date();
@@ -4263,7 +4484,7 @@ BSM Assistant | BSD - IT Security Business`;
     };
 
     // Standard live-workflow seed records
-    // 1. Claim 1: Draft - Alice Requestor
+    // 1. Claim 1: Draft - Alice Reyes
     const mom1 = mkMom('u1', 'Ayala Land Inc', MomStatus.COMPLETED, 3);
     const claim1Id = uuidv4();
     const claim1Number = nextClaimNumber();
@@ -4304,7 +4525,7 @@ BSM Assistant | BSD - IT Security Business`;
       timestamp: rDate(2)
     });
 
-    // 2. Claim 2: Pending Approval - Alice Requestor
+    // 2. Claim 2: Pending Approval - Alice Reyes
     const mom2 = mkMom('u1', 'SM Prime Holdings', MomStatus.COMPLETED, 4);
     mkClaim({
       requestorId: 'u1',
@@ -4316,7 +4537,7 @@ BSM Assistant | BSD - IT Security Business`;
       createdDaysAgo: 3
     });
 
-    // 3. Claim 3: Returned for Revision - Eve Requestor
+    // 3. Claim 3: Returned for Revision - Eve Garcia
     const mom3 = mkMom('u5', 'JG Summit', MomStatus.COMPLETED, 6);
     mkClaim({
       requestorId: 'u5',
@@ -4329,7 +4550,7 @@ BSM Assistant | BSD - IT Security Business`;
       approvedDaysAgo: 4
     });
 
-    // 4. Claim 4: Approved (Routed to Finance) - Eve Requestor
+    // 4. Claim 4: Approved (Routed to Finance) - Eve Garcia
     const mom4 = mkMom('u5', 'Aboitiz Equity', MomStatus.COMPLETED, 5);
     mkClaim({
       requestorId: 'u5',
@@ -4342,7 +4563,7 @@ BSM Assistant | BSD - IT Security Business`;
       approvedDaysAgo: 3
     });
 
-    // 5. Claim 5: Processing (In Finance Queue) - Frank Requestor
+    // 5. Claim 5: Processing (In Finance Queue) - Frank Mendoza
     const mom5 = mkMom('u6', 'San Miguel Corp', MomStatus.COMPLETED, 7);
     mkClaim({
       requestorId: 'u6',
@@ -4356,7 +4577,7 @@ BSM Assistant | BSD - IT Security Business`;
       processedDaysAgo: 4
     });
 
-    // 6. Claim 6: Ready for Claim (Awaiting Code Entry) - Frank Requestor
+    // 6. Claim 6: Ready for Claim (Awaiting Code Entry) - Frank Mendoza
     const mom6 = mkMom('u6', 'Megaworld Corp', MomStatus.COMPLETED, 8);
     mkClaim({
       requestorId: 'u6',
@@ -4371,7 +4592,7 @@ BSM Assistant | BSD - IT Security Business`;
       releaseCode: 'CLAIM99'
     });
 
-    // 7. Claim 7: Completed (Paid Out) - Frank Requestor
+    // 7. Claim 7: Completed (Paid Out) - Frank Mendoza
     const mom7 = mkMom('u6', 'Robinsons Land', MomStatus.COMPLETED, 10);
     mkClaim({
       requestorId: 'u6',
@@ -4387,7 +4608,7 @@ BSM Assistant | BSD - IT Security Business`;
       paymentMethod: 'Bank Transfer'
     });
 
-    // 8. Claim 8: Rejected - Alice Requestor
+    // 8. Claim 8: Rejected - Alice Reyes
     const mom8 = mkMom('u1', 'BDO Unibank', MomStatus.COMPLETED, 12);
     mkClaim({
       requestorId: 'u1',
@@ -4459,7 +4680,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca2Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 5000 has been submitted by Eve Requestor for your approval.\n\nPurpose: Travel to Cebu`,
+      `A Cash Advance request for PHP 5000 has been submitted by Eve Garcia for your approval.\n\nPurpose: Travel to Cebu`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -4479,7 +4700,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca3Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 7500 has been submitted by Frank Requestor for your approval.\n\nPurpose: Client Entertainment - BGC`,
+      `A Cash Advance request for PHP 7500 has been submitted by Frank Mendoza for your approval.\n\nPurpose: Client Entertainment - BGC`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -4487,7 +4708,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u6',
       `Cash Advance Request Approved - CADV-${ca3Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 7500 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 7500 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -4507,7 +4728,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca4Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 12000 has been submitted by Kyle Requestor for your approval.\n\nPurpose: Team Building Advance`,
+      `A Cash Advance request for PHP 12000 has been submitted by Kyle Ocampo for your approval.\n\nPurpose: Team Building Advance`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -4515,7 +4736,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u11',
       `Cash Advance Request Rejected - CADV-${ca4Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Mid-Level Approver.\n\nComment: Rejected due to budget constraints`,
+      `Your Cash Advance request for PHP 12000 has been Rejected by Jack Herrera.\n\nComment: Rejected due to budget constraints`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -4538,7 +4759,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca5Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field surveys`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Villareal for your approval.\n\nPurpose: Field surveys`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -4546,7 +4767,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Request Approved - CADV-${ca5Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Herrera.`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -4554,7 +4775,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Released - CADV-${ca5Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Ramos.\n\nRelease Reference: REF-LIAM-CA\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(2) }
     );
@@ -4578,7 +4799,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u10',
       `Cash Advance Request Submitted - CADV-${ca6Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 6000 has been submitted by Liam Requestor for your approval.\n\nPurpose: Field survey Liam`,
+      `A Cash Advance request for PHP 6000 has been submitted by Liam Villareal for your approval.\n\nPurpose: Field survey Liam`,
       undefined,
       { timestamp: rDate(5) }
     );
@@ -4586,7 +4807,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Request Approved - CADV-${ca6Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 6000 has been Approved by Jack Mid-Level Approver.`,
+      `Your Cash Advance request for PHP 6000 has been Approved by Jack Herrera.`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -4594,7 +4815,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u12',
       `Cash Advance Released - CADV-${ca6Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 6000 has been released by Carol Custodian.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 6000 has been released by Carol Ramos.\n\nRelease Reference: REF-LIAM-SURVEY\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -4634,7 +4855,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Cash Advance Request Submitted - CADV-${ca7Id.substring(0,6)}`,
-      `A Cash Advance request for PHP 5000 has been submitted by Alice Requestor for your approval.\n\nPurpose: Max's Group Lunch`,
+      `A Cash Advance request for PHP 5000 has been submitted by Alice Reyes for your approval.\n\nPurpose: Max's Group Lunch`,
       undefined,
       { timestamp: rDate(6) }
     );
@@ -4642,7 +4863,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Request Approved - CADV-${ca7Id.substring(0,6)}`,
-      `Your Cash Advance request for PHP 5000 has been Approved by Bob Approver.`,
+      `Your Cash Advance request for PHP 5000 has been Approved by Bob Santos.`,
       undefined,
       { timestamp: rDate(5) }
     );
@@ -4650,7 +4871,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u1',
       `Cash Advance Released - CADV-${ca7Id.substring(0,6)}`,
-      `Your Cash Advance for PHP 5000 has been released by Carol Custodian.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
+      `Your Cash Advance for PHP 5000 has been released by Carol Ramos.\n\nRelease Reference: REF-ALICE-MAXS\n\nPlease file your liquidation within 7 days.`,
       undefined,
       { timestamp: rDate(4) }
     );
@@ -4684,7 +4905,7 @@ BSM Assistant | BSD - IT Security Business`;
     sendEmail(
       'u2',
       `Liquidation Submitted - LIQ-${liq2Id.substring(0,6)}`,
-      `A Liquidation report has been submitted by Alice Requestor for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
+      `A Liquidation report has been submitted by Alice Reyes for Cash Advance CADV-${ca7Id.substring(0,6)}.\n\nTotal Spent: PHP 5000\nVariance: PHP 0 (SETTLED)`,
       undefined,
       { timestamp: rDate(3) }
     );
@@ -4774,7 +4995,7 @@ BSM Assistant | BSD - IT Security Business`;
         addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', actionDate);
 
         const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
-        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+        const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Ramos.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
         sendEmail(reqId, relSubject, relBody, undefined, { timestamp: actionDate });
       }
     };
@@ -4806,7 +5027,7 @@ BSM Assistant | BSD - IT Security Business`;
       },
       {
         name: 'Marketing',
-        requestors: ['u13'],
+        requestors: ['u13', 'u20', 'u21'],
         approvers: ['u14'],
         categories: ['Marketing Materials', 'Event Hosting', 'Advertising', 'Client Meals'],
         vendors: ['Print Central', 'Hotel Del Rio', 'Facebook Ads', 'Google Ads', 'Starbucks'],
@@ -4905,7 +5126,7 @@ BSM Assistant | BSD - IT Security Business`;
       addCaHistoryWithTimestamp(caId, CashAdvanceStatus.APPROVED, CashAdvanceStatus.RELEASED, 'u3', 'Funds released', releasedDate);
 
       const relSubject = `Cash Advance Released - CADV-${caId.substring(0,6)}`;
-      const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Custodian.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
+      const relBody = `Your Cash Advance for PHP ${amt} has been released by Carol Ramos.\n\nRelease Reference: ${ca.releaseReference}\n\nPlease file your liquidation within 7 days.`;
       sendEmail(reqId, relSubject, relBody, undefined, { timestamp: releasedDate });
 
       // Liquidation
@@ -4960,7 +5181,7 @@ BSM Assistant | BSD - IT Security Business`;
         addLiqHistoryWithTimestamp(liqId, LiquidationStatus.SUBMITTED, LiquidationStatus.CLOSED, appId, 'Approved and Closed.', liqClosedDate);
         
         const liqCloSubject = `Liquidation Closed (Refund Collected) - LIQ-${liqId.substring(0,6)}`;
-        const liqCloBody = `Your Liquidation has been marked as Closed. Custodian Carol Custodian has verified collection of your refund.`;
+        const liqCloBody = `Your Liquidation has been marked as Closed. Custodian Carol Ramos has verified collection of your refund.`;
         sendEmail(reqId, liqCloSubject, liqCloBody, undefined, { timestamp: liqClosedDate });
       }
     };
@@ -5095,6 +5316,7 @@ BSM Assistant | BSD - IT Security Business`;
 
     users.length = 0;
     users.push(...buildDefaultUsers());
+    applyHierarchySyncDefaults(users);
 
     claimCounter = 123;
 

@@ -8,7 +8,7 @@ import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
 import { RecentActivityTable } from './RecentActivityTable';
 import { AnalyticsCard } from './AnalyticsCard';
-import { SimpleBarChart, DonutChart } from './AnalyticsCharts';
+import { DonutChart, CHART_COLORS } from './AnalyticsCharts';
 import { Bank, CurrencyDollar, ArrowDownLeft, Clock, ArrowsClockwise, Receipt, WarningCircle } from '@phosphor-icons/react';
 import { formatPHP } from '../../utils';
 import { metricsForRole, MetricContext } from '../../metrics/registry';
@@ -85,7 +85,7 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
   const pendingShortfallsAmt = pendingShortfalls.reduce((sum, c) => sum + (c.total_amount || 0), 0);
 
   const quickActions = [
-    { label: 'Process Claims', icon: ArrowsClockwise, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-slate-600' },
+    { label: 'Process Claims', icon: ArrowsClockwise, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-brand' },
     { label: 'Release Advances', icon: CurrencyDollar, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-emerald-600' },
     { label: 'Collect Refunds', icon: ArrowDownLeft, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-rose-500' }
   ];
@@ -121,11 +121,11 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6);
 
   const workloadData = [
-    { name: 'Claims', count: pendingProcessing.length },
-    { name: 'CADVs', count: pendingCadvReleases.length },
-    { name: 'Refunds', count: pendingRefunds.length },
-    { name: 'Shortfalls', count: pendingShortfalls.length }
-  ];
+    { name: 'Claims', value: pendingProcessing.length, color: CHART_COLORS[0] },
+    { name: 'CADVs', value: pendingCadvReleases.length, color: CHART_COLORS[1] },
+    { name: 'Refunds', value: pendingRefunds.length, color: CHART_COLORS[2] },
+    { name: 'Shortfalls', value: pendingShortfalls.length, color: CHART_COLORS[3] }
+  ].filter(w => w.value > 0);
 
   const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users: [], currentUser: user };
   const custodianMetricDefs = metricsForRole(UserRole.CUSTODIAN);
@@ -140,12 +140,19 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
         <DashboardHeader
           user={user}
-          summaryText={`You have ${pendingTotal} items pending finance operation actions.`}
+          summaryText={
+            <>
+              You have <strong className="font-bold text-slate-900">{pendingTotal} item{pendingTotal === 1 ? '' : 's'} pending</strong> finance operation actions.
+            </>
+          }
         />
-        <DashboardPeriodFilter role={UserRole.CUSTODIAN} />
+        <div className="flex flex-col items-end gap-2.5">
+          <QuickActionsCard actions={quickActions} layout="compact" />
+          <DashboardPeriodFilter role={UserRole.CUSTODIAN} />
+        </div>
       </div>
 
       <div className="mb-8">
@@ -202,15 +209,39 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
         <RecentActivityTable title="Action Required" items={recentItems} emptyMessage="No finance operations are waiting — you're caught up." />
       </div>
 
-      <QuickActionsCard actions={quickActions} layout="horizontal" />
-
       {/* Level 3: workflow-health metrics scoped to a period, below the
-          live action queue. */}
+          live action queue. Split into two labeled sub-groups so "right now"
+          balances aren't visually mixed in with weekly/monthly rollups —
+          the two answer different questions ("what's outstanding" vs.
+          "how has processing been trending"). */}
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-800 mb-1">Payment Performance</h2>
         <p className="text-sm text-slate-500 mb-4">Each card scoped to its own relevant period</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {custodianMetricDefs.map(metric => {
+
+        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Right Now</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          {custodianMetricDefs.filter(m => m.id === 'custodian_pending_payments' || m.id === 'custodian_outstanding_amount').map(metric => {
+            const scope = effectiveScope(metric);
+            const range = resolveMetricRange(metric);
+            const value = metric.compute(ctx, range);
+            const action = metricActionMap[metric.id];
+            return (
+              <MetricCard
+                key={metric.id}
+                metric={metric}
+                ctx={ctx}
+                scope={scope}
+                value={value}
+                actionLabel={action?.actionLabel}
+                actionPath={action?.actionPath}
+              />
+            );
+          })}
+        </div>
+
+        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">This Period</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {custodianMetricDefs.filter(m => m.id !== 'custodian_pending_payments' && m.id !== 'custodian_outstanding_amount').map(metric => {
             const scope = effectiveScope(metric);
             const range = resolveMetricRange(metric);
             const value = metric.compute(ctx, range);
@@ -233,7 +264,11 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       {/* Level 4: analytics — last. */}
       <div className="mb-8">
         <AnalyticsCard title="Finance Operations Queue">
-          <SimpleBarChart data={workloadData} dataKey="count" color="#2563eb" name="Pending Items" />
+          {workloadData.length === 0 ? (
+            <div className="text-sm text-slate-400 text-center py-6">Nothing pending right now — your queue is clear.</div>
+          ) : (
+            <DonutChart data={workloadData} centerCaption="Pending Items" />
+          )}
         </AnalyticsCard>
       </div>
     </div>

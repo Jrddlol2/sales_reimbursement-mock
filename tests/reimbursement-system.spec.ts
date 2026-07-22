@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 
 // Standard mock IDs matching server.ts default users
 const USERS = {
-  REQUESTOR: { id: 'u1', email: 'alice@example.com', name: 'Alice Requestor' },
-  APPROVER: { id: 'u2', email: 'bob@example.com', name: 'Bob Approver' },
-  CUSTODIAN: { id: 'u3', email: 'carol@example.com', name: 'Carol Custodian' },
-  ADMIN: { id: 'u4', email: 'dave@example.com', name: 'Dave Admin' },
-  SECOND_REQUESTOR: { id: 'u5', email: 'eve@example.com', name: 'Eve Requestor' },
+  REQUESTOR: { id: 'u1', email: 'alice@mgenesis.com', name: 'Alice Reyes' },
+  APPROVER: { id: 'u2', email: 'bob@mgenesis.com', name: 'Bob Santos' },
+  CUSTODIAN: { id: 'u3', email: 'carol@mgenesis.com', name: 'Carol Ramos' },
+  ADMIN: { id: 'u4', email: 'dave@mgenesis.com', name: 'Dave Lopez' },
+  SECOND_REQUESTOR: { id: 'u5', email: 'eve@mgenesis.com', name: 'Eve Garcia' },
 };
 
 test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
@@ -57,7 +57,7 @@ test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
       await page.click('button[type="submit"]');
       
       await page.waitForURL('**/');
-      await expect(page.locator('text=Alice Requestor')).toBeVisible();
+      await expect(page.locator('text=Alice Reyes')).toBeVisible();
       await expect(page.locator('text=Sales Executive')).toBeVisible();
       
       // Verify localStorage is set correctly
@@ -134,7 +134,7 @@ test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
       
       // Assert that we are still on history and authenticated
       expect(page.url()).toContain('/history');
-      await expect(page.locator('text=Alice Requestor')).toBeVisible();
+      await expect(page.locator('text=Alice Reyes')).toBeVisible();
     });
 
     test('Back Navigation: Returning to dashboard maintains stable visual state', async ({ page }) => {
@@ -238,7 +238,7 @@ test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
   // =========================================================================
   test.describe('4. Approvals and Rejections', () => {
 
-    test('Happy Path: Bob Approver reviews and approves a pending claim', async ({ page }) => {
+    test('Happy Path: Bob Santos reviews and approves a pending claim', async ({ page }) => {
       // Login as Bob (Approver)
       await loginAs(page, USERS.APPROVER);
       
@@ -269,7 +269,7 @@ test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
       await expect(page.locator('text=Approved')).toBeVisible({ timeout: 5000 });
     });
 
-    test('Happy Path: Bob Approver rejects a claim with mandatory feedback', async ({ page }) => {
+    test('Happy Path: Bob Santos rejects a claim with mandatory feedback', async ({ page }) => {
       await loginAs(page, USERS.APPROVER);
       await page.goto('/approvals');
       await page.waitForLoadState('networkidle');
@@ -298,7 +298,7 @@ test.describe('Sales Reimbursement System - End-to-End Test Suite', () => {
     });
 
     test('Permission Validation: Approvers cannot approve their own submitted claims', async ({ page }) => {
-      // Bob Approver is also allowed to request, but segregation of duties blocks self-approval
+      // Bob Santos is also allowed to request, but segregation of duties blocks self-approval
       await loginAs(page, USERS.APPROVER);
       
       // Navigate to history to find one of Bob's own requests

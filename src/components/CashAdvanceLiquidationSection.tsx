@@ -909,13 +909,13 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
           <table className="min-w-full divide-y divide-slate-200 text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">ID / Date</th>
-                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Type</th>
-                <th className="px-4 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Purpose / Details</th>
-                <th className="px-4 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
-                <th className="px-4 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Liquidation</th>
-                <th className="px-4 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Status</th>
-                <th className="px-4 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Action</th>
+                <th className="px-3 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">ID / Date</th>
+                <th className="px-3 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Type</th>
+                <th className="px-3 py-3 text-left font-extrabold text-slate-500 uppercase tracking-wider font-display">Purpose / Details</th>
+                <th className="px-3 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                <th className="px-3 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Liquidation</th>
+                <th className="px-3 py-3 text-center font-extrabold text-slate-500 uppercase tracking-wider font-display">Status</th>
+                <th className="px-3 py-3 text-right font-extrabold text-slate-500 uppercase tracking-wider font-display">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -963,7 +963,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                   return (
                     <tr key={item.uniqueId} className="hover:bg-brand/5 transition-colors">
                       {/* ID / Date */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
+                      <td className="px-3 py-3.5 whitespace-nowrap">
                         {isClaim && claim ? (
                           <Link 
                             to={`/claims/${claim.id}`}
@@ -985,18 +985,14 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                       </td>
 
                       {/* Type Badge */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          isClaim
-                            ? 'bg-slate-100 text-slate-700 border-slate-200'
-                            : 'bg-slate-200 text-slate-800 border-slate-300'
-                        }`}>
+                      <td className="px-3 py-3.5 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-slate-100 text-slate-700 border-slate-200">
                           {item.type}
                         </span>
                       </td>
 
                       {/* Purpose / Details */}
-                      <td className="px-4 py-3.5 max-w-xs md:max-w-md">
+                      <td className="px-3 py-3.5 max-w-[9rem] md:max-w-xs">
                         <div className="font-semibold text-slate-700 truncate" title={item.purpose}>
                           {item.purpose}
                         </div>
@@ -1013,12 +1009,12 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                       </td>
 
                       {/* Request Amount */}
-                      <td className="px-4 py-3.5 whitespace-nowrap text-right font-bold text-slate-900">
+                      <td className="px-3 py-3.5 whitespace-nowrap text-right font-bold text-slate-900">
                         {formatPHP(item.amount)}
                       </td>
 
                       {/* Liquidation Column */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td className="px-3 py-3.5 text-center whitespace-nowrap">
                         {isClaim && claim?.sourceLiquidationId ? (
                           <Link 
                             to={`/liquidations/${claim.sourceLiquidationId}`}
@@ -1050,7 +1046,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                       </td>
 
                       {/* Status Badge */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                      <td className="px-3 py-3.5 text-center whitespace-nowrap">
                         {isClaim && claim ? (
                           <StatusBadge status={claim.status} size="sm" />
                         ) : ca ? (
@@ -1059,7 +1055,7 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                       </td>
 
                       {/* Row Action Actions */}
-                      <td className="px-4 py-3.5 whitespace-nowrap text-right font-bold space-x-2">
+                      <td className="px-3 py-3.5 whitespace-nowrap text-right font-bold space-x-2">
                         {isClaim && claim && claim.status === ClaimStatus.READY_FOR_CLAIM && (
                           activeClaimPrompt === claim.id ? (
                             <div className="inline-flex flex-col items-end gap-1">

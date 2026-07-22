@@ -12,12 +12,44 @@ export interface QuickAction {
   // lets QuickActionsCard visually separate actions that create a new
   // claim/request from actions that manage or schedule existing ones.
   group?: string;
+  // Optional small count badge (e.g. open support tickets) — only rendered
+  // in the 'compact' layout, colored by badgeColorClass so its urgency
+  // (severity of what's waiting) reads independently of the icon's own
+  // fixed bgColorClass.
+  badgeCount?: number;
+  badgeColorClass?: string;
 }
 
 interface QuickActionsCardProps {
   actions: QuickAction[];
-  layout?: 'grid' | 'horizontal';
+  layout?: 'grid' | 'horizontal' | 'compact';
 }
+
+// Small circular icon buttons for the dashboard header's top-right corner —
+// each keeps its own color (from bgColorClass) so actions stay visually
+// distinct at a glance, with a hover lift + label tooltip instead of a
+// full card layout.
+const CompactActionButton: React.FC<{ action: QuickAction; onClick: () => void }> = ({ action, onClick }) => {
+  const IconComp = action.icon;
+  return (
+    <button
+      onClick={onClick}
+      title={action.label}
+      aria-label={action.label}
+      className={`group relative w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${action.bgColorClass} ${action.colorClass}`}
+    >
+      <IconComp size={18} weight="fill" />
+      {!!action.badgeCount && (
+        <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center border-2 border-white ${action.badgeColorClass || 'bg-red-500'}`}>
+          {action.badgeCount > 9 ? '9+' : action.badgeCount}
+        </span>
+      )}
+      <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-20">
+        {action.label}
+      </span>
+    </button>
+  );
+};
 
 const ActionButton: React.FC<{ action: QuickAction; onClick: () => void }> = ({ action, onClick }) => {
   const IconComp = action.icon;
@@ -36,6 +68,16 @@ const ActionButton: React.FC<{ action: QuickAction; onClick: () => void }> = ({ 
 
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({ actions, layout = 'grid' }) => {
   const navigate = useNavigate();
+
+  if (layout === 'compact') {
+    return (
+      <div className="flex items-center gap-2.5">
+        {actions.map((action, idx) => (
+          <CompactActionButton key={idx} action={action} onClick={() => navigate(action.path)} />
+        ))}
+      </div>
+    );
+  }
 
   if (layout === 'horizontal') {
     const groups = Array.from(new Set(actions.map(a => a.group).filter((g): g is string => !!g)));

@@ -49,7 +49,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     <KPICard
       title={metric.label}
       value={formatValue(value, metric.format)}
-      icon={iconForFormat(metric.format)}
+      icon={metric.icon || iconForFormat(metric.format)}
       variant={metric.variant}
       description={metric.description}
       additionalContext={scopeLabel(scope)}

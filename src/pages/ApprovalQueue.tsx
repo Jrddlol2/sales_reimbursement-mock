@@ -6,10 +6,9 @@ import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
 import { SourceLiquidationTag } from '../components/SourceLiquidationTag';
-import { CaretDown, Tray, CheckSquare, Pulse, Clock, Warning, CalendarCheck, Wallet, ArrowsClockwise } from '@phosphor-icons/react';
+import { Tray, CheckSquare, Warning, Wallet, ArrowsClockwise } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { KPICard } from '../components/dashboard/KPICard';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
@@ -17,7 +16,14 @@ import { ClaimLineItems } from '../components/ClaimLineItems';
 import { EmptyState } from '../components/EmptyState';
 import { useNewDataAvailable } from '../hooks/useNewDataAvailable';
 
-export const ApprovalQueue: React.FC = () => {
+interface ApprovalQueueProps {
+  // Set when rendered inline inside the Approver Dashboard (which already has
+  // its own "Good Morning" header) instead of standalone, so the page's own
+  // title block doesn't duplicate it.
+  embedded?: boolean;
+}
+
+export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const toast = useToast();
@@ -28,7 +34,7 @@ export const ApprovalQueue: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [selectedClaimId, setSelectedClaimId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState<'inbox' | 'meetings' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'inbox');
+  const [tab, setTab] = useState<'inbox' | 'meetings' | 'history'>((searchParams.get('tab') as any) === 'cadv' ? 'inbox' : (searchParams.get('tab') as any) || 'inbox');
 
   // Cash Advance / Liquidation states
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
@@ -55,6 +61,13 @@ export const ApprovalQueue: React.FC = () => {
     return next;
   });
 
+  // Pending is a unified queue (Reimbursements + Cash Advances + Liquidations
+  // together, not separate tabs — docs/hierarchy-sync-design.md doesn't cover
+  // this, it's a UX simplification). A Cash Advance/Liquidation row expands
+  // inline for its decision instead of navigating away, since those don't
+  // have a full-page detail view the way claims do.
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+
   // Bulk actions
   const [selectedForBulk, setSelectedForBulk] = useState<string[]>([]);
   const [bulkAction, setBulkAction] = useState<'Approved' | 'Rejected' | null>(null);
@@ -68,6 +81,17 @@ export const ApprovalQueue: React.FC = () => {
       body: JSON.stringify({ section: 'inbox' })
     }).catch(console.error);
   }, []);
+
+  // Embedded in the Dashboard, this component stays mounted across
+  // same-route navigations (e.g. a "Decision History" link setting
+  // ?tab=history) — the initial useState read above only fires once, so this
+  // keeps the active tab in sync with the URL on every change, not just mount.
+  useEffect(() => {
+    const requested = searchParams.get('tab');
+    if (!requested) return;
+    const normalized = requested === 'cadv' ? 'inbox' : (requested as 'inbox' | 'meetings' | 'history');
+    if (normalized !== tab) setTab(normalized);
+  }, [searchParams]);
 
   const fetchClaims = () => {
     setLoading(true);
@@ -199,6 +223,15 @@ export const ApprovalQueue: React.FC = () => {
   const pendingMeetingConfirmations = reviewMeetings.filter(rm => rm.approver_id === user?.id && rm.status === ReviewMeetingStatus.PENDING_CONFIRMATION && !pendingRemovalIds.has(rm.id));
   const visibleInboxClaims = inboxClaims.filter(c => !pendingRemovalIds.has(c.id));
 
+  // One unified queue — Reimbursements, Cash Advances, and Liquidations
+  // together, sorted by how long they've been waiting, instead of split
+  // across separate tabs.
+  const unifiedPendingItems = [
+    ...visibleInboxClaims.map(claim => ({ kind: 'claim' as const, id: claim.id, date: claim.updated_at, claim })),
+    ...pendingAdvances.map(ca => ({ kind: 'cadv' as const, id: ca.id, date: ca.createdAt, ca })),
+    ...pendingLiqs.map(liq => ({ kind: 'liq' as const, id: liq.id, date: liq.createdAt, liq })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
   const toggleBulkSelection = (id: string) => {
     setSelectedForBulk(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -210,6 +243,31 @@ export const ApprovalQueue: React.FC = () => {
     } else {
       setSelectedForBulk(pendings.map(c => c.id));
     }
+  };
+
+  // docs/hierarchy-sync-design.md §5: claims whose requestor no longer
+  // reports to this approver (an org-chart change) stay put by default, but
+  // offer a transfer to the suggested new approver.
+  const [transferringId, setTransferringId] = useState<string | null>(null);
+  const [dismissedStaleIds, setDismissedStaleIds] = useState<Set<string>>(new Set());
+
+  const handleTransferApprover = async (claim: Claim) => {
+    setTransferringId(claim.id);
+    try {
+      await apiFetch(`/api/claims/${claim.id}/transfer-approver`, { method: 'POST' });
+      toast.success('Claim transferred to the new approver.');
+      fetchClaims();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to transfer the claim.');
+    } finally {
+      setTransferringId(null);
+    }
+  };
+
+  const handleKeepReviewing = (claimId: string) => {
+    // No server action needed — the claim already stays with this approver
+    // by default. This just clears the local reminder banner for the claim.
+    setDismissedStaleIds(prev => new Set(prev).add(claimId));
   };
 
   const handleBulkSubmit = async (action: 'Approved' | 'Rejected') => {
@@ -300,29 +358,7 @@ export const ApprovalQueue: React.FC = () => {
   const pendingApprovals = visibleInboxClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
   const returnedClaims = visibleInboxClaims.filter(c => c.status === ClaimStatus.RETURNED);
   
-  const approverClaims = allClaims.filter(c => c.current_approver_id === user?.id || c.original_approver_id === user?.id);
-  const spendByRequestor = approverClaims
-    .filter(c => [ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED].includes(c.status))
-    .reduce((acc, c) => {
-      const name = c.requestor?.name || "Unknown";
-      acc[name] = (acc[name] || 0) + c.total_amount;
-      return acc;
-    }, {} as Record<string, number>);
-  const requestorData = Object.entries(spendByRequestor).map(([name, value]) => ({ name, value: Number(value) })).sort((a,b) => b.value - a.value);
-
   const totalAmountPending = pendingApprovals.reduce((sum, c) => sum + (c.total_amount || 0), 0);
-
-  const now = new Date();
-  
-  // Calculate oldest pending in days based on updated_at
-  let oldestPendingDays = 0;
-  if (pendingApprovals.length > 0) {
-    const oldestDate = pendingApprovals.reduce((oldest, claim) => {
-      const date = new Date(claim.updated_at);
-      return date < oldest ? date : oldest;
-    }, new Date());
-    oldestPendingDays = Math.max(0, Math.floor((now.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24)));
-  }
 
   const decisionHistoryItems = allClaims
     .filter(c => c.approvals && c.approvals.some((a: any) => a.approver_id === user?.id))
@@ -341,10 +377,12 @@ export const ApprovalQueue: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Approver Inbox</h2>
-        <p className="mt-1 text-xs text-slate-500">Unified action list: Reimbursement claims, Cash Advances, and Liquidations awaiting your decision, plus your own claims returned for revision.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Approver Inbox</h2>
+          <p className="mt-1 text-xs text-slate-500">Unified action list: Reimbursement claims, Cash Advances, and Liquidations awaiting your decision, plus your own claims returned for revision.</p>
+        </div>
+      )}
 
       {hasNewInboxData && (
         <div className="bg-brand/10 border border-brand/30 text-brand text-xs font-semibold rounded-lg px-4 py-2.5 flex items-center justify-between gap-3">
@@ -358,8 +396,44 @@ export const ApprovalQueue: React.FC = () => {
         </div>
       )}
 
-      {/* Stats Cards - same KPICard component/sizing as the Dashboard, for visual consistency */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Org-change notices — docs/hierarchy-sync-design.md §5. Claims whose
+          requestor no longer reports to this approver stay assigned by
+          default; this offers a one-click transfer to the suggested new
+          approver, or "keep reviewing" to just dismiss the reminder. */}
+      {visibleInboxClaims.filter(c => c.approver_stale_since && !dismissedStaleIds.has(c.id)).map(claim => {
+        const suggested = claim.pending_transfer_to ? users.find(u => u.id === claim.pending_transfer_to) : null;
+        const claimNumber = getClaimNumber(claim);
+        return (
+          <div key={`stale-${claim.id}`} className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-amber-900">
+              <span className="font-bold">{claimNumber}:</span> {claim.approver_stale_reason || 'The requestor no longer reports to you.'}
+              {suggested && <> Transfer to <strong>{suggested.name}</strong>, or keep reviewing it yourself.</>}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => handleKeepReviewing(claim.id)}
+                className="text-xs font-bold text-amber-800 hover:text-amber-950 px-3 py-1.5 rounded border border-amber-300 bg-white"
+              >
+                Keep Reviewing
+              </button>
+              {suggested && (
+                <button
+                  onClick={() => handleTransferApprover(claim)}
+                  disabled={transferringId === claim.id}
+                  className="text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded disabled:opacity-50"
+                >
+                  {transferringId === claim.id ? 'Transferring...' : `Transfer to ${suggested.name}`}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Stats Cards - same KPICard component/sizing as the Dashboard, for visual consistency.
+          Oldest Pending now lives in the Approval Center row above (registry-driven) —
+          it was redundant here once the two dashboards merged. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <KPICard
           title="Pending Approvals"
           value={pendingApprovals.length}
@@ -375,31 +449,23 @@ export const ApprovalQueue: React.FC = () => {
           variant={returnedClaims.length > 0 ? "warning" : "success"}
         />
         <KPICard
-          title="Oldest Pending"
-          value={`${oldestPendingDays}d`}
-          description="Longest waiting claim in your approval queue."
-          icon={Clock}
-          variant="info"
-        />
-        <KPICard
           title="Advances & Liquidations"
           value={pendingAdvances.length + pendingLiqs.length}
-          description="Cash Advances and Liquidations awaiting your review."
+          description="Included in the Pending list below, alongside reimbursements."
           icon={Wallet}
           variant={pendingAdvances.length + pendingLiqs.length > 0 ? "action" : "success"}
-          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }}
         />
       </div>
 
       {/* Navigation tabs */}
       <div className="flex gap-1 border-b border-slate-200">
-        <button 
-          onClick={() => { setTab('inbox'); searchParams.set('tab', 'inbox'); setSearchParams(searchParams); }} 
+        <button
+          onClick={() => { setTab('inbox'); searchParams.set('tab', 'inbox'); setSearchParams(searchParams); }}
           className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
             tab === 'inbox' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          Pending ({visibleInboxClaims.length})
+          Pending ({unifiedPendingItems.length})
         </button>
         <button
           onClick={() => { setTab('meetings'); searchParams.set('tab', 'meetings'); setSearchParams(searchParams); }}
@@ -417,183 +483,9 @@ export const ApprovalQueue: React.FC = () => {
         >
           Decision History ({decisionHistoryItems.length})
         </button>
-        <button 
-          onClick={() => { setTab('cadv'); searchParams.set('tab', 'cadv'); setSearchParams(searchParams); }} 
-          className={`px-4 py-2 text-xs font-extrabold border-b-2 -mb-px transition-colors font-display ${
-            tab === 'cadv' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Advances & Liquidations ({pendingAdvances.length + pendingLiqs.length})
-        </button>
       </div>
 
-      {tab === 'cadv' ? (
-        <div className="space-y-6">
-          {/* Pending Cash Advances */}
-          <div className="corp-card flex flex-col overflow-hidden">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Cash Advance Requests Pending Approval</h3>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {pendingAdvances.length === 0 ? (
-                <div className="px-4 py-8 text-center text-slate-400 italic">No cash advances currently pending your approval.</div>
-              ) : (
-                pendingAdvances.map(ca => {
-                  const reqUser = users.find(u => u.id === ca.requestorId);
-                  return (
-                    <div key={ca.id} className="p-4 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <Link 
-                            to={`/cash-advances/${ca.id}`}
-                            className="font-bold text-brand hover:underline text-sm block"
-                          >
-                            CADV-{ca.id.substring(0,6).toUpperCase()}
-                          </Link>
-                          <div className="text-xs text-slate-500 font-semibold mt-0.5">
-                            Requestor: <strong className="text-slate-800">{reqUser?.name || 'Unknown'}</strong> ({reqUser?.department || 'No Dept'})
-                          </div>
-                          <div className="text-xs text-slate-600 mt-2 italic">Purpose: "{ca.purpose}"</div>
-                        </div>
-                        <div className="text-right font-extrabold text-slate-950 font-display text-sm">
-                          {formatPHP(ca.amount)}
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 items-center">
-                        <input
-                          type="text"
-                          placeholder="Provide decision comment or rejection reason..."
-                          value={approvalsComment[ca.id] || ''}
-                          onChange={e => setApprovalsComment(p => ({ ...p, [ca.id]: e.target.value }))}
-                          className="flex-1 border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
-                        />
-                        <div className="flex gap-1.5 w-full sm:w-auto">
-                          <button
-                            onClick={() => handleApproveAdvance(ca.id, 'Rejected')}
-                            disabled={isProcessingAdvance === ca.id}
-                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => handleApproveAdvance(ca.id, 'Approved')}
-                            disabled={isProcessingAdvance === ca.id}
-                            className="corp-btn-primary disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Pending Liquidations */}
-          <div className="corp-card flex flex-col overflow-hidden">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Liquidation Reports Pending Your Review</h3>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {pendingLiqs.length === 0 ? (
-                <div className="px-4 py-8 text-center text-slate-400 italic">No liquidation reports currently pending your review.</div>
-              ) : (
-                pendingLiqs.map(l => {
-                  const ca = cashAdvances.find(c => c.id === l.cashAdvanceId);
-                  const reqUser = users.find(u => u.id === l.requestorId);
-                  return (
-                    <div key={l.id} className="p-4 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
-                            <Link 
-                              to={`/liquidations/${l.id}`}
-                              className="font-bold text-brand hover:underline"
-                            >
-                              LIQ-{l.id.substring(0,6).toUpperCase()}
-                            </Link>
-                            <span className="text-slate-400 font-medium">(for</span>
-                            {ca ? (
-                              <Link 
-                                to={`/cash-advances/${ca.id}`}
-                                className="font-bold text-brand hover:underline"
-                              >
-                                CADV-{ca.id.substring(0,6).toUpperCase()}
-                              </Link>
-                            ) : (
-                              <span className="text-slate-500 font-bold">None</span>
-                            )}
-                            <span className="text-slate-400 font-medium">)</span>
-                          </div>
-                          <div className="text-xs text-slate-500 font-semibold mt-0.5">
-                            Requestor: <strong className="text-slate-800">{reqUser?.name || 'Unknown'}</strong> ({reqUser?.department || 'No Dept'})
-                          </div>
-                          <div className="text-[11px] text-slate-600 mt-2 font-bold space-x-3">
-                            <span>Advance: {formatPHP(ca?.amount || 0)}</span>
-                            <span>Spent: {formatPHP(l.totalSpent)}</span>
-                            <span className={l.varianceAmount === 0 ? 'text-green-600' : l.varianceAmount < 0 ? 'text-amber-600' : 'text-slate-700'}>
-                              Discrepancy: {l.varianceAmount === 0 ? '₱0.00 (Settled)' : l.varianceAmount < 0 ? `${formatPHP(Math.abs(l.varianceAmount))} Refund Due` : `${formatPHP(l.varianceAmount)} Reimbursement Due`}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={async () => {
-                            const details = await apiFetch(`/api/liquidations/${l.id}`);
-                            confirm({
-                              title: `Review Line Items - LIQ-${l.id.substring(0,6).toUpperCase()}`,
-                              message: (
-                                <div className="space-y-4 max-w-2xl text-xs">
-                                  <p>Liquidating Cash Advance: <strong>{formatPHP(ca?.amount || 0)}</strong>. Actual Spent Listed below:</p>
-                                  <div className="border border-slate-200 rounded overflow-hidden">
-                                    <ClaimLineItems expenses={details.lineItems} totalAmount={l.totalSpent} />
-                                  </div>
-                                </div>
-                              ),
-                              confirmLabel: 'Close Preview',
-                              cancelLabel: ''
-                            });
-                          }}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider"
-                        >
-                          Review Line Items
-                        </button>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row gap-2 items-center pt-2">
-                        <input
-                          type="text"
-                          placeholder="Provide decision comment or return reason..."
-                          value={approvalsComment[l.id] || ''}
-                          onChange={e => setApprovalsComment(p => ({ ...p, [l.id]: e.target.value }))}
-                          className="flex-1 border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
-                        />
-                        <div className="flex gap-1.5 w-full sm:w-auto">
-                          <button
-                            onClick={() => handleReviewLiquidation(l.id, 'Returned')}
-                            disabled={isProcessingLiq === l.id}
-                            className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
-                          >
-                            Return for Revision
-                          </button>
-                          <button
-                            onClick={() => handleReviewLiquidation(l.id, 'Approved')}
-                            disabled={isProcessingLiq === l.id}
-                            className="corp-btn-primary disabled:opacity-50"
-                          >
-                            Approve & Close
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      ) : tab === 'meetings' ? (
+      {tab === 'meetings' ? (
         <div className="corp-card flex flex-col overflow-hidden">
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
             <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Review Meetings Awaiting Your Confirmation</h3>
@@ -632,7 +524,7 @@ export const ApprovalQueue: React.FC = () => {
                       <button
                         onClick={() => handleDeclineMeeting(rm.id)}
                         disabled={isProcessingMeeting === rm.id}
-                        className="flex-1 sm:flex-none bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                        className="flex-1 sm:flex-none bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                       >
                         Decline
                       </button>
@@ -655,161 +547,238 @@ export const ApprovalQueue: React.FC = () => {
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
           <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Action Items</h3>
         </div>
-        <div className="overflow-x-auto">
-          {/* Desktop Table View */}
-          <div className="hidden sm:block">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-2.5 w-10">
-                    <input 
-                      type="checkbox" 
-                      className="rounded border-gray-300 text-brand focus:ring-brand"
-                      checked={pendingApprovals.length > 0 && selectedForBulk.length === pendingApprovals.length}
-                      onChange={selectAllBulk}
-                      disabled={pendingApprovals.length === 0}
-                    />
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center gap-1">Requestor <CaretDown className="w-3 h-3 text-transparent"/></div>
-                  </th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center gap-1">Category <CaretDown className="w-3 h-3 text-transparent"/></div>
-                  </th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-end gap-1">Amount <CaretDown className="w-3 h-3 text-transparent"/></div>
-                  </th>
-                  <th className="px-4 py-2.5 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
-                    <div className="flex items-center justify-center gap-1">Type/Status <CaretDown className="w-3 h-3 text-transparent"/></div>
-                  </th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {visibleInboxClaims.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-4">
-                      <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
-                    </td>
-                  </tr>
-                ) : visibleInboxClaims.map((claim: any) => {
-                  const claimNumber = getClaimNumber(claim);
-                  const isReturned = claim.status === ClaimStatus.RETURNED;
-                  return (
-                    <tr key={claim.id} className={`transition-colors ${selectedForBulk.includes(claim.id) ? 'bg-brand/10' : 'hover:bg-brand/5'} ${isReturned ? 'bg-amber-50/20' : ''}`}>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
+        <div>
+          {/* Card list — replaces the old table, which kept overflowing the
+              viewport no matter how the columns were trimmed. Cards reflow
+              (1 column narrow, 2 columns wide) instead of forcing a fixed
+              set of columns into whatever width is available. */}
+          {unifiedPendingItems.length > 0 && (
+            <div className="px-4 pt-3">
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                  checked={pendingApprovals.length > 0 && selectedForBulk.length === pendingApprovals.length}
+                  onChange={selectAllBulk}
+                  disabled={pendingApprovals.length === 0}
+                />
+                Select all reimbursements
+              </label>
+            </div>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-4">
+            {unifiedPendingItems.length === 0 ? (
+              <div className="lg:col-span-2">
+                <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
+              </div>
+            ) : unifiedPendingItems.map(item => {
+              if (item.kind === 'claim') {
+                const claim = item.claim;
+                const claimNumber = getClaimNumber(claim);
+                const isReturned = claim.status === ClaimStatus.RETURNED;
+                return (
+                  <div key={item.id} className={`border rounded-lg p-4 flex flex-col gap-2.5 transition-colors ${selectedForBulk.includes(claim.id) ? 'border-brand bg-brand/5' : isReturned ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
                         {!isReturned && (
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             className="rounded border-gray-300 text-brand focus:ring-brand"
                             checked={selectedForBulk.includes(claim.id)}
                             onChange={() => toggleBulkSelection(claim.id)}
                           />
                         )}
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <div className="text-xs font-mono font-bold text-brand cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
+                        <span className="font-mono font-bold text-brand text-xs cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
                           {claimNumber}
-                        </div>
-                        <div className="text-sm font-bold text-gray-950 mt-0.5">{isReturned ? 'You (Self)' : claim.requestor?.name}</div>
-                        <div className="text-[10px] text-gray-500">
-                          {claim.requestor?.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor?.department}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-sm text-gray-600">
-                        <div className="flex flex-col gap-1 items-start">
-                          <span>{claim.expense_category || 'Meals'}</span>
-                          {claim.sourceLiquidationId && (
-                            <SourceLiquidationTag />
-                          )}
-                          {claim.flagged_high_value && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                              <Warning className="w-2 h-2" /> High Value — Review Closely
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs font-bold text-gray-900">
-                        {formatPHP(claim.total_amount)}
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-center">
-                        <StatusBadge status={claim.status} size="sm" />
-                      </td>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-right text-sm font-medium">
-                        <button onClick={() => setSelectedClaimId(claim.id)} className="text-brand hover:text-brand-hover">
-                          {isReturned ? 'Fix & Resubmit' : 'Review'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Stacked Card View */}
-          <div className="sm:hidden flex flex-col divide-y divide-slate-100">
-            {visibleInboxClaims.length === 0 ? (
-              <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
-            ) : visibleInboxClaims.map((claim: any) => {
-              const claimNumber = getClaimNumber(claim);
-              const isReturned = claim.status === ClaimStatus.RETURNED;
-              return (
-                <div key={claim.id} className={`p-4 hover:bg-slate-50 flex flex-col gap-2.5 transition-colors ${selectedForBulk.includes(claim.id) ? 'bg-brand/5' : ''}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {!isReturned && (
-                        <input 
-                          type="checkbox" 
-                          className="rounded border-gray-300 text-brand focus:ring-brand"
-                          checked={selectedForBulk.includes(claim.id)}
-                          onChange={() => toggleBulkSelection(claim.id)}
-                        />
-                      )}
-                      <span className="font-mono font-bold text-brand text-xs cursor-pointer hover:underline" onClick={() => setSelectedClaimId(claim.id)}>
-                        {claimNumber}
-                      </span>
-                    </div>
-                    <StatusBadge status={claim.status} size="sm" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
-                    <div>
-                      <span className="text-slate-400 font-medium mr-1">Requestor:</span>
-                      <span className="font-bold text-slate-900">{isReturned ? 'You (Self)' : claim.requestor?.name}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-slate-400 font-medium mr-1">Amount:</span>
-                      <span className="font-extrabold text-slate-900">{formatPHP(claim.total_amount)}</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-slate-400 font-medium mr-1">Category:</span>
-                      <span className="font-semibold text-slate-800">{claim.expense_category || 'Meals'}</span>
-                    </div>
-                    {claim.flagged_high_value && (
-                      <div className="col-span-2 mt-1">
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                          <Warning className="w-2.5 h-2.5 mr-0.5 inline" /> High Value — Review Closely
                         </span>
+                      </div>
+                      <StatusBadge status={claim.status} size="sm" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                      <div className="col-span-2">
+                        <span className="text-slate-400 font-medium mr-1">Requestor:</span>
+                        <span className="font-bold text-slate-900">{isReturned ? 'You (Self)' : claim.requestor?.name}</span>
+                        {!isReturned && claim.requestor?.department && (
+                          <span className="text-slate-400"> · {claim.requestor.job_title ? `${claim.requestor.job_title} · ${claim.requestor.department}` : claim.requestor.department}</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-medium mr-1">Category:</span>
+                        <span className="font-semibold text-slate-800">{claim.expense_category || 'Meals'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                        <span className="font-extrabold text-slate-900">{formatPHP(claim.total_amount)}</span>
+                      </div>
+                      {claim.sourceLiquidationId && (
+                        <div className="col-span-2"><SourceLiquidationTag /></div>
+                      )}
+                      {claim.flagged_high_value && (
+                        <div className="col-span-2 mt-1">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-200">
+                            <Warning className="w-2.5 h-2.5 mr-0.5 inline" /> High Value — Review Closely
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end mt-1">
+                      <button onClick={() => setSelectedClaimId(claim.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
+                        {isReturned ? 'Fix & Resubmit' : 'Review'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (item.kind === 'cadv') {
+                const ca = item.ca;
+                const reqUser = users.find(u => u.id === ca.requestorId);
+                const isExpanded = expandedItemId === item.id;
+                return (
+                  <div key={item.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <Link to={`/cash-advances/${ca.id}`} className="font-mono font-bold text-brand text-xs hover:underline">
+                        CADV-{ca.id.substring(0, 6).toUpperCase()}
+                      </Link>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Cash Advance</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                      <div className="col-span-2">
+                        <span className="text-slate-400 font-medium mr-1">Requestor:</span>
+                        <span className="font-bold text-slate-900">{reqUser?.name || 'Unknown'}</span>
+                        <span className="text-slate-400"> · {reqUser?.department || 'No Dept'}</span>
+                      </div>
+                      <div className="col-span-2 italic">"{ca.purpose}"</div>
+                      <div className="text-right col-span-2">
+                        <span className="text-slate-400 font-medium mr-1">Amount:</span>
+                        <span className="font-extrabold text-slate-900">{formatPHP(ca.amount)}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end mt-1">
+                      <button onClick={() => setExpandedItemId(isExpanded ? null : item.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
+                        {isExpanded ? 'Close' : 'Review'}
+                      </button>
+                    </div>
+                    {isExpanded && (
+                      <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                        <input
+                          type="text"
+                          placeholder="Provide decision comment or rejection reason..."
+                          value={approvalsComment[ca.id] || ''}
+                          onChange={e => setApprovalsComment(p => ({ ...p, [ca.id]: e.target.value }))}
+                          className="border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleApproveAdvance(ca.id, 'Rejected')}
+                            disabled={isProcessingAdvance === ca.id}
+                            className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleApproveAdvance(ca.id, 'Approved')}
+                            disabled={isProcessingAdvance === ca.id}
+                            className="flex-1 corp-btn-primary disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
+                );
+              }
+
+              const liq = item.liq;
+              const ca = cashAdvances.find(c => c.id === liq.cashAdvanceId);
+              const reqUser = users.find(u => u.id === liq.requestorId);
+              const isExpanded = expandedItemId === item.id;
+              return (
+                <div key={item.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <Link to={`/liquidations/${liq.id}`} className="font-mono font-bold text-brand text-xs hover:underline">
+                      LIQ-{liq.id.substring(0, 6).toUpperCase()}
+                    </Link>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Liquidation</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                    <div className="col-span-2">
+                      <span className="text-slate-400 font-medium mr-1">Requestor:</span>
+                      <span className="font-bold text-slate-900">{reqUser?.name || 'Unknown'}</span>
+                      <span className="text-slate-400"> · {reqUser?.department || 'No Dept'}</span>
+                    </div>
+                    <div>Advance: {formatPHP(ca?.amount || 0)}</div>
+                    <div className="text-right font-extrabold text-slate-900">Spent: {formatPHP(liq.totalSpent)}</div>
+                  </div>
                   <div className="flex justify-end mt-1">
-                    <button onClick={() => setSelectedClaimId(claim.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
-                      {isReturned ? 'Fix & Resubmit' : 'Review'}
+                    <button onClick={() => setExpandedItemId(isExpanded ? null : item.id)} className="text-xs font-bold text-brand hover:text-brand-hover">
+                      {isExpanded ? 'Close' : 'Review'}
                     </button>
                   </div>
+                  {isExpanded && (
+                    <div className="pt-2 border-t border-slate-100 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600 font-bold">
+                        <span className={liq.varianceAmount === 0 ? 'text-green-600' : liq.varianceAmount < 0 ? 'text-amber-600' : 'text-slate-700'}>
+                          Discrepancy: {liq.varianceAmount === 0 ? '₱0.00 (Settled)' : liq.varianceAmount < 0 ? `${formatPHP(Math.abs(liq.varianceAmount))} Refund Due` : `${formatPHP(liq.varianceAmount)} Reimbursement Due`}
+                        </span>
+                        <button
+                          onClick={async () => {
+                            const details = await apiFetch(`/api/liquidations/${liq.id}`);
+                            confirm({
+                              title: `Review Line Items - LIQ-${liq.id.substring(0,6).toUpperCase()}`,
+                              message: (
+                                <div className="space-y-4 max-w-2xl text-xs">
+                                  <p>Liquidating Cash Advance: <strong>{formatPHP(ca?.amount || 0)}</strong>. Actual Spent Listed below:</p>
+                                  <div className="border border-slate-200 rounded overflow-hidden">
+                                    <ClaimLineItems expenses={details.lineItems} totalAmount={liq.totalSpent} />
+                                  </div>
+                                </div>
+                              ),
+                              confirmLabel: 'Close Preview',
+                              cancelLabel: ''
+                            });
+                          }}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded text-xs font-bold border border-slate-200 uppercase tracking-wider shrink-0"
+                        >
+                          Review Line Items
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Provide decision comment or return reason..."
+                        value={approvalsComment[liq.id] || ''}
+                        onChange={e => setApprovalsComment(p => ({ ...p, [liq.id]: e.target.value }))}
+                        className="border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
+                      />
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => handleReviewLiquidation(liq.id, 'Returned')}
+                          disabled={isProcessingLiq === liq.id}
+                          className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                        >
+                          Return for Revision
+                        </button>
+                        <button
+                          onClick={() => handleReviewLiquidation(liq.id, 'Approved')}
+                          disabled={isProcessingLiq === liq.id}
+                          className="flex-1 corp-btn-primary disabled:opacity-50"
+                        >
+                          Approve & Close
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
-        
-        {visibleInboxClaims.length > 0 && (
+
+        {unifiedPendingItems.length > 0 && (
           <div className="bg-white px-4 py-2 border-t border-gray-200 sm:px-6">
             <p className="text-[10px] text-gray-500">
-              Showing all <span className="font-medium text-gray-900">{visibleInboxClaims.length}</span> result{visibleInboxClaims.length === 1 ? '' : 's'}
+              Showing all <span className="font-medium text-gray-900">{unifiedPendingItems.length}</span> result{unifiedPendingItems.length === 1 ? '' : 's'}
             </p>
           </div>
         )}
@@ -918,44 +887,6 @@ export const ApprovalQueue: React.FC = () => {
                 })
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Spend Insights Widget */}
-      {requestorData.length > 0 && (
-        <div className="corp-card space-y-4">
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider font-display flex items-center gap-2"><div className="w-1 h-3 bg-brand rounded-full"></div>Approved Spend by Requestor</h3>
-              <p className="text-[10px] text-slate-500">Total approved reimbursements from your reports</p>
-            </div>
-          </div>
-          <div className="px-6 pb-6 h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={requestorData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                <XAxis
-                  dataKey="name"
-                  type="category"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "#475569" }}
-                  tickFormatter={(name: string) => name.split(' ')[0]}
-                  interval={0}
-                />
-                <YAxis type="number" hide />
-                <Tooltip
-                  cursor={{ fill: "#f1f5f9" }}
-                  formatter={(value: number) => formatPHP(value)}
-                  contentStyle={{ fontSize: "11px", borderRadius: "4px", border: "1px solid #e2e8f0", boxShadow: "0 1px 2px 0 rgb(0 0 0 / 0.05)" }}
-                />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={32}>
-                  {requestorData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#cbd5e1"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
           </div>
         </div>
       )}

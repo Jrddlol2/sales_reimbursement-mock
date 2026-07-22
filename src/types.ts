@@ -13,6 +13,14 @@ export interface User {
   department: string;
   job_title?: string;
   reports_to: string | null; // ID of the Approver they report to
+
+  // Simulated Entra ID hierarchy sync fields — see docs/hierarchy-sync-design.md.
+  // reports_to above is the field that sync writes; these two track the
+  // consequences of a sync-driven org-chart change (approval authority is
+  // derived from headcount but Admin-overridable; employment status flags
+  // departures so their pending approvals get escalated the same as a demotion).
+  employment_status?: 'Active' | 'Inactive';
+  can_approve_reimbursements?: boolean;
 }
 
 export enum DelegationStatus {
@@ -158,6 +166,15 @@ export interface Claim {
   created_at: string;
   updated_at: string;
   reviewMeeting?: ReviewMeeting; // enriched by GET /api/claims and GET /api/claims/:id
+
+  // Set when the requestor's manager changes (simulated Entra ID sync) while
+  // this claim is still Pending Approval under their old approver. See
+  // docs/hierarchy-sync-design.md §5 — the claim stays with the old approver,
+  // who is notified and can keep it or transfer to pending_transfer_to.
+  approver_stale_since?: string | null;
+  pending_transfer_to?: string | null;
+  approver_stale_reason?: string;
+  escalated_to_admin?: boolean;
 }
 
 export interface ImportBatch {

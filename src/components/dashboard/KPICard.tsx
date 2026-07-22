@@ -3,7 +3,14 @@ import { TrendIndicator } from './TrendIndicator';
 import { Icon, ArrowRight } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 
-export type CardVariant = 'action' | 'success' | 'warning' | 'info' | 'default' | 'danger';
+// 'info'/'default' both read as brand blue, same as 'action' — fine for a
+// lone stat card, but a row of 4-6 cards needs more distinct hues than
+// blue/emerald/amber/red to actually look different from each other at a
+// glance. 'indigo'/'violet'/'teal'/'fuchsia'/'cyan'/'orange' are
+// neutral-leaning analytical colors (no status meaning of their own) for
+// exactly that case — status still only ever reads as blue/emerald/amber
+// /red/violet/teal/slate per the app's semantic color rules.
+export type CardVariant = 'action' | 'success' | 'warning' | 'info' | 'default' | 'danger' | 'indigo' | 'violet' | 'teal' | 'fuchsia' | 'cyan' | 'orange';
 
 interface KPICardProps {
   title: string;
@@ -36,65 +43,58 @@ export const KPICard: React.FC<KPICardProps> = ({
   actionLabel,
   actionPath
 }) => {
-  // Border utilities use the Tailwind `!` (important) prefix because the
-  // plain-CSS `.corp-card` rule in index.css declares its own `border: 1px
-  // solid ...` further down the stylesheet than Tailwind's generated utility
-  // layer — at equal specificity, source order wins, so `.corp-card`'s grey
-  // border was silently overriding every variant's colored border here.
-  // Forcing !important is the surgical fix scoped to this component only.
+  // No border color per variant anymore — a colored border plus a colored
+  // top bar plus a colored icon chip was three signals doing one job. The
+  // top bar + icon chip alone are enough to tell variants apart; the border
+  // is now always the same neutral hairline every card shares, so nothing
+  // outlines the card in a status color.
   const variantStyles = {
     action: {
-      card: 'corp-card-glass tint-brand !border-2 !border-brand shadow-sm hover:shadow-md transition-shadow',
       iconContainer: 'bg-brand text-white shadow-sm',
       title: 'text-slate-900 font-extrabold',
       value: 'text-brand',
-      description: 'text-slate-700',
+      description: 'text-slate-600',
       context: 'text-brand font-bold',
       btn: 'bg-brand hover:bg-brand-hover text-white',
       topBar: 'bg-brand'
     },
     success: {
-      card: 'corp-card-glass tint-emerald !border-2 !border-emerald-400 hover:!border-emerald-500 transition-colors shadow-sm',
       iconContainer: 'bg-emerald-600 text-white shadow-sm',
-      title: 'text-emerald-950 font-bold',
-      value: 'text-emerald-800',
-      description: 'text-emerald-700',
+      title: 'text-slate-900 font-bold',
+      value: 'text-emerald-700',
+      description: 'text-slate-600',
       context: 'text-emerald-700 font-bold',
       btn: 'bg-emerald-600 text-white hover:bg-emerald-700',
       topBar: 'bg-emerald-500'
     },
     warning: {
-      card: 'corp-card-glass tint-amber !border-2 !border-amber-400 hover:!border-amber-500 transition-colors shadow-sm',
       iconContainer: 'bg-amber-500 text-white shadow-sm',
-      title: 'text-amber-950 font-bold',
-      value: 'text-amber-800',
-      description: 'text-amber-700',
+      title: 'text-slate-900 font-bold',
+      value: 'text-amber-700',
+      description: 'text-slate-600',
       context: 'text-amber-700 font-bold',
       btn: 'bg-amber-500 text-white hover:bg-amber-600',
       topBar: 'bg-amber-400'
     },
     info: {
-      card: 'corp-card-glass tint-neutral !border !border-slate-300 hover:!border-brand/50 transition-colors',
-      iconContainer: 'bg-slate-700 text-white',
+      iconContainer: 'bg-brand text-white',
       title: 'text-slate-800 font-bold',
       value: 'text-slate-900',
       description: 'text-slate-600',
       context: 'text-slate-500 font-semibold',
-      btn: 'bg-slate-700 text-white hover:bg-slate-800',
-      topBar: 'bg-slate-400'
+      btn: 'bg-brand text-white hover:bg-brand-hover',
+      topBar: 'bg-brand'
     },
     danger: {
-      card: 'corp-card-glass tint-red !border-2 !border-red-400 hover:!border-red-500 transition-colors shadow-sm',
       iconContainer: 'bg-red-600 text-white shadow-sm',
-      title: 'text-red-950 font-bold',
-      value: 'text-red-800',
-      description: 'text-red-700',
+      title: 'text-slate-900 font-bold',
+      value: 'text-red-700',
+      description: 'text-slate-600',
       context: 'text-red-700 font-bold',
       btn: 'bg-red-600 text-white hover:bg-red-700',
       topBar: 'bg-red-500'
     },
     default: {
-      card: `corp-card-glass tint-neutral !border !border-slate-300 hover:!border-brand/50 transition-colors ${colorClass}`,
       iconContainer: 'bg-brand text-white',
       title: 'text-slate-800 font-bold',
       value: 'text-brand',
@@ -102,26 +102,84 @@ export const KPICard: React.FC<KPICardProps> = ({
       context: 'text-slate-500 font-semibold',
       btn: 'bg-brand text-white hover:bg-brand-hover',
       topBar: 'bg-brand'
+    },
+    indigo: {
+      iconContainer: 'bg-indigo-500 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-indigo-700',
+      description: 'text-slate-600',
+      context: 'text-indigo-600 font-semibold',
+      btn: 'bg-indigo-500 text-white hover:bg-indigo-600',
+      topBar: 'bg-indigo-500'
+    },
+    violet: {
+      iconContainer: 'bg-violet-500 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-violet-700',
+      description: 'text-slate-600',
+      context: 'text-violet-600 font-semibold',
+      btn: 'bg-violet-500 text-white hover:bg-violet-600',
+      topBar: 'bg-violet-500'
+    },
+    teal: {
+      iconContainer: 'bg-teal-600 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-teal-700',
+      description: 'text-slate-600',
+      context: 'text-teal-600 font-semibold',
+      btn: 'bg-teal-600 text-white hover:bg-teal-700',
+      topBar: 'bg-teal-500'
+    },
+    fuchsia: {
+      iconContainer: 'bg-fuchsia-500 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-fuchsia-700',
+      description: 'text-slate-600',
+      context: 'text-fuchsia-600 font-semibold',
+      btn: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600',
+      topBar: 'bg-fuchsia-500'
+    },
+    cyan: {
+      iconContainer: 'bg-cyan-600 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-cyan-700',
+      description: 'text-slate-600',
+      context: 'text-cyan-600 font-semibold',
+      btn: 'bg-cyan-600 text-white hover:bg-cyan-700',
+      topBar: 'bg-cyan-500'
+    },
+    orange: {
+      iconContainer: 'bg-orange-500 text-white shadow-sm',
+      title: 'text-slate-800 font-bold',
+      value: 'text-orange-700',
+      description: 'text-slate-600',
+      context: 'text-orange-600 font-semibold',
+      btn: 'bg-orange-500 text-white hover:bg-orange-600',
+      topBar: 'bg-orange-500'
     }
   };
 
   const styles = variantStyles[variant];
+  const cardClass = `bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md shadow-sm transition-all ${colorClass}`;
   const isClickableCard = !!onClick && !actionPath;
 
   const content = (
     <>
-      <div className="absolute top-0 left-0 right-0 h-1 rounded-t-[11px] overflow-hidden">
-        <div className={`w-full h-full ${styles.topBar}`} />
-      </div>
-      
-      <div className="flex items-start justify-between mb-4 mt-1 min-w-0">
-        <div className="flex gap-3 items-center min-w-0">
+      <div className={`absolute top-0 left-0 right-0 h-1.5 ${styles.topBar}`} />
+
+      <div className="flex items-start justify-between mb-4 mt-2 min-w-0">
+        <div className="flex gap-3 items-start min-w-0">
           <div className={`p-2.5 rounded-xl flex-shrink-0 ${styles.iconContainer}`}>
-            <IconComponent size={24} weight="duotone" />
+            <IconComponent size={22} weight="duotone" />
           </div>
-          <div className="min-w-0">
-            <h3 className={`text-xs uppercase tracking-wide leading-normal truncate ${styles.title}`}>{title}</h3>
-            {description && <p className={`text-xs mt-1 leading-snug ${styles.description}`}>{description}</p>}
+          <div className="min-w-0 pt-0.5">
+            {/* Both title and description reserve 2 lines' worth of height
+                regardless of actual line count — without this, a longer
+                title/description that wraps in one card (e.g. "Amount
+                Reimbursed" vs "Approved") pushes that card's value number to
+                a different vertical position than its row siblings. */}
+            <h3 className={`text-xs uppercase tracking-wide leading-normal line-clamp-2 min-h-[2.25rem] ${styles.title}`} title={title}>{title}</h3>
+            {description && <p className={`text-xs mt-1 leading-snug line-clamp-2 min-h-[1.875rem] ${styles.description}`}>{description}</p>}
           </div>
         </div>
       </div>
@@ -181,7 +239,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   if (isClickableCard) {
     return (
       <div
-        className={`corp-card relative p-5 sm:p-6 cursor-pointer h-full flex flex-col ${styles.card}`}
+        className={`corp-card relative overflow-hidden p-5 sm:p-6 cursor-pointer h-full flex flex-col ${cardClass}`}
         onClick={onClick}
       >
         {content}
@@ -190,7 +248,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   }
 
   return (
-    <div className={`corp-card relative p-5 sm:p-6 h-full flex flex-col ${styles.card}`}>
+    <div className={`corp-card relative overflow-hidden p-5 sm:p-6 h-full flex flex-col ${cardClass}`}>
       {content}
     </div>
   );

@@ -14,7 +14,6 @@ import { Layout, navItems } from './components/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { SubmitClaim } from './pages/SubmitClaim';
-import { ApprovalQueue } from './pages/ApprovalQueue';
 import { ProcessingQueue } from './pages/ProcessingQueue';
 import { ReadyToClaim } from './pages/ReadyToClaim';
 import { TransactionHistory } from './pages/TransactionHistory';
@@ -41,9 +40,17 @@ import { UserRole } from './types';
 
 const roleHomePages: Record<UserRole, string> = {
   [UserRole.REQUESTOR]: '/',
-  [UserRole.APPROVER]: '/approvals',
+  [UserRole.APPROVER]: '/',
   [UserRole.CUSTODIAN]: '/processing',
   [UserRole.ADMIN]: '/audit',
+};
+
+// The standalone Approver Inbox page was merged into the Dashboard — this
+// keeps any old /approvals?tab=X link (bookmarks, notification click-throughs)
+// working by forwarding to the same tab on the Dashboard instead of 404ing.
+const ApprovalsRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/${location.search}`} replace />;
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -121,7 +128,7 @@ export default function App() {
                   <Route path="claims/:id" element={<ClaimDetail />} />
                   <Route path="cash-advances/:id" element={<CashAdvanceDetail />} />
                   <Route path="liquidations/:id" element={<LiquidationDetail />} />
-                  <Route path="approvals" element={<ApprovalQueue />} />
+                  <Route path="approvals" element={<ApprovalsRedirect />} />
                   <Route path="processing" element={<ProcessingQueue />} />
                   <Route path="ready-to-claim" element={<ReadyToClaim />} />
                   <Route path="history" element={<TransactionHistory />} />

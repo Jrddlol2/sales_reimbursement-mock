@@ -20,6 +20,7 @@ import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
 import { EmptyState } from '../components/EmptyState';
 import { useNewDataAvailable } from '../hooks/useNewDataAvailable';
+import { Pagination, usePagination } from '../components/Pagination';
 
 type ClaimWithDetails = Claim & { requestor?: User; mom?: any; expenses?: any[]; approvals?: any[] };
 
@@ -247,6 +248,11 @@ export const ProcessingQueue: React.FC = () => {
     if (filterRequestor && c.requestor_id !== filterRequestor) return false;
     return true;
   }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  // Disbursement History has no natural cap and grows forever — the active
+  // Queue tab stays intentionally unpaginated since it's a short, actively
+  // managed worklist where seeing everything at once is more useful.
+  const { currentPage: historyPage, setPage: setHistoryPage, totalPages: historyTotalPages, paginatedItems: paginatedHistory, totalItems: totalHistoryItems } = usePagination(filteredHistory, 25);
 
   if (loadError) {
     return (
@@ -487,11 +493,11 @@ export const ProcessingQueue: React.FC = () => {
               <table className="min-w-full divide-y divide-slate-200">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim / Requestor</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Aging</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Actions</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Claim / Requestor</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Category</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Amount</th>
+                    <th className="px-4 py-2.5 text-center text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Aging</th>
+                    <th className="px-4 py-2.5 text-right text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -514,7 +520,7 @@ export const ProcessingQueue: React.FC = () => {
                             onClick={() => toggleExpand(claim)}
                             className={`transition-colors cursor-pointer ${isExpanded ? 'bg-brand/10' : 'hover:bg-brand/5'}`}
                           >
-                            <td className="px-4 py-4 whitespace-nowrap">
+                            <td className="px-4 py-3 whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 {isExpanded ? <CaretDown className="w-4 h-4 text-gray-400 shrink-0" /> : <CaretRight className="w-4 h-4 text-gray-400 shrink-0" />}
                                 <div>
@@ -526,7 +532,7 @@ export const ProcessingQueue: React.FC = () => {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                               <div>{claim.expense_category || 'Meals'}</div>
                               {claim.sourceLiquidationId && (
                                 <div className="mt-1">
@@ -534,16 +540,16 @@ export const ProcessingQueue: React.FC = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-right font-bold text-gray-900 text-sm">
+                            <td className="px-4 py-3 whitespace-nowrap text-right font-bold text-gray-900 text-sm">
                               {formatPHP(claim.total_amount)}
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-center">
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
                               <span className={`px-2.5 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
                                 {aging.label}
                               </span>
                             </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-bold">
-                              <button 
+                            <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-bold">
+                              <button
                                 onClick={(e) => { e.stopPropagation(); toggleExpand(claim); }}
                                 className="text-brand hover:text-brand-hover"
                               >
@@ -852,14 +858,14 @@ export const ProcessingQueue: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-100">
-                    {filteredHistory.length === 0 ? (
+                    {paginatedHistory.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-4 py-4">
                           <EmptyState icon={FolderOpen} title="No History Found" description="No processed or historical claims found matching the current selected filters." />
                         </td>
                       </tr>
                     ) : (
-                      filteredHistory.map(claim => {
+                      paginatedHistory.map(claim => {
                         const claimNumber = getClaimNumber(claim);
                         const isClaimed = claim.status === ClaimStatus.COMPLETED;
                         
@@ -905,10 +911,10 @@ export const ProcessingQueue: React.FC = () => {
 
               {/* Mobile Card View */}
               <div className="md:hidden flex flex-col divide-y divide-slate-100">
-                {filteredHistory.length === 0 ? (
+                {paginatedHistory.length === 0 ? (
                   <EmptyState icon={FolderOpen} title="No History Found" description="No processed or historical claims found matching the current selected filters." />
                 ) : (
-                  filteredHistory.map(claim => {
+                  paginatedHistory.map(claim => {
                     const claimNumber = getClaimNumber(claim);
                     const isClaimed = claim.status === ClaimStatus.COMPLETED;
                     
@@ -959,6 +965,13 @@ export const ProcessingQueue: React.FC = () => {
                 )}
               </div>
             </div>
+            <Pagination
+              currentPage={historyPage}
+              totalPages={historyTotalPages}
+              onPageChange={setHistoryPage}
+              totalItems={totalHistoryItems}
+              itemsPerPage={25}
+            />
           </div>
         </div>
       )}

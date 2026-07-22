@@ -94,7 +94,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
         <ArrowLeft className="w-4 h-4" /> Back to list
       </button>
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {/* Header */}
         <DetailHeader
           eyebrow="Cash Advance Request"

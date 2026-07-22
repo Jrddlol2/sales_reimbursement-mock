@@ -327,7 +327,7 @@ export const ScenarioGuide: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-brand" /> Demo Scenario Guide
           </h2>
           <p className="mt-1 text-sm text-gray-500">

@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { Email, UserRole } from '../types';
 import { useAuth } from '../components/AuthContext';
 import { Envelope, Clock, User as UserIcon, ArrowLeft } from '@phosphor-icons/react';
+import { EmptyState } from '../components/EmptyState';
 
 export const SystemEmails: React.FC = () => {
   const { user } = useAuth();
@@ -150,7 +151,7 @@ export const SystemEmails: React.FC = () => {
       {/* Header (Always show on Desktop, and on Mobile list view) */}
       {(!mobileEmail) && (
         <div className="shrink-0">
-          <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
             <Envelope className="w-6 h-6 text-brand" />
             {user?.role === UserRole.ADMIN ? 'System Emails (All)' : 'Email Inbox'}
           </h2>
@@ -161,11 +162,11 @@ export const SystemEmails: React.FC = () => {
       )}
 
       {emails.length === 0 ? (
-        <div className="bg-white p-8 text-center border border-slate-200 rounded-xl text-sm text-slate-500 shadow-sm shrink-0">
-          No emails found.
+        <div className="corp-card shrink-0">
+          <EmptyState icon={Envelope} title="No emails found" />
         </div>
       ) : (
-        <div className="grid grid-cols-12 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-1 min-h-0">
+        <div className="grid grid-cols-12 corp-card overflow-hidden flex-1 min-h-0">
           {/* List Pane */}
           <div className={`col-span-12 md:col-span-5 lg:col-span-4 border-r border-slate-200 flex flex-col h-full min-h-0 bg-white ${mobileEmail ? 'hidden md:flex' : 'flex'}`}>
             <div className="p-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between shrink-0">

@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
+import { Modal } from '../components/Modal';
 
 export const Moms: React.FC = () => {
   const { user } = useAuth();
@@ -1403,7 +1404,7 @@ export const Moms: React.FC = () => {
       {/* MOM Transcript Viewer Modal */}
       <AnimatePresence>
         {previewMom && (
-          <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-40 flex items-center justify-center p-4">
+          <Modal onClose={() => setPreviewMom(null)} bare>
             <motion.div
               role="dialog"
               aria-modal="true"
@@ -1589,7 +1590,7 @@ export const Moms: React.FC = () => {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </Modal>
         )}
       </AnimatePresence>
     </div>

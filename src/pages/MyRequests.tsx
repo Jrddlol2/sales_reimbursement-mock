@@ -7,7 +7,8 @@ import { RecentActivityTable } from '../components/dashboard/RecentActivityTable
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { metricsForRole, MetricContext } from '../metrics/registry';
 import { DashboardPeriodProvider, useDashboardPeriod } from '../contexts/DashboardPeriodContext';
-import { PlusCircle, UserCircle, Wallet, X, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { PlusCircle, UserCircle, Wallet, X } from '@phosphor-icons/react';
+import { Pagination, usePagination } from '../components/Pagination';
 
 const PAGE_SIZE = 10;
 
@@ -65,7 +66,6 @@ export const MyRequests: React.FC = () => {
   const [cadvs, setCadvs] = useState<CashAdvance[]>([]);
   const [liqs, setLiqs] = useState<Liquidation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
 
   useEffect(() => {
     Promise.all([
@@ -80,21 +80,10 @@ export const MyRequests: React.FC = () => {
     }).catch(console.error);
   }, []);
 
-  if (loading || !user) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-7 w-56 bg-slate-200 rounded"></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 h-28"></div>
-          ))}
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl h-64"></div>
-      </div>
-    );
-  }
-
-  const myItems = [
+  // Computed unconditionally (before the loading/no-user return below) so
+  // usePagination, itself a hook, is never called conditionally. Guarded
+  // with user?.id so this is safe to evaluate before auth has loaded.
+  const myItems = user ? [
     ...claims.filter(c => c.requestor_id === user.id).map(c => ({
       id: c.id,
       reference: `REIM-${c.id.substring(0, 6)}`,
@@ -122,7 +111,7 @@ export const MyRequests: React.FC = () => {
       date: l.createdAt,
       path: `/liquidations/${l.id}`
     }))
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
 
   const availableStatuses = Array.from(new Set(myItems.map(i => i.status))).sort();
 
@@ -133,15 +122,27 @@ export const MyRequests: React.FC = () => {
   // The submission history has no natural cap (a long-tenured requestor can
   // have hundreds of rows), so it needs pagination rather than rendering
   // everything into one indefinitely-scrolling table.
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paginatedItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const { currentPage, setPage, totalPages, paginatedItems, totalItems } = usePagination(filteredItems, PAGE_SIZE);
+
+  if (loading || !user) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-7 w-56 bg-slate-200 rounded"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 h-28"></div>
+          ))}
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl h-64"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
             <UserCircle className="w-5 h-5 text-brand" /> My Requests
           </h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -213,30 +214,14 @@ export const MyRequests: React.FC = () => {
         emptyMessage={statusFilter || typeFilter ? "No requests match the selected filters." : "No requests submitted yet — new reimbursements, cash advances, and liquidations you file will show up here."}
       />
 
-      {filteredItems.length > 0 && (
-        <div className="flex items-center justify-between -mt-4">
-          <p className="text-xs text-slate-500">
-            Showing <span className="font-semibold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredItems.length)}</span> of <span className="font-semibold text-slate-700">{filteredItems.length}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:hover:text-slate-600 px-2 py-1.5 rounded border border-slate-300 bg-white"
-            >
-              <CaretLeft className="w-3 h-3" /> Prev
-            </button>
-            <span className="text-xs text-slate-500 font-semibold">Page {currentPage} of {totalPages}</span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 disabled:opacity-40 disabled:hover:text-slate-600 px-2 py-1.5 rounded border border-slate-300 bg-white"
-            >
-              Next <CaretRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalItems={totalItems}
+        itemsPerPage={PAGE_SIZE}
+        className="border-t-0 px-0 py-0 -mt-4"
+      />
     </div>
   );
 };

@@ -67,7 +67,7 @@ export const Support: React.FC = () => {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 font-display">
+          <h1 className="text-2xl font-extrabold text-slate-950 tracking-tight flex items-center gap-2 font-display">
             <Lifebuoy className="w-6 h-6 text-brand" />
             Support Requests
           </h1>

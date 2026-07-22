@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { Company } from '../types';
 import { useToast } from '../components/Toast';
 import { Pencil, X, Check, Plus, Buildings } from '@phosphor-icons/react';
+import { Pagination, usePagination } from '../components/Pagination';
 
 interface EditState {
   name: string;
@@ -81,6 +82,8 @@ export const CompanyDirectory: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const { currentPage, setPage, totalPages, paginatedItems: paginatedCompanies, totalItems } = usePagination(companies, 25);
 
   if (loading) {
     return (
@@ -187,7 +190,7 @@ export const CompanyDirectory: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
-              {companies.length === 0 ? (
+              {paginatedCompanies.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 py-4">
@@ -199,7 +202,7 @@ export const CompanyDirectory: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ) : companies.map(c => {
+              ) : paginatedCompanies.map(c => {
                 const isEditing = editingId === c.id;
                 return (
                   <React.Fragment key={c.id}>
@@ -275,6 +278,14 @@ export const CompanyDirectory: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={totalItems}
+          itemsPerPage={25}
+          itemLabel="companies"
+        />
       </div>
     </div>
   );

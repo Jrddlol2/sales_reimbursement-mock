@@ -2,9 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import Papa from 'papaparse';
-import { DownloadSimple, CaretDown, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { DownloadSimple, CaretDown, ClockCounterClockwise } from '@phosphor-icons/react';
 import { getClaimNumber } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
+import { Pagination, usePagination } from '../components/Pagination';
+import { EmptyState } from '../components/EmptyState';
+
+const PAGE_SIZE = 25;
 
 // Claim-related entries have a claim_number; user-admin entries have a
 // targetUser name. Everything else (Cash Advance / Liquidation events) has
@@ -48,6 +52,8 @@ export const AuditLog: React.FC = () => {
     });
   }, []);
 
+  const { currentPage, setPage, totalPages, paginatedItems, totalItems } = usePagination(history, PAGE_SIZE);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -76,7 +82,7 @@ export const AuditLog: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display">Audit Log</h2>
@@ -118,11 +124,13 @@ export const AuditLog: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {history.length === 0 ? (
+                {paginatedItems.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</td>
+                    <td colSpan={4} className="px-4 py-4">
+                      <EmptyState icon={ClockCounterClockwise} title="No activity recorded yet" />
+                    </td>
                   </tr>
-                ) : history.map((log: any) => (
+                ) : paginatedItems.map((log: any) => (
                   <tr key={log.id} className="hover:bg-brand/5 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap text-[10px] text-slate-500 font-mono">
                       {new Date(log.timestamp).toLocaleString()}
@@ -166,9 +174,9 @@ export const AuditLog: React.FC = () => {
 
           {/* Mobile Card View */}
           <div className="sm:hidden flex flex-col divide-y divide-slate-100">
-            {history.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-slate-500">No activity recorded yet.</div>
-            ) : history.map((log: any) => (
+            {paginatedItems.length === 0 ? (
+              <EmptyState icon={ClockCounterClockwise} title="No activity recorded yet" />
+            ) : paginatedItems.map((log: any) => (
               <div key={log.id} className="p-4 hover:bg-brand/5 flex flex-col gap-2.5 transition-colors">
                 <div className="flex items-center justify-between text-[10px]">
                   <span className="text-slate-500 font-mono">{new Date(log.timestamp).toLocaleString()}</span>
@@ -211,29 +219,13 @@ export const AuditLog: React.FC = () => {
           </div>
         </div>
         
-        {/* Pagination visually represented */}
-        <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between sm:px-6">
-          <div className="flex-1 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-slate-500">
-                Showing <span className="font-extrabold text-slate-900">1</span> to <span className="font-extrabold text-slate-900">{history.length}</span> of <span className="font-extrabold text-slate-900">{history.length}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded shadow-sm -space-x-px" aria-label="Pagination">
-                <button className="relative inline-flex items-center px-2 py-1.5 rounded-l border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
-                  <CaretLeft className="h-3.5 w-3.5" />
-                </button>
-                <button className="relative inline-flex items-center px-3 py-1.5 border border-slate-300 bg-white text-xs font-extrabold text-brand font-display">
-                  1
-                </button>
-                <button className="relative inline-flex items-center px-2 py-1.5 rounded-r border border-slate-300 bg-white text-xs font-bold text-slate-500 hover:bg-slate-50">
-                  <CaretRight className="h-3.5 w-3.5" />
-                </button>
-              </nav>
-            </div>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={totalItems}
+          itemsPerPage={PAGE_SIZE}
+        />
       </div>
     </div>
   );

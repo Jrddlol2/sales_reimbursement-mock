@@ -5,6 +5,8 @@ import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
 import { Pencil, X, Check, ArrowsClockwise, MagnifyingGlass } from '@phosphor-icons/react';
+import { Pagination, usePagination } from '../components/Pagination';
+import { EmptyState } from '../components/EmptyState';
 
 interface EditState {
   role: UserRole;
@@ -173,6 +175,8 @@ export const UserAccounts: React.FC = () => {
   const filtersActive = roleFilter !== 'All' || departmentFilter !== 'All' || searchQuery.trim() !== '';
   const clearFilters = () => { setRoleFilter('All'); setDepartmentFilter('All'); setSearchQuery(''); };
 
+  const { currentPage, setPage, totalPages, paginatedItems: paginatedUsers, totalItems } = usePagination(filteredUsers, 25);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -271,14 +275,14 @@ export const UserAccounts: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
-              {filteredUsers.length === 0 && (
+              {paginatedUsers.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400 italic text-xs">
-                    No users match the current filters.
+                  <td colSpan={9} className="px-4 py-4">
+                    <EmptyState icon={MagnifyingGlass} title="No users match the current filters" />
                   </td>
                 </tr>
               )}
-              {filteredUsers.map(u => {
+              {paginatedUsers.map(u => {
                 const isEditing = editingId === u.id;
                 const isSelf = currentUser?.id === u.id;
 
@@ -298,12 +302,12 @@ export const UserAccounts: React.FC = () => {
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600">{u.job_title || '—'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600">{getManagerName(u.reports_to)}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${u.employment_status === 'Inactive' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${u.employment_status === 'Inactive' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                           {u.employment_status || 'Active'}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${u.can_approve_reimbursements ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-500'}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${u.can_approve_reimbursements ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-500'}`}>
                           {u.can_approve_reimbursements ? 'Yes' : 'No'}
                         </span>
                       </td>
@@ -431,6 +435,14 @@ export const UserAccounts: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={totalItems}
+          itemsPerPage={25}
+          itemLabel="users"
+        />
       </div>
     </div>
   );

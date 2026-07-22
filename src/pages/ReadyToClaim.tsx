@@ -74,7 +74,7 @@ export const ReadyToClaim: React.FC = () => {
       {/* Page Header */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
             <Wallet className="w-6 h-6 text-brand" />
             Ready to Claim
           </h2>

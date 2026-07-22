@@ -15,10 +15,8 @@ import {
   User, 
   Hash, 
   X, 
-  List, 
-  SquaresFour, 
-  ArrowLeft, 
-  ArrowRight,
+  List,
+  SquaresFour,
   Receipt,
   FileText,
   Clock
@@ -26,6 +24,9 @@ import {
 import Papa from 'papaparse';
 import { DownloadSimple } from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Lightbox } from '../components/Modal';
+import { Pagination, usePagination } from '../components/Pagination';
+import { EmptyState } from '../components/EmptyState';
 
 interface ReceiptRecord {
   id: string;
@@ -62,7 +63,6 @@ export const Receipts: React.FC = () => {
 
   // UI States
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 50;
 
   // Active Receipt Preview modal state
@@ -111,6 +111,36 @@ export const Receipts: React.FC = () => {
       });
   }, [user, navigate]);
 
+  // Derive unique departments for filtering — computed unconditionally
+  // (before the loading return below) so usePagination, itself a hook, is
+  // never called conditionally.
+  const departments = Array.from(new Set(receipts.map(r => r.requestor_department))).sort();
+
+  // Filter receipt logs
+  const filteredReceipts = receipts.filter(item => {
+    const matchesGeneral = !generalSearch ||
+      item.requestor_name.toLowerCase().includes(generalSearch.toLowerCase()) ||
+      item.parentNumber.toLowerCase().includes(generalSearch.toLowerCase()) ||
+      item.business_purpose.toLowerCase().includes(generalSearch.toLowerCase()) ||
+      item.category.toLowerCase().includes(generalSearch.toLowerCase());
+
+    const matchesVendor = !vendorSearch || item.vendor.toLowerCase().includes(vendorSearch.toLowerCase());
+    const matchesOr = !orSearch || item.or_number.toLowerCase().includes(orSearch.toLowerCase());
+    const matchesDept = selectedDepartment === 'All' || item.requestor_department === selectedDepartment;
+
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && item.expense_date >= startDate;
+    }
+    if (endDate) {
+      matchesDate = matchesDate && item.expense_date <= endDate;
+    }
+
+    return matchesGeneral && matchesVendor && matchesOr && matchesDept && matchesDate;
+  });
+
+  const { currentPage, setPage, totalPages, paginatedItems: paginatedReceipts, totalItems } = usePagination(filteredReceipts, ITEMS_PER_PAGE);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -137,37 +167,6 @@ export const Receipts: React.FC = () => {
     );
   }
 
-  // Derive unique departments for filtering
-  const departments = Array.from(new Set(receipts.map(r => r.requestor_department))).sort();
-
-  // Filter receipt logs
-  const filteredReceipts = receipts.filter(item => {
-    const matchesGeneral = !generalSearch || 
-      item.requestor_name.toLowerCase().includes(generalSearch.toLowerCase()) ||
-      item.parentNumber.toLowerCase().includes(generalSearch.toLowerCase()) ||
-      item.business_purpose.toLowerCase().includes(generalSearch.toLowerCase()) ||
-      item.category.toLowerCase().includes(generalSearch.toLowerCase());
-
-    const matchesVendor = !vendorSearch || item.vendor.toLowerCase().includes(vendorSearch.toLowerCase());
-    const matchesOr = !orSearch || item.or_number.toLowerCase().includes(orSearch.toLowerCase());
-    const matchesDept = selectedDepartment === 'All' || item.requestor_department === selectedDepartment;
-
-    let matchesDate = true;
-    if (startDate) {
-      matchesDate = matchesDate && item.expense_date >= startDate;
-    }
-    if (endDate) {
-      matchesDate = matchesDate && item.expense_date <= endDate;
-    }
-
-    return matchesGeneral && matchesVendor && matchesOr && matchesDept && matchesDate;
-  });
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredReceipts.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedReceipts = filteredReceipts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
   const handleClearFilters = () => {
     setGeneralSearch('');
     setVendorSearch('');
@@ -175,7 +174,7 @@ export const Receipts: React.FC = () => {
     setSelectedDepartment('All');
     setStartDate('');
     setEndDate('');
-    setCurrentPage(1);
+    setPage(1);
   };
 
   return (
@@ -183,7 +182,7 @@ export const Receipts: React.FC = () => {
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
             <Archive className="w-5 h-5 text-brand" /> Receipt Archive
           </h2>
           <p className="mt-1 text-xs text-slate-500">
@@ -239,7 +238,7 @@ export const Receipts: React.FC = () => {
               type="text"
               placeholder="Search submitter, reference, purpose..."
               value={generalSearch}
-              onChange={e => { setGeneralSearch(e.target.value); setCurrentPage(1); }}
+              onChange={e => { setGeneralSearch(e.target.value); setPage(1); }}
               className="block w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-800 placeholder-slate-400"
             />
           </div>
@@ -253,7 +252,7 @@ export const Receipts: React.FC = () => {
               type="text"
               placeholder="Filter by vendor..."
               value={vendorSearch}
-              onChange={e => { setVendorSearch(e.target.value); setCurrentPage(1); }}
+              onChange={e => { setVendorSearch(e.target.value); setPage(1); }}
               className="block w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-800 placeholder-slate-400"
             />
           </div>
@@ -267,7 +266,7 @@ export const Receipts: React.FC = () => {
               type="text"
               placeholder="Filter by Official Receipt No..."
               value={orSearch}
-              onChange={e => { setOrSearch(e.target.value); setCurrentPage(1); }}
+              onChange={e => { setOrSearch(e.target.value); setPage(1); }}
               className="block w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-800 placeholder-slate-400"
             />
           </div>
@@ -281,7 +280,7 @@ export const Receipts: React.FC = () => {
               <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Department:</span>
               <select
                 value={selectedDepartment}
-                onChange={e => { setSelectedDepartment(e.target.value); setCurrentPage(1); }}
+                onChange={e => { setSelectedDepartment(e.target.value); setPage(1); }}
                 className="border border-slate-300 rounded px-2.5 py-1 text-xs focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-700"
               >
                 <option value="All">All Departments</option>
@@ -297,7 +296,7 @@ export const Receipts: React.FC = () => {
               <input
                 type="date"
                 value={startDate}
-                onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }}
+                onChange={e => { setStartDate(e.target.value); setPage(1); }}
                 className="border border-slate-300 rounded px-2 py-1 text-xs focus:border-brand focus:outline-none bg-white text-slate-700"
               />
             </div>
@@ -308,7 +307,7 @@ export const Receipts: React.FC = () => {
               <input
                 type="date"
                 value={endDate}
-                onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }}
+                onChange={e => { setEndDate(e.target.value); setPage(1); }}
                 className="border border-slate-300 rounded px-2 py-1 text-xs focus:border-brand focus:outline-none bg-white text-slate-700"
               />
             </div>
@@ -343,24 +342,24 @@ export const Receipts: React.FC = () => {
 
       {/* Content Renderers */}
       {filteredReceipts.length === 0 ? (
-        <div className="text-center py-12 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <Receipt className="w-12 h-12 text-slate-300 mx-auto mb-3.5" />
-          <h3 className="font-bold text-slate-800 text-sm">No Matching Receipts found</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-            Try revising your search terms or clearing current filters to view the complete archive.
-          </p>
-          {(generalSearch || vendorSearch || orSearch || selectedDepartment !== 'All' || startDate || endDate) && (
-            <button
-              onClick={handleClearFilters}
-              className="mt-4 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold shadow-xs transition-all"
-            >
-              Show All Receipts
-            </button>
-          )}
+        <div className="corp-card">
+          <EmptyState
+            icon={Receipt}
+            title="No Matching Receipts found"
+            description="Try revising your search terms or clearing current filters to view the complete archive."
+            action={(generalSearch || vendorSearch || orSearch || selectedDepartment !== 'All' || startDate || endDate) ? (
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-bold shadow-xs transition-all"
+              >
+                Show All Receipts
+              </button>
+            ) : undefined}
+          />
         </div>
       ) : viewMode === 'table' ? (
         /* TABLE VIEW (TABULAR SCANNABLE AUDIT LOG) */
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="corp-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-xs">
               <thead className="bg-slate-50">
@@ -513,48 +512,20 @@ export const Receipts: React.FC = () => {
         </div>
       )}
 
-      {/* Audit Pagination Footer */}
-      {totalPages > 1 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-xs">
-          <span className="text-xs text-slate-500 font-semibold">
-            Showing <strong className="text-slate-900">{startIndex + 1}–{Math.min(startIndex + ITEMS_PER_PAGE, filteredReceipts.length)}</strong> of <strong className="text-slate-900">{filteredReceipts.length}</strong> records
-          </span>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white text-slate-700 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="flex items-center text-xs font-bold text-slate-700 px-2">
-              Page {currentPage} of {totalPages}
-            </div>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-1.5 border border-slate-300 rounded bg-white hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white text-slate-700 transition-colors"
-            >
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalItems={totalItems}
+        itemsPerPage={ITEMS_PER_PAGE}
+        itemLabel="records"
+        className="border border-slate-200 rounded-xl shadow-xs"
+      />
 
       {/* Full-Screen Overlay Modal */}
       <AnimatePresence>
         {previewItem && previewItem.receipt_url && previewItem.receipt_url !== 'No Official Receipt' && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" id="archive_preview_modal">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setPreviewItem(null)}
-              className="absolute inset-0 bg-slate-950/85 backdrop-blur-md"
-            />
-
+          <Lightbox onClose={() => setPreviewItem(null)}>
             {/* Modal Box */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -680,7 +651,7 @@ export const Receipts: React.FC = () => {
                 </div>
               </div>
             </motion.div>
-          </div>
+          </Lightbox>
         )}
       </AnimatePresence>
     </div>

@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { formatPHP, uploadFile } from '../utils';
 import { useToast } from '../components/Toast';
 import { ExpenseLineItemEditor } from '../components/ExpenseLineItemEditor';
+import { Input, Textarea, Select, labelClass, fieldBaseClass, fieldStateClass, RequiredMark } from '../components/ui/Input';
 
 interface LineItem {
   id: string;
@@ -624,9 +625,7 @@ export const SubmitClaim: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Requested Amount (PHP ₱) *
-                  </label>
+                  <label className={labelClass}>Requested Amount (PHP ₱)<RequiredMark /></label>
                   <div className="relative rounded shadow-sm">
                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                       <span className="text-gray-500 text-sm">₱</span>
@@ -639,45 +638,35 @@ export const SubmitClaim: React.FC = () => {
                       placeholder="0.00"
                       value={advanceAmount}
                       onChange={e => setAdvanceAmount(e.target.value)}
-                      className="block w-full border border-gray-300 rounded pl-7 pr-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                      className={`${fieldBaseClass} ${fieldStateClass(false)} pl-7`}
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Link completed Meeting
-                  </label>
-                  <select
-                    value={advanceMomId}
-                    disabled={cashAdvances.some(ca => ca.requestorId === user?.id && ca.status !== 'Liquidated' && ca.status !== 'Rejected')}
-                    onChange={e => setAdvanceMomId(e.target.value)}
-                    className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="">-- No linked meeting (Optional) --</option>
-                    {moms.map(mom => (
-                      <option key={mom.id} value={mom.id}>
-                        {mom.client} - {mom.purpose} ({mom.meeting_date})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  label="Link completed Meeting"
+                  value={advanceMomId}
+                  disabled={cashAdvances.some(ca => ca.requestorId === user?.id && ca.status !== 'Liquidated' && ca.status !== 'Rejected')}
+                  onChange={e => setAdvanceMomId(e.target.value)}
+                >
+                  <option value="">-- No linked meeting (Optional) --</option>
+                  {moms.map(mom => (
+                    <option key={mom.id} value={mom.id}>
+                      {mom.client} - {mom.purpose} ({mom.meeting_date})
+                    </option>
+                  ))}
+                </Select>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                  Business Purpose *
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  disabled={cashAdvances.some(ca => ca.requestorId === user?.id && ca.status !== 'Liquidated' && ca.status !== 'Rejected')}
-                  placeholder="Detail the sales activity, travel plans, client target, or specific commercial scope..."
-                  value={advancePurpose}
-                  onChange={e => setAdvancePurpose(e.target.value)}
-                  className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                />
-              </div>
+              <Textarea
+                label="Business Purpose"
+                required
+                rows={3}
+                disabled={cashAdvances.some(ca => ca.requestorId === user?.id && ca.status !== 'Liquidated' && ca.status !== 'Rejected')}
+                placeholder="Detail the sales activity, travel plans, client target, or specific commercial scope..."
+                value={advancePurpose}
+                onChange={e => setAdvancePurpose(e.target.value)}
+              />
             </div>
           </div>
 
@@ -767,18 +756,14 @@ export const SubmitClaim: React.FC = () => {
 
                   {/* MOM Picker */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                      1. Link Completed Meeting *
-                    </label>
+                    <label className={labelClass}>1. Link Completed Meeting<RequiredMark /></label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <select
                         required
                         value={selectedMomId}
                         onChange={e => setSelectedMomId(e.target.value)}
                         aria-invalid={!!formErrors.mom}
-                        className={`block w-full border rounded px-3 py-2 text-sm focus:ring-brand focus:outline-none ${
-                          formErrors.mom ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
-                        }`}
+                        className={`${fieldBaseClass} ${fieldStateClass(!!formErrors.mom)}`}
                       >
                         <option value="">-- Select Completed MOM --</option>
                         {moms.map(mom => (
@@ -795,7 +780,7 @@ export const SubmitClaim: React.FC = () => {
                       </Link>
                     </div>
                     {formErrors.mom ? (
-                      <p className="text-[10px] text-red-600 font-semibold mt-1 flex items-center gap-1">
+                      <p className="text-[11px] text-red-600 font-semibold mt-1 flex items-center gap-1">
                         <WarningCircle className="w-3 h-3 shrink-0" /> {formErrors.mom}
                       </p>
                     ) : (
@@ -840,43 +825,27 @@ export const SubmitClaim: React.FC = () => {
                   {/* Schedule Review Meeting */}
                   {!isResubmit && (
                     <div className="border border-slate-200 rounded p-4 bg-slate-50/50 space-y-3">
-                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                        3. Schedule Review Meeting *
-                      </label>
+                      <label className={labelClass}>3. Schedule Review Meeting<RequiredMark /></label>
                       <p className="text-[10px] text-gray-500 -mt-2">
                         Pick a date/time for your Approver{superior ? ` (${superior.name})` : ''} to review this claim with you. This is your internal review call, separate from the client meeting documented in the MOM above.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                            Meeting Date
-                          </label>
-                          <input
-                            type="date"
-                            required
-                            value={meetingDate}
-                            onChange={e => setMeetingDate(e.target.value)}
-                            aria-invalid={!!formErrors.meeting}
-                            className={`block w-full border rounded px-3 py-2 text-sm focus:outline-none ${
-                              formErrors.meeting ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
-                            }`}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                            Meeting Time
-                          </label>
-                          <input
-                            type="time"
-                            required
-                            value={meetingTime}
-                            onChange={e => setMeetingTime(e.target.value)}
-                            aria-invalid={!!formErrors.meeting}
-                            className={`block w-full border rounded px-3 py-2 text-sm focus:outline-none ${
-                              formErrors.meeting ? 'border-red-300 focus:border-red-400' : 'border-gray-300 focus:border-brand'
-                            }`}
-                          />
-                        </div>
+                        <Input
+                          type="date"
+                          label="Meeting Date"
+                          required
+                          value={meetingDate}
+                          onChange={e => setMeetingDate(e.target.value)}
+                          aria-invalid={!!formErrors.meeting}
+                        />
+                        <Input
+                          type="time"
+                          label="Meeting Time"
+                          required
+                          value={meetingTime}
+                          onChange={e => setMeetingTime(e.target.value)}
+                          aria-invalid={!!formErrors.meeting}
+                        />
                       </div>
                       {hasMeetingConflict ? (
                         <div className="flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
@@ -892,30 +861,22 @@ export const SubmitClaim: React.FC = () => {
                   )}
 
                   {/* Remarks */}
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                      4. Remarks / Business Purpose
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="Detail the sales objective, specific activities, and context of this reimbursement claim..."
-                      value={remarks}
-                      onChange={e => setRemarks(e.target.value)}
-                      className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none"
-                    />
-                  </div>
+                  <Textarea
+                    label="4. Remarks / Business Purpose"
+                    rows={3}
+                    placeholder="Detail the sales objective, specific activities, and context of this reimbursement claim..."
+                    value={remarks}
+                    onChange={e => setRemarks(e.target.value)}
+                  />
 
                   {/* Supporting docs (optional) */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                      5. Supporting Documents / Attachments (Optional)
-                    </label>
-                    <input
+                    <Input
                       type="text"
+                      label="5. Supporting Documents / Attachments (Optional)"
                       placeholder="e.g. SalesProposal_Draft.pdf, Client_Contract_v2.docx"
                       value={supportingDocs}
                       onChange={e => setSupportingDocs(e.target.value)}
-                      className="block w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-brand focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">
                       Specify any additional file attachments that might justify or clarify this reimbursement.

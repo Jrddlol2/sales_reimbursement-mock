@@ -91,7 +91,7 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
         <ArrowLeft className="w-4 h-4" /> Back to list
       </button>
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {/* Header */}
         <DetailHeader
           eyebrow="Liquidation Report"

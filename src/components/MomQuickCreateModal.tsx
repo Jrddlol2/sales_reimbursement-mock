@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, X, PaperPlaneRight } from '@phosphor-icons/react';
+import { FileText, PaperPlaneRight } from '@phosphor-icons/react';
 import { apiFetch } from '../lib/api';
 import { Mom, MomStatus, MinutesSource, Company } from '../types';
 import { useToast } from './Toast';
+import { Modal, ModalHeader } from './Modal';
 
 interface MomQuickCreateModalProps {
   onClose: () => void;
@@ -69,24 +70,10 @@ export const MomQuickCreateModal: React.FC<MomQuickCreateModalProps> = ({ onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-xl max-h-[85vh] overflow-y-auto">
+    <Modal onClose={onClose} maxWidthClass="max-w-xl" ariaLabel="Create Minutes of Meeting">
+      <ModalHeader title="Create Minutes of Meeting" icon={<FileText className="w-5 h-5 text-brand" />} onClose={onClose} />
+      <div className="overflow-y-auto">
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-brand" />
-              Create Minutes of Meeting
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
           <p className="text-xs text-gray-500 -mt-1">
             This finalizes and sends the MOM immediately so it's ready to attach to your claim.
           </p>
@@ -248,6 +235,6 @@ export const MomQuickCreateModal: React.FC<MomQuickCreateModalProps> = ({ onClos
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

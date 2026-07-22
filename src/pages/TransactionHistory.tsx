@@ -6,6 +6,7 @@ import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { ClockCounterClockwise, CaretRight, Funnel } from '@phosphor-icons/react';
 import { EmptyState } from '../components/EmptyState';
+import { Pagination, usePagination } from '../components/Pagination';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { DownloadSimple } from '@phosphor-icons/react';
@@ -34,8 +35,6 @@ export const TransactionHistory: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
@@ -98,6 +97,29 @@ export const TransactionHistory: React.FC = () => {
       });
   }, []);
 
+  // Derived filters — computed unconditionally (before the loading return
+  // below) so usePagination, itself a hook, is never called conditionally.
+  const uniqueStatuses = Array.from(new Set(items.map(item => item.status))).sort();
+
+  const filteredItems = items.filter(item => {
+    const matchesType = selectedType === 'All' || item.type === selectedType;
+    const matchesStatus = selectedStatus === 'All' || item.status === selectedStatus;
+
+    let matchesDate = true;
+    if (startDate) {
+      const itemDateStr = item.date ? item.date.substring(0, 10) : '';
+      matchesDate = matchesDate && itemDateStr >= startDate;
+    }
+    if (endDate) {
+      const itemDateStr = item.date ? item.date.substring(0, 10) : '';
+      matchesDate = matchesDate && itemDateStr <= endDate;
+    }
+
+    return matchesType && matchesStatus && matchesDate;
+  });
+
+  const { currentPage, setPage, totalPages, paginatedItems, totalItems } = usePagination(filteredItems, ITEMS_PER_PAGE);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -134,32 +156,6 @@ export const TransactionHistory: React.FC = () => {
     );
   }
 
-  // Derived filters
-  const uniqueStatuses = Array.from(new Set(items.map(item => item.status))).sort();
-
-  const filteredItems = items.filter(item => {
-    const matchesType = selectedType === 'All' || item.type === selectedType;
-    const matchesStatus = selectedStatus === 'All' || item.status === selectedStatus;
-    
-    let matchesDate = true;
-    if (startDate) {
-      const itemDateStr = item.date ? item.date.substring(0, 10) : '';
-      matchesDate = matchesDate && itemDateStr >= startDate;
-    }
-    if (endDate) {
-      const itemDateStr = item.date ? item.date.substring(0, 10) : '';
-      matchesDate = matchesDate && itemDateStr <= endDate;
-    }
-
-    return matchesType && matchesStatus && matchesDate;
-  });
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedItems = filteredItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  
   const handleExport = () => {
     if (filteredItems.length === 0) return;
     const csv = Papa.unparse(filteredItems.map(item => ({
@@ -187,7 +183,7 @@ export const TransactionHistory: React.FC = () => {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h2 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-2">
+        <h2 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
           <ClockCounterClockwise className="w-5 h-5 text-brand" /> Transaction History
         </h2>
         <p className="mt-1 text-sm text-gray-500">
@@ -205,7 +201,7 @@ export const TransactionHistory: React.FC = () => {
                 key={t}
                 onClick={() => {
                   setSelectedType(t);
-                  setCurrentPage(1);
+                  setPage(1);
                 }}
                 className={`px-4 py-2 text-xs font-bold border-b-2 md:border-b-0 md:rounded-md -mb-px md:mb-0 transition-all ${
                   selectedType === t
@@ -230,7 +226,7 @@ export const TransactionHistory: React.FC = () => {
                 setSelectedStatus(e.target.value);
                 searchParams.set('status', e.target.value);
                 setSearchParams(searchParams);
-                setCurrentPage(1);
+                setPage(1);
               }}
               className="block w-full md:w-48 border border-gray-300 rounded px-3 py-1.5 text-xs focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-700"
             >
@@ -255,7 +251,7 @@ export const TransactionHistory: React.FC = () => {
               value={startDate}
               onChange={e => {
                 setStartDate(e.target.value);
-                setCurrentPage(1);
+                setPage(1);
               }}
               className="block w-full sm:w-40 border border-gray-300 rounded px-3 py-1.5 text-xs focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-700"
             />
@@ -270,7 +266,7 @@ export const TransactionHistory: React.FC = () => {
               value={endDate}
               onChange={e => {
                 setEndDate(e.target.value);
-                setCurrentPage(1);
+                setPage(1);
               }}
               className="block w-full sm:w-40 border border-gray-300 rounded px-3 py-1.5 text-xs focus:border-brand focus:ring-brand focus:outline-none bg-white text-slate-700"
             />
@@ -282,7 +278,7 @@ export const TransactionHistory: React.FC = () => {
               onClick={() => {
                 setStartDate('');
                 setEndDate('');
-                setCurrentPage(1);
+                setPage(1);
               }}
               className="text-xs font-semibold text-brand hover:underline self-end sm:self-auto"
             >
@@ -401,56 +397,13 @@ export const TransactionHistory: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 bg-white px-6 py-4 rounded-b-xl">
-                  <div className="text-xs text-slate-500">
-                    Showing <span className="font-semibold text-slate-700">{startIndex + 1}</span> to{' '}
-                    <span className="font-semibold text-slate-700">
-                      {Math.min(startIndex + ITEMS_PER_PAGE, filteredItems.length)}
-                    </span>{' '}
-                    of <span className="font-semibold text-slate-700">{filteredItems.length}</span> results
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 border border-gray-200 text-xs font-semibold rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent transition-all"
-                    >
-                      Previous
-                    </button>
-                    {Array.from({ length: totalPages }).map((_, i) => {
-                      const pageNum = i + 1;
-                      if (totalPages > 5 && Math.abs(pageNum - currentPage) > 1 && pageNum !== 1 && pageNum !== totalPages) {
-                        if (pageNum === 2 || pageNum === totalPages - 1) {
-                          return <span key={pageNum} className="text-xs text-slate-400 px-1">...</span>;
-                        }
-                        return null;
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`w-8 h-8 flex items-center justify-center text-xs font-semibold rounded-md transition-all ${
-                            currentPage === pageNum
-                              ? 'bg-brand text-white border border-brand'
-                              : 'border border-gray-200 text-gray-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 border border-gray-200 text-xs font-semibold rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-transparent transition-all"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                totalItems={totalItems}
+                itemsPerPage={ITEMS_PER_PAGE}
+              />
             </>
           )}
         </div>

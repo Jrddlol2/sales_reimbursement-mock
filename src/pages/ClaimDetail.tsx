@@ -19,6 +19,7 @@ import { ClaimActivityTimeline } from '../components/ClaimActivityTimeline';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmModal';
 import { Button } from '../components/ui/Button';
+import { Drawer } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { WorkflowTimeline } from '../components/WorkflowTimeline';
@@ -91,13 +92,6 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claimId, user]);
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
 
   const handleApproveReject = async (decision: string) => {
     const action = decision === 'Approved' ? 'approve' : decision === 'Rejected' ? 'reject' : 'return';
@@ -201,7 +195,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
   const originalApproverName = isDelegated ? users.find(u => u.id === claim!.original_approver_id)?.name : undefined;
 
   const drawerContent = (
-    <div className="fixed inset-0 z-50 overflow-hidden flex bg-slate-900/40" id="claim_detail_side_panel">
+    <Drawer onClose={onClose}>
       
       {/* Preview Section (Left Side) */}
       {previewFile && (
@@ -657,7 +651,7 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
            </div>
         )}
       </div>
-    </div>
+    </Drawer>
   );
 
   return createPortal(drawerContent, document.body);

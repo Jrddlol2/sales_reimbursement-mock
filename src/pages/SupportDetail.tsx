@@ -104,7 +104,7 @@ export const SupportDetail: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col md:flex-row">
         <div className="p-6 flex-1 space-y-4">
           <div className="flex justify-between items-start">
-            <h1 className="text-2xl font-bold text-gray-900 font-display flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold text-slate-950 tracking-tight font-display flex items-center gap-2">
               <Lifebuoy className="w-6 h-6 text-brand" />
               {request.subject}
             </h1>

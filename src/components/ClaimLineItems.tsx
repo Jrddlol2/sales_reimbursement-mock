@@ -3,6 +3,7 @@ import { Paperclip, X, Calendar, Tag, Info, FilePdf } from '@phosphor-icons/reac
 import { formatPHP, getUploadUrl } from '../utils';
 import { ReceiptThumbnail } from './ReceiptThumbnail';
 import { motion, AnimatePresence } from 'motion/react';
+import { Lightbox } from './Modal';
 
 interface ExpenseLike {
   id: string;
@@ -135,16 +136,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
         {/* Full-Screen Overlay Modal */}
         <AnimatePresence>
           {previewExpense && previewExpense.receipt_url && previewExpense.receipt_url !== 'No Official Receipt' && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" id="receipt_full_preview_modal">
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setPreviewExpense(null)}
-                className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-              />
-
+            <Lightbox onClose={() => setPreviewExpense(null)}>
               {/* Modal Box */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -248,7 +240,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                   </div>
                 </div>
               </motion.div>
-            </div>
+            </Lightbox>
           )}
         </AnimatePresence>
       </div>
@@ -299,16 +291,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
         {/* Fallback Overlay Modal */}
         <AnimatePresence>
           {previewExpense && previewExpense.id === 'fallback' && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" id="receipt_full_preview_fallback">
-              {/* Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setPreviewExpense(null)}
-                className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-              />
-
+            <Lightbox onClose={() => setPreviewExpense(null)}>
               {/* Modal Box */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -375,7 +358,7 @@ export const ClaimLineItems: React.FC<ClaimLineItemsProps> = ({ expenses, totalA
                   </div>
                 </div>
               </motion.div>
-            </div>
+            </Lightbox>
           )}
         </AnimatePresence>
       </div>

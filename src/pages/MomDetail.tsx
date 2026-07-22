@@ -64,7 +64,7 @@ export const MomDetail: React.FC<MomDetailProps> = ({ id: propId, onClose }) => 
         <ArrowLeft className="w-4 h-4" /> Back to list
       </button>
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {/* Header */}
         <DetailHeader
           eyebrow={isUploaded ? 'Uploaded Minutes of Meeting' : 'Minutes of Meeting'}

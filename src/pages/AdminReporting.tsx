@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus, CashAdvance, CashAdvanceStatus, Liquidation, LiquidationVarianceType, ReviewMeeting, ReviewMeetingStatus, User } from '../types';
 import { SimpleLineChart, SimpleBarChart, DonutChart, CHART_COLORS } from '../components/dashboard/AnalyticsCharts';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatPHP } from '../utils';
-import { ChartBar, CaretDown } from '@phosphor-icons/react';
+import { ChartBar, CaretDown, CaretUp, Minus, WarningCircle } from '@phosphor-icons/react';
 
 type RequestorSortKey = 'spend' | 'count' | 'avg';
 type ApproverSortKey = 'decisions' | 'rate' | 'time';
@@ -18,6 +18,12 @@ const LIQUIDATION_DEADLINE_DAYS = 7;
 const AGING_WARNING_DAYS = 5;
 
 const NON_TERMINAL_STATUSES = [ClaimStatus.PENDING_APPROVAL, ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM];
+
+// A claim counts as "decided" once it's been Rejected or has moved past
+// approval into any post-approval status — Draft/Pending/Returned haven't
+// been decided yet, so they don't belong in an approval/rejection-rate
+// denominator.
+const DECIDED_STATUSES = [ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED, ClaimStatus.REJECTED];
 
 // --- Global date window (Phase 1) ------------------------------------------
 // Every analytical section reads from one user-controlled window so the page
@@ -105,6 +111,102 @@ const inWindow = (dateStr: string | undefined, win: DateWindow): boolean => {
   if (win.start && t < win.start.getTime()) return false;
   if (win.end && t > win.end.getTime()) return false;
   return true;
+};
+
+// The "vs previous period" window. Calendar-aware for month/quarter/year
+// presets (comparing Nov to Oct, not Nov to "30 days before Nov 1" which
+// would land a few days into September) — falls back to a plain
+// duration-shift for rolling windows and custom ranges, where there's no
+// calendar unit to align to. Returns null for All Time: an unbounded window
+// has no meaningful "previous" period to compare against.
+const resolvePreviousWindow = (preset: DatePreset, win: DateWindow, specificMonth?: string, specificYear?: string): DateWindow | null => {
+  if (preset === 'all_time') return null;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  switch (preset) {
+    case 'this_month':
+      return { start: startOfDay(new Date(y, m - 1, 1)), end: endOfDay(new Date(y, m, 0)), label: 'Last Month' };
+    case 'last_month':
+      return { start: startOfDay(new Date(y, m - 2, 1)), end: endOfDay(new Date(y, m - 1, 0)), label: 'The Month Before' };
+    case 'specific_month': {
+      if (!specificMonth) return null;
+      const [sy, sm] = specificMonth.split('-').map(Number);
+      const prevRef = new Date(sy, sm - 2, 1); // sm-1 = selected month (0-idx), one more back
+      const py = prevRef.getFullYear();
+      const pm = prevRef.getMonth();
+      return { start: startOfDay(new Date(py, pm, 1)), end: endOfDay(new Date(py, pm + 1, 0)), label: `${MONTH_NAMES[pm]} ${py}` };
+    }
+    case 'this_quarter': {
+      const q = Math.floor(m / 3);
+      return { start: startOfDay(new Date(y, q * 3 - 3, 1)), end: endOfDay(new Date(y, q * 3, 0)), label: 'Previous Quarter' };
+    }
+    case 'this_year':
+      return { start: startOfDay(new Date(y - 1, 0, 1)), end: endOfDay(new Date(y - 1, 11, 31)), label: String(y - 1) };
+    case 'specific_year': {
+      if (!specificYear) return null;
+      const py = Number(specificYear) - 1;
+      return { start: startOfDay(new Date(py, 0, 1)), end: endOfDay(new Date(py, 11, 31)), label: String(py) };
+    }
+    case 'last_year':
+      return { start: startOfDay(new Date(y - 2, 0, 1)), end: endOfDay(new Date(y - 2, 11, 31)), label: String(y - 2) };
+    case 'last_30':
+    case 'last_90':
+    case 'custom':
+    default: {
+      if (!win.start || !win.end) return null;
+      const durationMs = win.end.getTime() - win.start.getTime();
+      const prevEnd = new Date(win.start.getTime() - 1);
+      const prevStart = new Date(prevEnd.getTime() - durationMs);
+      return { start: prevStart, end: prevEnd, label: 'Previous Period' };
+    }
+  }
+};
+
+// Percentage + direction between a current and prior value. `null` pct means
+// "not comparable" (prior was zero — any current value is an infinite/undefined
+// % change, not a real number to display).
+const computeDelta = (current: number, previous: number): { pct: number | null; diff: number; direction: 'up' | 'down' | 'flat' } => {
+  const diff = current - previous;
+  if (previous === 0) return { pct: current === 0 ? 0 : null, diff, direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat' };
+  const pct = (diff / previous) * 100;
+  return { pct, diff, direction: pct > 0.05 ? 'up' : pct < -0.05 ? 'down' : 'flat' };
+};
+
+// Neutral (slate) by default — for spend and volume counts, "up" isn't
+// inherently good or bad (more spend could mean business growth or cost
+// overrun; that judgment isn't ours to make). Pass `goodDirection` for
+// rate-based KPIs where direction has one unambiguous meaning (Approval
+// Rate: up is good; Avg Approval Time: down is good) — that switches the
+// chip to semantic green/red instead of neutral slate.
+const DeltaChip: React.FC<{
+  delta: { pct: number | null; diff: number; direction: 'up' | 'down' | 'flat' };
+  compareLabel: string;
+  formatDiff?: (n: number) => string;
+  goodDirection?: 'up' | 'down';
+}> = ({ delta, compareLabel, formatDiff, goodDirection }) => {
+  const Icon = delta.direction === 'up' ? CaretUp : delta.direction === 'down' ? CaretDown : Minus;
+  const diffText = formatDiff ? formatDiff(Math.abs(delta.diff)) : String(Math.abs(delta.diff));
+  const mainText = delta.pct === null
+    ? (delta.diff === 0 ? 'No change' : delta.diff > 0 ? `+${diffText} (new)` : `-${diffText}`)
+    : `${delta.pct > 0 ? '+' : ''}${delta.pct.toFixed(1)}%`;
+
+  let colorClass = 'text-slate-500 bg-slate-100';
+  if (goodDirection && delta.direction !== 'flat') {
+    const isGood = delta.direction === goodDirection;
+    colorClass = isGood ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50';
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2 py-0.5 mt-1.5 ${colorClass}`}
+      title={`vs ${compareLabel}`}
+    >
+      <Icon className="w-3 h-3 shrink-0" weight="bold" />
+      {mainText}
+      <span className="font-medium opacity-70 hidden sm:inline">vs {compareLabel}</span>
+    </span>
+  );
 };
 
 const fmtWindowDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -261,6 +363,7 @@ export const AdminReporting: React.FC = () => {
   const [customEnd, setCustomEnd] = useState('');
   const [specificMonth, setSpecificMonth] = useState('');
   const [specificYear, setSpecificYear] = useState('');
+  const [compareEnabled, setCompareEnabled] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -292,9 +395,21 @@ export const AdminReporting: React.FC = () => {
 
   // Years actually present in the data, newest first, for the "Specific
   // Year" picker — avoids offering years with no records to select.
-  const availableYears = Array.from(new Set(claims.map(c => new Date(c.created_at).getFullYear())))
-    .filter(y => !isNaN(y))
-    .sort((a, b) => b - a);
+  const availableYears: number[] = [];
+  claims.forEach(c => {
+    const y = new Date(c.created_at).getFullYear();
+    if (!isNaN(y) && !availableYears.includes(y)) availableYears.push(y);
+  });
+  availableYears.sort((a, b) => b - a);
+
+  // Compare mode — the prior-period equivalent of the active window, only
+  // meaningful (and only offered in the UI) when a bounded window is active.
+  const prevWin = compareEnabled ? resolvePreviousWindow(datePreset, win, specificMonth, specificYear) : null;
+  const prevScopedClaims = prevWin ? claims.filter(c => inWindow(c.created_at, prevWin)) : [];
+  const prevCompletedClaims = prevScopedClaims.filter(c => c.status === ClaimStatus.COMPLETED);
+  const prevTotalSpend = prevCompletedClaims.reduce((acc, c: any) => {
+    return acc + (c.expenses?.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) || 0);
+  }, 0);
 
   // Scoped datasets. Every analytical aggregation below reads from these so
   // the whole page shares one user-controlled window (anchored on each
@@ -312,6 +427,47 @@ export const AdminReporting: React.FC = () => {
   const totalSpend = completedClaims.reduce((acc, c) => {
     return acc + (c.expenses?.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) || 0);
   }, 0);
+  const spendDelta = prevWin ? computeDelta(totalSpend, prevTotalSpend) : null;
+
+  // Prior-period datasets for the remaining top-band KPIs, mirroring the
+  // scoped* derivation above but against prevWin instead of win.
+  const prevScopedClaimIds = new Set(prevScopedClaims.map(c => c.id));
+  const prevScopedHistory = prevWin ? history.filter(h => prevScopedClaimIds.has(h.claim_id)) : [];
+  const prevScopedCadvs = prevWin ? cadvs.filter(ca => inWindow(ca.createdAt, prevWin)) : [];
+
+  // Pending Amount — money currently awaiting a decision (not yet approved,
+  // rejected, or paid). The number a Finance Manager wants to know is
+  // exposed to risk right now.
+  const pendingAmount = scopedClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).reduce((sum, c) => sum + Number(c.total_amount || 0), 0);
+  const prevPendingAmount = prevScopedClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).reduce((sum, c) => sum + Number(c.total_amount || 0), 0);
+  const pendingDelta = prevWin ? computeDelta(pendingAmount, prevPendingAmount) : null;
+
+  // Avg Approval Time — the Submitted -> Approved leg of the cycle-time
+  // funnel, computed early here (not just down in the funnel section) so the
+  // top KPI band can headline it too.
+  const stageDurations = computeStageDurations(scopedHistory);
+  const avgApprovalDays = stageDurations[0]?.days ?? 0;
+  const prevStageDurations = prevWin ? computeStageDurations(prevScopedHistory) : [];
+  const prevAvgApprovalDays = prevStageDurations[0]?.days ?? 0;
+  // Lower is better here, so a numeric "up" delta is actually bad news —
+  // goodDirection='down' tells DeltaChip to flip the color logic accordingly.
+  const approvalTimeDelta = prevWin ? computeDelta(avgApprovalDays, prevAvgApprovalDays) : null;
+
+  // Approval Rate — % of decided claims that were approved, not rejected.
+  const computeApprovalRate = (claimSet: Claim[]) => {
+    const decided = claimSet.filter(c => DECIDED_STATUSES.includes(c.status));
+    const approved = decided.filter(c => c.status !== ClaimStatus.REJECTED);
+    return decided.length > 0 ? (approved.length / decided.length) * 100 : 0;
+  };
+  const approvalRate = computeApprovalRate(scopedClaims);
+  const prevApprovalRate = prevWin ? computeApprovalRate(prevScopedClaims) : 0;
+  const approvalRateDelta = prevWin ? computeDelta(approvalRate, prevApprovalRate) : null;
+
+  // Avg Claim Value — average total_amount across every scoped claim
+  // (not just completed ones), i.e. "how big is a typical claim here."
+  const avgClaimValue = scopedClaims.length > 0 ? scopedClaims.reduce((sum, c) => sum + Number(c.total_amount || 0), 0) / scopedClaims.length : 0;
+  const prevAvgClaimValue = prevScopedClaims.length > 0 ? prevScopedClaims.reduce((sum, c) => sum + Number(c.total_amount || 0), 0) / prevScopedClaims.length : 0;
+  const avgClaimValueDelta = prevWin ? computeDelta(avgClaimValue, prevAvgClaimValue) : null;
 
   // Spend by Category
   const categorySpend: Record<string, number> = {};
@@ -339,29 +495,46 @@ export const AdminReporting: React.FC = () => {
     .sort()
     .map(key => ({ name: monthlyBuckets[key].label, Total: monthlyBuckets[key].total }));
 
-  // Requests by Department — now scoped to the global window (previously
-  // hardcoded to "this month", which was the main scope-mixing offender).
-  const departmentData = () => {
-    const deps: Record<string, number> = {};
-    scopedClaims.forEach(c => {
-      const u = users.find(u => u.id === c.requestor_id);
-      if (u) deps[u.department] = (deps[u.department] || 0) + 1;
+  // Department Table — one row per department answering every department
+  // question at once (spend, volume, avg claim, rejection rate, and how
+  // spend moved vs the prior period), replacing three separate charts that
+  // each required flipping between cards to compare one department against
+  // another on a different dimension.
+  interface DeptStat { spend: number; volume: number; completedCount: number; decided: number; rejected: number; }
+  const buildDeptStats = (claimSet: Claim[]): Record<string, DeptStat> => {
+    const stats: Record<string, DeptStat> = {};
+    claimSet.forEach(c => {
+      const dept = users.find(u => u.id === c.requestor_id)?.department;
+      if (!dept) return;
+      if (!stats[dept]) stats[dept] = { spend: 0, volume: 0, completedCount: 0, decided: 0, rejected: 0 };
+      stats[dept].volume += 1;
+      if (c.status === ClaimStatus.COMPLETED) {
+        stats[dept].completedCount += 1;
+        stats[dept].spend += (c as any).expenses?.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) || 0;
+      }
+      if (DECIDED_STATUSES.includes(c.status)) {
+        stats[dept].decided += 1;
+        if (c.status === ClaimStatus.REJECTED) stats[dept].rejected += 1;
+      }
     });
-    return Object.keys(deps).map(k => ({ name: k, count: deps[k] }));
+    return stats;
   };
-
-  // Spend by Department — completed claims only, same scope as the category
-  // breakdown above, just bucketed by the requestor's department instead.
-  const departmentSpend: Record<string, number> = {};
-  completedClaims.forEach(c => {
-    const dept = users.find(u => u.id === c.requestor_id)?.department;
-    if (!dept) return;
-    const spend = c.expenses?.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) || 0;
-    departmentSpend[dept] = (departmentSpend[dept] || 0) + spend;
-  });
-  const departmentSpendData = Object.entries(departmentSpend)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+  const deptStatsCurrent = buildDeptStats(scopedClaims);
+  const deptStatsPrev = prevWin ? buildDeptStats(prevScopedClaims) : {};
+  const departmentRows = Object.keys(deptStatsCurrent)
+    .map(dept => {
+      const cur = deptStatsCurrent[dept];
+      const prev = deptStatsPrev[dept];
+      return {
+        dept,
+        spend: cur.spend,
+        volume: cur.volume,
+        avgClaim: cur.completedCount > 0 ? cur.spend / cur.completedCount : 0,
+        rejectionRate: cur.decided > 0 ? (cur.rejected / cur.decided) * 100 : 0,
+        spendDelta: prevWin ? computeDelta(cur.spend, prev?.spend || 0) : null,
+      };
+    })
+    .sort((a, b) => b.spend - a.spend);
 
   // Top Requestors — same completed-claims scope, grouped per person instead
   // of per department, so a single big spender inside a department is
@@ -411,6 +584,10 @@ export const AdminReporting: React.FC = () => {
   const outstandingFloat = scopedCadvs
     .filter(ca => ca.status === CashAdvanceStatus.RELEASED)
     .reduce((sum, ca) => sum + Number(ca.amount || 0), 0);
+  const prevOutstandingFloat = prevScopedCadvs
+    .filter(ca => ca.status === CashAdvanceStatus.RELEASED)
+    .reduce((sum, ca) => sum + Number(ca.amount || 0), 0);
+  const outstandingFloatDelta = prevWin ? computeDelta(outstandingFloat, prevOutstandingFloat) : null;
 
   // Deadline compliance — only liquidations whose parent cash advance has a
   // releaseDate can be judged (a liquidation with no release on record has
@@ -463,9 +640,15 @@ export const AdminReporting: React.FC = () => {
     .sort((a, b) => b.daysOverdue - a.daysOverdue);
 
   // Process Cycle Time — where claims actually spend their time.
-  const stageDurations = computeStageDurations(scopedHistory);
+  // (stageDurations itself is computed earlier, alongside the top KPI band's
+  // Avg Approval Time, so both read from one call instead of two.)
   const stageDurationData = stageDurations.map(s => ({ name: s.name, days: Number(s.days.toFixed(1)) }));
   const slowestStage = stageDurations.reduce((max, s) => s.days > max.days ? s : max, stageDurations[0]);
+  // A stage averaging to exactly 0 days with real claims behind it is a data
+  // artifact (this prototype's mock data timestamps that transition
+  // same-day for every claim), not a genuine "instant" workflow step — flag
+  // it instead of letting a 0.0 bar quietly read as trustworthy.
+  const zeroDayStages = stageDurations.filter(s => s.sampleSize > 0 && s.days < 0.05);
 
   // Claims Aging — how long each still-open claim has sat in its CURRENT
   // status. Uses the latest StatusHistory entry (the transition INTO the
@@ -520,23 +703,6 @@ export const AdminReporting: React.FC = () => {
     </th>
   );
 
-  // Rejections by Department — rate = rejected / claims that reached a
-  // decision (a claim counts as "decided" once it's Rejected or made it into
-  // any post-approval status; Draft/Pending/Returned haven't been decided
-  // yet, so they don't belong in the denominator).
-  const DECIDED_STATUSES = [ClaimStatus.APPROVED, ClaimStatus.PROCESSING, ClaimStatus.READY_FOR_CLAIM, ClaimStatus.COMPLETED, ClaimStatus.REJECTED];
-  const deptRejection: Record<string, { decided: number; rejected: number }> = {};
-  scopedClaims.forEach(c => {
-    if (!DECIDED_STATUSES.includes(c.status)) return;
-    const dept = users.find(u => u.id === c.requestor_id)?.department;
-    if (!dept) return;
-    if (!deptRejection[dept]) deptRejection[dept] = { decided: 0, rejected: 0 };
-    deptRejection[dept].decided += 1;
-    if (c.status === ClaimStatus.REJECTED) deptRejection[dept].rejected += 1;
-  });
-  const rejectionRateData = Object.entries(deptRejection)
-    .map(([name, s]) => ({ name, value: Number(((s.rejected / s.decided) * 100).toFixed(1)) }))
-    .sort((a, b) => b.value - a.value);
 
   // Top rejection reasons — the Approval.comment on each Rejected decision,
   // which is populated both by the live reject route and the seed data
@@ -651,208 +817,106 @@ export const AdminReporting: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="text-[11px] text-slate-500 shrink-0">
-          Showing:{' '}
-          <span className="font-bold text-slate-700">
-            {win.start && win.end
-              ? `${fmtWindowDate(win.start)} – ${fmtWindowDate(win.end)}`
-              : win.start
-                ? `Since ${fmtWindowDate(win.start)}`
-                : 'All records'}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Spend (Completed)</p>
-          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(totalSpend)}</p>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Completed Claims</p>
-          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{completedClaims.length}</p>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Claims (All Statuses)</p>
-          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{scopedClaims.length}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Top Expense Categories</h3>
-          <div className="h-64">
-            <DonutChart data={categoryData} colors={CHART_COLORS} centerCaption="Total Spend" valueFormatter={formatPHP} />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Monthly Spend Trend</h3>
-          <div className="h-64">
-            <SimpleLineChart data={trendData} dataKey="Total" name="Spend" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Requests by Department</h3>
-          <div className="h-64">
-            <SimpleBarChart data={departmentData()} dataKey="count" colors={CHART_COLORS} name="Requests" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Claim Volume by Status</h3>
-          <div className="h-64">
-            <SimpleBarChart data={[
-               { name: 'Pending', count: scopedClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length, color: '#d97706' },
-               { name: 'Processing', count: scopedClaims.filter(c => c.status === ClaimStatus.PROCESSING).length, color: '#7c3aed' },
-               { name: 'Completed', count: scopedClaims.filter(c => c.status === ClaimStatus.COMPLETED).length, color: '#16a34a' },
-               { name: 'Rejected', count: scopedClaims.filter(c => c.status === ClaimStatus.REJECTED).length, color: '#dc2626' }
-            ]} dataKey="count" colors={['#d97706', '#7c3aed', '#16a34a', '#dc2626']} name="Claims" />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Spend by Department</h3>
-          <div className="h-64">
-            <SimpleBarChart data={departmentSpendData} dataKey="value" colors={CHART_COLORS} name="Spend" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="px-6 pt-6 pb-4">
-            <h3 className="text-sm font-bold text-slate-800">Top Requestors</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Name</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Dept</th>
-                  {requestorSortHeader('count', 'Claims')}
-                  {requestorSortHeader('spend', 'Total Spend')}
-                  {requestorSortHeader('avg', 'Avg Claim')}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {requestorRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-xs text-slate-400">No completed claims yet.</td>
-                  </tr>
-                ) : requestorRows.map(row => (
-                  <tr key={row.id} className="hover:bg-brand/5 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{row.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">{row.department}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.count}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900 tabular-nums">{formatPHP(row.spend)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{formatPHP(row.avg)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 pt-6 pb-4">
-          <h3 className="text-sm font-bold text-slate-800">Approver Performance</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Decision volume, approval rate, and turnaround time per approver.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Approver</th>
-                {approverSortHeader('decisions', 'Decisions')}
-                {approverSortHeader('rate', 'Approval Rate')}
-                {approverSortHeader('time', 'Avg Decision Time')}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {approverRows.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-xs text-slate-400">No approval decisions recorded yet.</td>
-                </tr>
-              ) : approverRows.map(row => (
-                <tr key={row.approverId} className="hover:bg-brand/5 transition-colors">
-                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{row.name}</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">
-                    {row.decisions} <span className="text-slate-400">({row.approved}✓ / {row.rejected}✗)</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900 tabular-nums">{row.approvalRate.toFixed(0)}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.avgDecisionDays.toFixed(1)}d</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Rejection Rate by Department</h3>
-          <div className="h-64">
-            {rejectionRateData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">No decided claims yet.</div>
-            ) : (
-              <SimpleBarChart data={rejectionRateData} dataKey="value" colors={CHART_COLORS} name="Rejection %" />
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-4">Top Rejection Reasons</h3>
-          {topRejectionReasons.length === 0 ? (
-            <div className="text-xs text-slate-400">No rejections recorded yet.</div>
-          ) : (
-            <ul className="space-y-3">
-              {topRejectionReasons.map((r, i) => (
-                <li key={i} className="flex items-start justify-between gap-3">
-                  <span className="text-xs text-slate-700 leading-snug">{r.reason}</span>
-                  <span className="shrink-0 text-xs font-bold text-slate-900 tabular-nums bg-slate-100 rounded-full px-2 py-0.5">{r.count}</span>
-                </li>
-              ))}
-            </ul>
+        <div className="flex items-center gap-3 shrink-0">
+          {datePreset !== 'all_time' && (
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={compareEnabled}
+                onChange={e => setCompareEnabled(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-brand focus:ring-brand"
+              />
+              Compare to previous period
+            </label>
           )}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-bold text-slate-800 mb-3">Cash Advance &amp; Liquidation Health</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Outstanding Float</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(outstandingFloat)}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Released to requestors, not yet liquidated</p>
-          </div>
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Liquidated Within Deadline</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">
-              {onTimePct === null ? '—' : `${onTimePct}% on time`}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {judgedLiquidations.length === 0
-                ? `No liquidations to judge yet (${LIQUIDATION_DEADLINE_DAYS}-day deadline)`
-                : `${lateCount} filed late, out of ${judgedLiquidations.length} · ${LIQUIDATION_DEADLINE_DAYS}-day deadline`}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-sm font-bold text-slate-800 mb-4">Variance Mix</h4>
-          <div className="h-64">
-            {varianceMixData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400">No liquidations yet.</div>
-            ) : (
-              <DonutChart data={varianceMixData} centerCaption="Total Liquidations" />
-            )}
+          <div className="text-[11px] text-slate-500">
+            Showing:{' '}
+            <span className="font-bold text-slate-700">
+              {win.start && win.end
+                ? `${fmtWindowDate(win.start)} – ${fmtWindowDate(win.end)}`
+                : win.start
+                  ? `Since ${fmtWindowDate(win.start)}`
+                  : 'All records'}
+            </span>
           </div>
         </div>
       </div>
 
+      {/* Six decision-driving metrics, replacing the old three (which
+          included a vanity "Total Claims (All Statuses)" count that mapped
+          to no decision). Each answers a specific question a Finance
+          Manager, Custodian, or Admin opens this page to ask. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Reimbursed</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(totalSpend)}</p>
+          {spendDelta && prevWin && <DeltaChip delta={spendDelta} compareLabel={prevWin.label} formatDiff={formatPHP} />}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pending Amount</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(pendingAmount)}</p>
+          <p className="text-[11px] text-slate-400 mt-1">Awaiting a decision right now</p>
+          {pendingDelta && prevWin && <DeltaChip delta={pendingDelta} compareLabel={prevWin.label} formatDiff={formatPHP} />}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Avg Approval Time</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{avgApprovalDays.toFixed(1)}d</p>
+          <p className="text-[11px] text-slate-400 mt-1">Submitted → Approved</p>
+          {approvalTimeDelta && prevWin && <DeltaChip delta={approvalTimeDelta} compareLabel={prevWin.label} goodDirection="down" />}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Approval Rate</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{approvalRate.toFixed(1)}%</p>
+          <p className="text-[11px] text-slate-400 mt-1">Of decided claims, not rejected</p>
+          {approvalRateDelta && prevWin && <DeltaChip delta={approvalRateDelta} compareLabel={prevWin.label} goodDirection="up" />}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Outstanding Float</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(outstandingFloat)}</p>
+          <p className="text-[11px] text-slate-400 mt-1">Released, not yet liquidated</p>
+          {outstandingFloatDelta && prevWin && <DeltaChip delta={outstandingFloatDelta} compareLabel={prevWin.label} formatDiff={formatPHP} />}
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Avg Claim Value</p>
+          <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(avgClaimValue)}</p>
+          {avgClaimValueDelta && prevWin && <DeltaChip delta={avgClaimValueDelta} compareLabel={prevWin.label} formatDiff={formatPHP} />}
+        </div>
+      </div>
+
       <div>
+        <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <WarningCircle className="w-4 h-4 text-amber-500" weight="fill" />
+          Needs Attention
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <a
+            href="#overdue-meetings"
+            className={`block p-5 rounded-xl border shadow-sm transition-colors ${overdueMeetings.length > 0 ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+          >
+            <p className={`text-xs font-semibold uppercase tracking-wide ${overdueMeetings.length > 0 ? 'text-red-700' : 'text-slate-500'}`}>Overdue Review Meetings</p>
+            <p className={`text-2xl font-extrabold mt-1 tabular-nums ${overdueMeetings.length > 0 ? 'text-red-800' : 'text-slate-900'}`}>{overdueMeetings.length}</p>
+            <p className="text-[11px] text-slate-400 mt-1">Live snapshot — jump to details ↓</p>
+          </a>
+          <a
+            href="#claims-aging"
+            className={`block p-5 rounded-xl border shadow-sm transition-colors ${agingPastThreshold > 0 ? 'bg-amber-50 border-amber-200 hover:bg-amber-100' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+          >
+            <p className={`text-xs font-semibold uppercase tracking-wide ${agingPastThreshold > 0 ? 'text-amber-700' : 'text-slate-500'}`}>Claims Aging Past {AGING_WARNING_DAYS} Days</p>
+            <p className={`text-2xl font-extrabold mt-1 tabular-nums ${agingPastThreshold > 0 ? 'text-amber-800' : 'text-slate-900'}`}>{agingPastThreshold}</p>
+            <p className="text-[11px] text-slate-400 mt-1">Live snapshot — jump to details ↓</p>
+          </a>
+          <a
+            href="#high-value-flagged"
+            className={`block p-5 rounded-xl border shadow-sm transition-colors ${flaggedClaims.length > 0 ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+          >
+            <p className={`text-xs font-semibold uppercase tracking-wide ${flaggedClaims.length > 0 ? 'text-orange-700' : 'text-slate-500'}`}>High-Value Flagged Claims</p>
+            <p className={`text-2xl font-extrabold mt-1 tabular-nums ${flaggedClaims.length > 0 ? 'text-orange-800' : 'text-slate-900'}`}>{flaggedClaims.length}</p>
+            <p className="text-[11px] text-slate-400 mt-1">{formatPHP(flaggedTotalValue)} total — jump to details ↓</p>
+          </a>
+        </div>
+      </div>
+
+      <div id="overdue-meetings" className="scroll-mt-24">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-800">Overdue Review Meetings</h3>
@@ -896,19 +960,7 @@ export const AdminReporting: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 mb-1">Average Time in Each Stage</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          {slowestStage && slowestStage.days > 0
-            ? <>Slowest stage: <span className="font-bold text-slate-700">{slowestStage.name}</span> at {slowestStage.days.toFixed(1)} days on average.</>
-            : 'Not enough claims have moved through the full pipeline yet to measure this.'}
-        </p>
-        <div className="h-64">
-          <SimpleBarChart data={stageDurationData} dataKey="days" colors={CHART_COLORS} name="Avg Days" />
-        </div>
-      </div>
-
-      <div>
+      <div id="claims-aging" className="scroll-mt-24">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-800">Claims Aging</h3>
@@ -955,7 +1007,7 @@ export const AdminReporting: React.FC = () => {
         )}
       </div>
 
-      <div>
+      <div id="high-value-flagged" className="scroll-mt-24">
         <h3 className="text-sm font-bold text-slate-800 mb-3">High-Value Flagged Claims</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
@@ -1036,6 +1088,208 @@ export const AdminReporting: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 mb-4">Top Expense Categories</h3>
+          <div className="h-64">
+            <DonutChart data={categoryData} colors={CHART_COLORS} centerCaption="Total Spend" valueFormatter={formatPHP} />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 mb-4">Monthly Spend Trend</h3>
+          <div className="h-64">
+            <SimpleLineChart data={trendData} dataKey="Total" name="Spend" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 mb-4">Claim Volume by Status</h3>
+          <div className="h-64">
+            <SimpleBarChart data={[
+               { name: 'Pending', count: scopedClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length, color: '#d97706' },
+               { name: 'Processing', count: scopedClaims.filter(c => c.status === ClaimStatus.PROCESSING).length, color: '#7c3aed' },
+               { name: 'Completed', count: scopedClaims.filter(c => c.status === ClaimStatus.COMPLETED).length, color: '#16a34a' },
+               { name: 'Rejected', count: scopedClaims.filter(c => c.status === ClaimStatus.REJECTED).length, color: '#dc2626' }
+            ]} dataKey="count" colors={['#d97706', '#7c3aed', '#16a34a', '#dc2626']} name="Claims" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-800 mb-1">Average Time in Each Stage</h3>
+        <p className="text-xs text-slate-500 mb-4">
+          {slowestStage && slowestStage.days > 0
+            ? <>Slowest stage: <span className="font-bold text-slate-700">{slowestStage.name}</span> at {slowestStage.days.toFixed(1)} days on average.</>
+            : 'Not enough claims have moved through the full pipeline yet to measure this.'}
+        </p>
+        <div className="h-64">
+          <SimpleBarChart data={stageDurationData} dataKey="days" colors={CHART_COLORS} name="Avg Days" />
+        </div>
+        {zeroDayStages.length > 0 && (
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+            <span className="font-bold">Data caveat:</span> {zeroDayStages.map(s => s.name).join(', ')} shows 0.0 days because the underlying records timestamp that transition on the same day for every claim in scope — treat it as "not yet meaningfully measured," not as a genuinely instant step.
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <h3 className="text-sm font-bold text-slate-800">Approver Performance</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Decision volume, approval rate, and turnaround time per approver.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Approver</th>
+                {approverSortHeader('decisions', 'Decisions')}
+                {approverSortHeader('rate', 'Approval Rate')}
+                {approverSortHeader('time', 'Avg Decision Time')}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {approverRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-xs text-slate-400">No approval decisions recorded yet.</td>
+                </tr>
+              ) : approverRows.map(row => (
+                <tr key={row.approverId} className="hover:bg-brand/5 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{row.name}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">
+                    {row.decisions} <span className="text-slate-400">({row.approved}✓ / {row.rejected}✗)</span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900 tabular-nums">{row.approvalRate.toFixed(0)}%</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.avgDecisionDays.toFixed(1)}d</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <h3 className="text-sm font-bold text-slate-800">Department Breakdown</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Spend, volume, average claim, and rejection rate — one row per department instead of three separate charts.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Department</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Spend</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Volume</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Avg Claim</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Rejection Rate</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {departmentRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-xs text-slate-400">No claims in this period yet.</td>
+                </tr>
+              ) : departmentRows.map(row => (
+                <tr key={row.dept} className="hover:bg-brand/5 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{row.dept}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900 tabular-nums">
+                    {formatPHP(row.spend)}
+                    {row.spendDelta && prevWin && (
+                      <div className="mt-1"><DeltaChip delta={row.spendDelta} compareLabel={prevWin.label} formatDiff={formatPHP} /></div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.volume}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{formatPHP(row.avgClaim)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.rejectionRate.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 pt-6 pb-4">
+          <h3 className="text-sm font-bold text-slate-800">Top Requestors</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Name</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-display">Dept</th>
+                {requestorSortHeader('count', 'Claims')}
+                {requestorSortHeader('spend', 'Total Spend')}
+                {requestorSortHeader('avg', 'Avg Claim')}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-100">
+              {requestorRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-xs text-slate-400">No completed claims yet.</td>
+                </tr>
+              ) : requestorRows.map(row => (
+                <tr key={row.id} className="hover:bg-brand/5 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900">{row.name}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">{row.department}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{row.count}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-900 tabular-nums">{formatPHP(row.spend)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600 tabular-nums">{formatPHP(row.avg)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-800 mb-4">Top Rejection Reasons</h3>
+        {topRejectionReasons.length === 0 ? (
+          <div className="text-xs text-slate-400">No rejections recorded yet.</div>
+        ) : (
+          <ul className="space-y-3">
+            {topRejectionReasons.map((r, i) => (
+              <li key={i} className="flex items-start justify-between gap-3">
+                <span className="text-xs text-slate-700 leading-snug">{r.reason}</span>
+                <span className="shrink-0 text-xs font-bold text-slate-900 tabular-nums bg-slate-100 rounded-full px-2 py-0.5">{r.count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-sm font-bold text-slate-800 mb-3">Cash Advance &amp; Liquidation Health</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Outstanding Float</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{formatPHP(outstandingFloat)}</p>
+            <p className="text-[11px] text-slate-400 mt-1">Released to requestors, not yet liquidated</p>
+          </div>
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Liquidated Within Deadline</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">
+              {onTimePct === null ? '—' : `${onTimePct}% on time`}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              {judgedLiquidations.length === 0
+                ? `No liquidations to judge yet (${LIQUIDATION_DEADLINE_DAYS}-day deadline)`
+                : `${lateCount} filed late, out of ${judgedLiquidations.length} · ${LIQUIDATION_DEADLINE_DAYS}-day deadline`}
+            </p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h4 className="text-sm font-bold text-slate-800 mb-4">Variance Mix</h4>
+          <div className="h-64">
+            {varianceMixData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-slate-400">No liquidations yet.</div>
+            ) : (
+              <DonutChart data={varianceMixData} centerCaption="Total Liquidations" />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

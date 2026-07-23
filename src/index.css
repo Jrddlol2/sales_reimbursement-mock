@@ -119,7 +119,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-panel {
-  background-color: rgba(241, 245, 249, 0.5);
+  /* Kept mostly opaque so the fixed decorative background glows (which sit
+     right under the top corners, inside the header band) don't bleed through
+     the chrome and read as a faint "cropped" edge along the top. Still a
+     touch of translucency + blur for depth, just not enough to show the
+     bokeh through the bar. */
+  background-color: rgba(248, 250, 252, 0.92);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
 }

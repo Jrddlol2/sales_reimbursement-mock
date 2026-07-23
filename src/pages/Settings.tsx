@@ -37,6 +37,17 @@ export const Settings: React.FC = () => {
   const [resetting, setResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  const [seedSelection, setSeedSelection] = useState({
+    demoClaims: true,
+    demoCashAdvances: true,
+    reviewMeetings: true,
+    supportRequests: true,
+    delegations: true,
+    historicalBackfill: true,
+  });
+  const [generatingSelective, setGeneratingSelective] = useState(false);
+  const [selectiveSuccess, setSelectiveSuccess] = useState(false);
+
   const fetchDelegations = () => {
     setDelegationsLoading(true);
     apiFetch('/api/delegations')
@@ -243,6 +254,50 @@ export const Settings: React.FC = () => {
       toast.error('Failed to generate 1 year of historical data');
     }
     setSeedingYear(false);
+  };
+
+  const seedSelectionOptions: { key: keyof typeof seedSelection; label: string; description: string }[] = [
+    { key: 'demoClaims', label: 'Claims & Expenses', description: 'Sample reimbursement claims across every lifecycle status.' },
+    { key: 'demoCashAdvances', label: 'Cash Advances & Liquidations', description: 'Cash advances and their liquidation records.' },
+    { key: 'reviewMeetings', label: 'Review Meetings', description: 'Scheduled review meetings against existing claims.' },
+    { key: 'supportRequests', label: 'Support Requests', description: 'Help-desk tickets with mixed priority/status and reply threads.' },
+    { key: 'delegations', label: 'Approver Delegations', description: 'A couple of pre-accepted approval delegations.' },
+    { key: 'historicalBackfill', label: 'Historical Backfill (12 months)', description: 'A full year of backdated records across every department.' },
+  ];
+
+  const toggleSeedSelection = (key: keyof typeof seedSelection) => {
+    setSeedSelection(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleGenerateSelective = async () => {
+    const anySelected = Object.values(seedSelection).some(Boolean);
+    if (!anySelected) {
+      toast.error('Select at least one data type to generate.');
+      return;
+    }
+    const ok = await confirmAction({
+      title: 'Generate selected data?',
+      message: 'This will wipe all existing data. Only the checked data types will be regenerated — everything else will be left empty.',
+      confirmLabel: 'Generate Selected',
+      tone: 'danger'
+    });
+    if (!ok) return;
+    setGeneratingSelective(true);
+    setSelectiveSuccess(false);
+    try {
+      await apiFetch('/api/admin/seed-year', {
+        method: 'POST',
+        body: JSON.stringify({ options: seedSelection })
+      });
+      setSelectiveSuccess(true);
+      setTimeout(() => {
+        setSelectiveSuccess(false);
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      toast.error('Failed to generate selected data');
+    }
+    setGeneratingSelective(false);
   };
 
   const handleResetSimulation = async () => {
@@ -478,6 +533,45 @@ export const Settings: React.FC = () => {
               {seedSuccess && <span className="text-green-600 text-xs font-bold">Mock data generated successfully! Reloading...</span>}
               {seedYearSuccess && <span className="text-green-600 text-xs font-bold">1 Year of historical data generated! Reloading...</span>}
             <HistoricalImport />
+            </div>
+          </div>
+
+          {/* Selective Generation Section */}
+          <div className="pt-6 border-t border-slate-200 mt-6">
+            <h4 className="text-sm font-extrabold text-slate-950 font-display mb-2">Custom Data Generation</h4>
+            <p className="text-xs text-slate-600 mb-4">
+              Pick exactly which data types to (re)generate. Unchecked types are wiped and left empty — everything checked is regenerated fresh, including a full year of history where applicable.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+              {seedSelectionOptions.map(opt => (
+                <label
+                  key={opt.key}
+                  className={`flex items-start gap-2.5 p-3 rounded border cursor-pointer transition-colors ${
+                    seedSelection[opt.key] ? 'border-brand bg-brand/5' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={seedSelection[opt.key]}
+                    onChange={() => toggleSeedSelection(opt.key)}
+                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-brand focus:ring-brand shrink-0"
+                  />
+                  <span>
+                    <span className="block text-xs font-bold text-slate-800">{opt.label}</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">{opt.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleGenerateSelective}
+                disabled={generatingSelective || seeding || seedingYear}
+                className="px-4 py-2 bg-brand text-white text-xs font-bold uppercase tracking-wider rounded hover:bg-brand-hover transition-colors disabled:opacity-50 shadow-sm font-display"
+              >
+                {generatingSelective ? 'Generating...' : 'Generate Selected'}
+              </button>
+              {selectiveSuccess && <span className="text-green-600 text-xs font-bold">Selected data generated! Reloading...</span>}
             </div>
           </div>
 

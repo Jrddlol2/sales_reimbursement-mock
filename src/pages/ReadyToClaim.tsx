@@ -3,7 +3,7 @@ import { apiFetch } from '../lib/api';
 import { Claim, ClaimStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
 import { getClaimNumber, formatPHP } from '../utils';
-import { Wallet, Key, Calendar, Tag, ArrowRight, CurrencyDollar } from '@phosphor-icons/react';
+import { Wallet, Calendar, Tag, ArrowRight, CurrencyDollar } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import { Button } from '../components/ui/Button';
@@ -79,7 +79,7 @@ export const ReadyToClaim: React.FC = () => {
             Ready to Claim
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Surfaces all of your approved reimbursement claims that are finalized and waiting for your release-code entry.
+            A read-only view of your approved claims awaiting release. To enter your Claim Code and collect a fund, use the "Needs Your Action" panel on your Dashboard.
           </p>
         </div>
       </div>
@@ -146,13 +146,12 @@ export const ReadyToClaim: React.FC = () => {
                           <td className="px-4 py-3 whitespace-nowrap text-right">
                             <Button
                               onClick={() => setSelectedClaimId(claim.id)}
-                              variant="primary"
+                              variant="ghost"
                               size="sm"
                               className="ml-auto"
-                              icon={<Key className="w-3.5 h-3.5" />}
                               id={`claim_funds_btn_${claim.id}`}
                             >
-                              Enter Code
+                              View Details
                             </Button>
                           </td>
                         </tr>
@@ -194,10 +193,10 @@ export const ReadyToClaim: React.FC = () => {
 
                       <button
                         onClick={() => setSelectedClaimId(claim.id)}
-                        className="w-full bg-brand hover:bg-brand-hover text-white text-xs font-bold py-2 rounded shadow-sm flex items-center justify-center gap-1.5 transition-colors mt-1"
+                        className="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold py-2 rounded flex items-center justify-center gap-1.5 transition-colors mt-1"
                         id={`claim_funds_mobile_btn_${claim.id}`}
                       >
-                        <Key className="w-3.5 h-3.5" /> Enter Code
+                        View Details
                       </button>
                     </div>
                   );

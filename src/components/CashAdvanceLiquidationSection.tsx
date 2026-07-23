@@ -15,6 +15,7 @@ import { ExpenseLineItemEditor } from './ExpenseLineItemEditor';
 import { ClaimActivityTimeline } from './ClaimActivityTimeline';
 import { formatPHP, getClaimNumber } from '../utils';
 import { StatusBadge } from './StatusBadge';
+import { WorkflowOwnerTag } from './WorkflowOwnerTag';
 import { 
   Plus, Trash, CloudArrowUp, X, WarningCircle, FileText, Check, ArrowLeft, PaperPlaneRight, Sparkle, MagnifyingGlass
 } from '@phosphor-icons/react';
@@ -48,7 +49,15 @@ const LIQUIDATION_CATEGORIES = [
   { value: 'Other Sales Expenses', label: 'Other Sales Expenses' }
 ];
 
-export const CashAdvanceLiquidationSection: React.FC = () => {
+interface CashAdvanceLiquidationSectionProps {
+  /** Rendered between the "Needs Your Action" panel and this section's own
+   *  KPI row/ledger — lets a parent (e.g. the Requestor Dashboard's "My
+   *  Requests" KPIs) sit in that gap without a second mount of this
+   *  component (which would double the data fetch and desync state). */
+  afterActionPanel?: React.ReactNode;
+}
+
+export const CashAdvanceLiquidationSection: React.FC<CashAdvanceLiquidationSectionProps> = ({ afterActionPanel }) => {
   const { user } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
@@ -423,27 +432,29 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
   const userClaims = claims.filter(c => c.requestor_id === user?.id);
   const userAdvances = cashAdvances.filter(ca => ca.requestorId === user?.id);
 
-  // Stats Calculations
-  const pendingRequestsCount = 
-    userClaims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL).length + 
-    userAdvances.filter(ca => ca.status === CashAdvanceStatus.SUBMITTED).length;
-
+  // Stats Calculations. These three are all cash-advance-specific on purpose —
+  // the "My Requests" registry row directly above already covers claim counts
+  // and reimbursed totals, so this row only surfaces what that one can't:
+  // the requestor's outstanding cash-advance liability and liquidation duties.
   const unliquidatedFloat = userAdvances
     .filter(ca => ca.status !== CashAdvanceStatus.LIQUIDATED && ca.status !== CashAdvanceStatus.REJECTED)
     .reduce((sum, ca) => sum + ca.amount, 0);
 
-  const totalClaimsReimbursed = userClaims
-    .filter(c => c.status === ClaimStatus.COMPLETED)
-    .reduce((sum, c) => sum + c.total_amount, 0);
+  // Released advances still needing a liquidation report — same set the "Needs
+  // Your Action" panel lists (no liquidation yet, or one still in Draft /
+  // Returned), just counted here.
+  const advancesToLiquidate = userAdvances.filter(ca => {
+    if (ca.status !== CashAdvanceStatus.RELEASED) return false;
+    const liq = liquidations.find(l => l.cashAdvanceId === ca.id);
+    return !liq || liq.status === LiquidationStatus.DRAFT || liq.status === LiquidationStatus.RETURNED_FOR_REVISION;
+  });
 
-  const totalLiquidatedSpent = userAdvances
-    .filter(ca => ca.status === CashAdvanceStatus.LIQUIDATED)
-    .reduce((sum, ca) => {
-      const liq = liquidations.find(l => l.cashAdvanceId === ca.id);
-      return sum + (liq ? liq.totalSpent : ca.amount);
-    }, 0);
-
-  const totalReimbursedOrSpent = totalClaimsReimbursed + totalLiquidatedSpent;
+  // Of those, the ones past the 7-day liquidation deadline (from releaseDate) —
+  // same deadline rule used by the "Request Disabled / overdue" notice below.
+  const LIQUIDATION_DEADLINE_MS = 7 * 24 * 60 * 60 * 1000;
+  const overdueLiquidations = advancesToLiquidate.filter(ca =>
+    ca.releaseDate && Date.now() > new Date(ca.releaseDate).getTime() + LIQUIDATION_DEADLINE_MS
+  );
 
   // Prepare unified list of ALL requests
   const unifiedList = [
@@ -698,7 +709,34 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                     <span className="font-mono font-bold text-slate-800">{getClaimNumber(c)}</span>
                     <span className="text-slate-500 ml-2">Ready to Claim — present your Claim Code ({formatPHP(c.total_amount)})</span>
                   </div>
-                  <button onClick={() => setActiveClaimPrompt(c.id)} className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-3 py-1.5 rounded shrink-0 uppercase font-display shadow-sm">Collect Fund</button>
+                  {activeClaimPrompt === c.id ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Claim Code"
+                        value={claimCodeInput}
+                        onChange={(e) => setClaimCodeInput(e.target.value)}
+                        className="border border-gray-300 rounded px-2 py-1 text-[10px] w-24 focus:border-brand focus:outline-none uppercase font-semibold text-slate-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setActiveClaimPrompt(null); setClaimCodeInput(''); }}
+                        className="bg-white border border-gray-300 text-gray-700 px-2 py-1.5 rounded text-[10px] font-bold font-display"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleClaimPayment(c.id, getClaimNumber(c))}
+                        className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-3 py-1.5 rounded shadow-sm font-bold font-display"
+                      >
+                        Submit
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setActiveClaimPrompt(c.id)} className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-3 py-1.5 rounded shrink-0 uppercase font-display shadow-sm">Collect Fund</button>
+                  )}
                 </div>
               ))}
               {returnedClaims.map(c => (
@@ -715,25 +753,31 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
         );
       })()}
 
-      {/* KPI Section */}
+      {afterActionPanel}
+
+      {/* KPI Section — cash-advance-specific stats only, so this row doesn't
+          restate the "My Requests" claim counts/reimbursed totals above it. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display">Pending requests</span>
-          <div className="text-2xl font-extrabold text-slate-900 font-display">
-            {pendingRequestsCount}
-          </div>
-        </div>
         <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
           <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Unliquidated Float</span>
           <div className="text-2xl font-extrabold text-brand font-display">
             {formatPHP(unliquidatedFloat)}
           </div>
+          <span className="text-[10px] text-slate-400 font-semibold">Cash advances still to account for</span>
         </div>
         <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Total Reimbursed & Spent</span>
-          <div className="text-2xl font-extrabold text-slate-900 font-display">
-            {formatPHP(totalReimbursedOrSpent)}
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Advances to Liquidate</span>
+          <div className={`text-2xl font-extrabold font-display ${advancesToLiquidate.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            {advancesToLiquidate.length}
           </div>
+          <span className="text-[10px] text-slate-400 font-semibold">Released advances awaiting a report</span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded p-5 shadow-sm space-y-1">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold font-display font-bold">Overdue Liquidations</span>
+          <div className={`text-2xl font-extrabold font-display ${overdueLiquidations.length > 0 ? 'text-red-600' : 'text-slate-900'}`}>
+            {overdueLiquidations.length}
+          </div>
+          <span className="text-[10px] text-slate-400 font-semibold">Past the 7-day filing deadline</span>
         </div>
       </div>
 
@@ -1045,82 +1089,39 @@ export const CashAdvanceLiquidationSection: React.FC = () => {
                         )}
                       </td>
 
-                      {/* Status Badge */}
+                      {/* Status Badge — plus a compact "waiting on whom" tag, so a
+                          requestor scanning several rows can see where each one is
+                          stuck without opening every drawer. */}
                       <td className="px-3 py-3.5 text-center whitespace-nowrap">
                         {isClaim && claim ? (
-                          <StatusBadge status={claim.status} size="sm" />
+                          <div className="flex flex-col items-center gap-0.5">
+                            <StatusBadge status={claim.status} size="sm" />
+                            <WorkflowOwnerTag
+                              status={claim.status}
+                              requestorName={user?.name}
+                              approverName={users.find(u => u.id === claim.current_approver_id)?.name}
+                            />
+                          </div>
                         ) : ca ? (
-                          <StatusBadge status={ca.status} size="sm" />
+                          <div className="flex flex-col items-center gap-0.5">
+                            <StatusBadge status={ca.status} size="sm" />
+                            <WorkflowOwnerTag
+                              status={ca.status}
+                              requestorName={user?.name}
+                              approverName={users.find(u => u.id === ca.approverId)?.name}
+                            />
+                          </div>
                         ) : null}
                       </td>
 
-                      {/* Row Action Actions */}
-                      <td className="px-3 py-3.5 whitespace-nowrap text-right font-bold space-x-2">
-                        {isClaim && claim && claim.status === ClaimStatus.READY_FOR_CLAIM && (
-                          activeClaimPrompt === claim.id ? (
-                            <div className="inline-flex flex-col items-end gap-1">
-                              <input 
-                                type="text" 
-                                placeholder="Claim Code" 
-                                value={claimCodeInput}
-                                onChange={(e) => setClaimCodeInput(e.target.value)}
-                                className="border border-gray-300 rounded px-2 py-1 text-[10px] w-24 focus:border-brand focus:outline-none uppercase font-semibold text-slate-800"
-                              />
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => { setActiveClaimPrompt(null); setClaimCodeInput(''); }}
-                                  className="bg-white border border-gray-300 text-gray-700 px-2 py-0.5 rounded text-[10px] font-bold font-display"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleClaimPayment(claim.id, getClaimNumber(claim))}
-                                  className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-2 py-0.5 rounded shadow-sm font-bold font-display"
-                                >
-                                  Submit
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setActiveClaimPrompt(claim.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white text-[10px] px-2.5 py-1 rounded shadow-sm transition-all uppercase font-display"
-                            >
-                              Collect Fund
-                            </button>
-                          )
-                        )}
-
-                        {isClaim && claim && claim.status === ClaimStatus.RETURNED && (
-                          <Link
-                            to={`/claims/${claim.id}/resubmit`}
-                            className="inline-block bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2.5 py-1 rounded shadow-sm transition-all uppercase font-display"
-                          >
-                            Revise
-                          </Link>
-                        )}
-
-                        {!isClaim && ca && ca.status === CashAdvanceStatus.DRAFT && (
-                          <button
-                            onClick={() => handleActionOnAdvance(ca.id, 'submit')}
-                            className="corp-btn-primary text-[10px] px-2.5 py-1"
-                          >
-                            Submit
-                          </button>
-                        )}
-
-                        {!isClaim && ca && ca.status === CashAdvanceStatus.RELEASED && (!liq || liq.status === LiquidationStatus.DRAFT || liq.status === LiquidationStatus.RETURNED_FOR_REVISION) && (
-                          <button
-                            onClick={() => handleStartLiquidation(ca)}
-                            className="bg-amber-500 text-white px-2.5 py-1 rounded text-[10px] hover:bg-amber-600 uppercase font-display shadow-sm"
-                          >
-                            {liq ? 'Resume' : 'File'} Liquidation
-                          </button>
-                        )}
-
+                      {/* Row Action — read/track only. Collecting a fund, submitting a
+                          draft advance, revising a returned claim, and filing a
+                          liquidation all happen from the "Needs Your Action" panel
+                          above (the one actionable surface for these); this row
+                          just links into the full record instead of re-offering
+                          the same buttons a second time with a second code-entry
+                          state. */}
+                      <td className="px-3 py-3.5 whitespace-nowrap text-right font-bold">
                         <Link
                           to={isClaim ? `/claims/${item.id}` : `/cash-advances/${item.id}`}
                           className="text-slate-500 hover:text-slate-800 text-[10px] uppercase font-display hover:underline"

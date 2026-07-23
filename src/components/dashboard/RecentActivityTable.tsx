@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusBadge } from '../StatusBadge';
+import { WorkflowOwnerTag } from '../WorkflowOwnerTag';
 import { formatPHP } from '../../utils';
 import { getAgingInfo } from '../../statusConfig';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,8 @@ interface ActivityItem {
   amount: number;
   date: string;
   path: string;
+  requestorName?: string;
+  approverName?: string;
 }
 
 interface RecentActivityTableProps {
@@ -25,9 +28,14 @@ interface RecentActivityTableProps {
   // pending items (e.g. the Approver's Action Required list), not for
   // already-decided history rows on other dashboards.
   showAging?: boolean;
+  // Opt-in only — "who's it waiting on" is only meaningful (and non-redundant)
+  // for a requestor scanning their own mixed-status submissions (MyRequests);
+  // e.g. Custodian's own queue is always "waiting on Custodian" and would just
+  // be noise restating the obvious.
+  showOwner?: boolean;
 }
 
-export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "Nothing here yet — activity will appear as requests move through the workflow.", action, showAging = false }) => {
+export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title, items, emptyMessage = "Nothing here yet — activity will appear as requests move through the workflow.", action, showAging = false, showOwner = false }) => {
   const navigate = useNavigate();
 
   return (
@@ -89,7 +97,10 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                         </td>
                       )}
                       <td>
-                        <StatusBadge status={item.status} size="sm" />
+                        <div className="flex flex-col gap-0.5">
+                          <StatusBadge status={item.status} size="sm" />
+                          {showOwner && <WorkflowOwnerTag status={item.status} requestorName={item.requestorName} approverName={item.approverName} />}
+                        </div>
                       </td>
                       <td className="text-right">
                         <CaretRight size={16} weight="bold" className="text-slate-400 inline-block" />
@@ -110,7 +121,10 @@ export const RecentActivityTable: React.FC<RecentActivityTableProps> = ({ title,
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold text-brand">{item.reference}</span>
-                    <StatusBadge status={item.status} size="sm" />
+                    <div className="flex flex-col items-end gap-0.5">
+                      <StatusBadge status={item.status} size="sm" />
+                      {showOwner && <WorkflowOwnerTag status={item.status} requestorName={item.requestorName} approverName={item.approverName} />}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                     <div>

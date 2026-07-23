@@ -138,7 +138,10 @@ export default function App() {
                   <Route path="receipts" element={<ReceiptArchive />} />
                   <Route path="users" element={<UserAccounts />} />
                   <Route path="companies" element={<CompanyDirectory />} />
-                  <Route path="notifications" element={<SystemEmails />} />
+                  {/* /notifications used to render its own copy of SystemEmails —
+                      same page, second URL. Redirects to the one canonical
+                      route instead of duplicating it. */}
+                  <Route path="notifications" element={<Navigate to="/emails" replace />} />
                   <Route path="emails" element={<SystemEmails />} />
                   <Route path="moms" element={<Moms />} />
                   <Route path="moms/:id" element={<MomDetail />} />

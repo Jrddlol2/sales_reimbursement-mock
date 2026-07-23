@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
-import { Claim, CashAdvance, Liquidation, UserRole } from '../types';
+import { Claim, CashAdvance, Liquidation, User, UserRole } from '../types';
 import { formatPHP } from '../utils';
 import { useAuth } from '../components/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
+import { WorkflowOwnerTag } from '../components/WorkflowOwnerTag';
 import { ClockCounterClockwise, CaretRight, Funnel } from '@phosphor-icons/react';
 import { EmptyState } from '../components/EmptyState';
 import { Pagination, usePagination } from '../components/Pagination';
@@ -19,6 +20,8 @@ interface UnifiedActivityItem {
   amount: number;
   date: string;
   path: string;
+  requestorName?: string;
+  approverName?: string;
 }
 
 export const TransactionHistory: React.FC = () => {
@@ -42,9 +45,10 @@ export const TransactionHistory: React.FC = () => {
     Promise.all([
       apiFetch('/api/claims'),
       apiFetch('/api/cash-advances'),
-      apiFetch('/api/liquidations')
+      apiFetch('/api/liquidations'),
+      apiFetch('/api/users')
     ])
-      .then(([claimsData, cadvsData, liqsData]: [Claim[], CashAdvance[], Liquidation[]]) => {
+      .then(([claimsData, cadvsData, liqsData, usersData]: [Claim[], CashAdvance[], Liquidation[], User[]]) => {
         // /api/claims etc. return everything the caller's role can see —
         // for an Approver that includes their direct reports' claims too
         // (needed for the approval queue), not just their own submissions.
@@ -56,6 +60,11 @@ export const TransactionHistory: React.FC = () => {
         const ownCadvs = isOwn ? cadvsData.filter((c: any) => c.requestorId === user!.id) : cadvsData;
         const ownLiqs = isOwn ? liqsData.filter((l: any) => l.requestorId === user!.id) : liqsData;
 
+        // The "waiting on whom" tag needs a person's name, not just the raw
+        // *_id the list endpoints return — resolve both ends (requestor and
+        // current approver) through one lookup map built from /api/users.
+        const usersById = new Map(usersData.map(u => [u.id, u]));
+
         const unified: UnifiedActivityItem[] = [
           ...ownClaims.map(c => ({
             id: c.id,
@@ -64,7 +73,9 @@ export const TransactionHistory: React.FC = () => {
             status: c.status,
             amount: c.total_amount,
             date: c.created_at,
-            path: `/claims/${c.id}`
+            path: `/claims/${c.id}`,
+            requestorName: usersById.get(c.requestor_id)?.name,
+            approverName: usersById.get(c.current_approver_id)?.name,
           })),
           ...ownCadvs.map((c: any) => ({
             id: c.id,
@@ -73,7 +84,9 @@ export const TransactionHistory: React.FC = () => {
             status: c.status,
             amount: c.amount || 0,
             date: c.createdAt || c.releaseDate || '',
-            path: `/cash-advances/${c.id}`
+            path: `/cash-advances/${c.id}`,
+            requestorName: usersById.get(c.requestorId)?.name,
+            approverName: usersById.get(c.approverId)?.name,
           })),
           ...ownLiqs.map((l: any) => ({
             id: l.id,
@@ -82,7 +95,9 @@ export const TransactionHistory: React.FC = () => {
             status: l.status,
             amount: l.totalExpenses ?? l.totalSpent ?? 0,
             date: l.createdAt || '',
-            path: `/liquidations/${l.id}`
+            path: `/liquidations/${l.id}`,
+            requestorName: usersById.get(l.requestorId)?.name,
+            approverName: usersById.get(l.cashAdvance?.approverId)?.name,
           }))
         ];
 
@@ -350,7 +365,10 @@ export const TransactionHistory: React.FC = () => {
                           </span>
                         </td>
                         <td>
-                          <StatusBadge status={item.status} size="sm" />
+                          <div className="flex flex-col gap-0.5">
+                            <StatusBadge status={item.status} size="sm" />
+                            <WorkflowOwnerTag status={item.status} requestorName={item.requestorName} approverName={item.approverName} />
+                          </div>
                         </td>
                         <td className="text-right">
                           <CaretRight size={16} weight="bold" className="text-slate-400 inline-block" />
@@ -371,7 +389,10 @@ export const TransactionHistory: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-brand">{item.reference}</span>
-                      <StatusBadge status={item.status} size="sm" />
+                      <div className="flex flex-col items-end gap-0.5">
+                        <StatusBadge status={item.status} size="sm" />
+                        <WorkflowOwnerTag status={item.status} requestorName={item.requestorName} approverName={item.approverName} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                       <div>

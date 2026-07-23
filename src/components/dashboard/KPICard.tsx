@@ -1,6 +1,6 @@
 import React from 'react';
 import { TrendIndicator } from './TrendIndicator';
-import { Icon, ArrowRight } from '@phosphor-icons/react';
+import { Icon } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 
 // 'info'/'default' both read as brand blue, same as 'action' — fine for a
@@ -161,6 +161,7 @@ export const KPICard: React.FC<KPICardProps> = ({
 
   const styles = variantStyles[variant];
   const cardClass = `bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md shadow-sm transition-all ${colorClass}`;
+  const isLinkCard = !!actionPath;
   const isClickableCard = !!onClick && !actionPath;
 
   const content = (
@@ -210,37 +211,32 @@ export const KPICard: React.FC<KPICardProps> = ({
           </div>
         )}
       </div>
-
-      {(actionLabel && actionPath) && (
-        <div className="mt-auto pt-4 border-t border-slate-100/50">
-          <Link
-            to={actionPath}
-            className={`flex items-center justify-between w-full px-3 py-2 text-xs font-bold rounded-lg transition-colors group ${styles.btn}`}
-          >
-            {actionLabel}
-            <ArrowRight size={14} weight="bold" className="group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
-      )}
-      {(actionLabel && onClick && !actionPath) && (
-        <div className="mt-auto pt-4 border-t border-slate-100/50">
-          <button
-            onClick={(e) => { e.stopPropagation(); onClick(); }}
-            className={`flex items-center justify-between w-full px-3 py-2 text-xs font-bold rounded-lg transition-colors group ${styles.btn}`}
-          >
-            {actionLabel}
-            <ArrowRight size={14} weight="bold" className="group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
-      )}
     </>
   );
+
+  // The whole card is the click target rather than a bottom button/link row —
+  // one card-sized hit area reads as clickable just as well and lets the
+  // card be shorter instead of reserving space for a repeated "View X" row.
+  if (isLinkCard) {
+    return (
+      <Link
+        to={actionPath!}
+        aria-label={actionLabel ? `${title}: ${actionLabel}` : title}
+        className={`corp-card relative overflow-hidden p-5 sm:p-6 cursor-pointer h-full flex flex-col ${cardClass}`}
+      >
+        {content}
+      </Link>
+    );
+  }
 
   if (isClickableCard) {
     return (
       <div
         className={`corp-card relative overflow-hidden p-5 sm:p-6 cursor-pointer h-full flex flex-col ${cardClass}`}
         onClick={onClick}
+        role="button"
+        tabIndex={0}
+        aria-label={actionLabel ? `${title}: ${actionLabel}` : title}
       >
         {content}
       </div>

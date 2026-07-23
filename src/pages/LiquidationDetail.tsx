@@ -96,7 +96,7 @@ export const LiquidationDetail: React.FC<LiquidationDetailProps> = ({ id: propId
         <DetailHeader
           eyebrow="Liquidation Report"
           title={`LIQ-${liq.id.substring(0, 6).toUpperCase()}`}
-          status={<><StatusBadge status={liq.status} /><WorkflowOwnerTag status={liq.status} className="ml-1.5" /></>}
+          status={<><StatusBadge status={liq.status} /><WorkflowOwnerTag status={liq.status} className="ml-1.5" requestorName={liq.requestor?.name} approverName={linkedCa?.approver?.name} /></>}
           actions={
              <Link to={`/support?new=true&entityType=Liquidation&entityId=${liq.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
                 <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />

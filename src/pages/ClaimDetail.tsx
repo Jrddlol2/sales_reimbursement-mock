@@ -193,6 +193,9 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
   const isDelegated = !!(claim?.original_approver_id && claim.original_approver_id !== claim.current_approver_id);
   const delegateApproverName = isDelegated ? users.find(u => u.id === claim!.current_approver_id)?.name : undefined;
   const originalApproverName = isDelegated ? users.find(u => u.id === claim!.original_approver_id)?.name : undefined;
+  // Non-delegated case — resolve "Currently with Approver" to the actual
+  // current approver's name wherever the id is known.
+  const currentApproverName = claim ? users.find(u => u.id === claim.current_approver_id)?.name : undefined;
 
   const drawerContent = (
     <Drawer onClose={onClose}>
@@ -250,7 +253,12 @@ export const ClaimDetail: React.FC<ClaimDetailProps> = ({ claimId: propClaimId, 
                     {originalApproverName && <> (on behalf of <span className="text-slate-600 font-bold">{originalApproverName}</span>)</>}
                   </span>
                 ) : (
-                  <WorkflowOwnerTag status={claim.status} className="ml-1.5" />
+                  <WorkflowOwnerTag
+                    status={claim.status}
+                    className="ml-1.5"
+                    requestorName={claim.requestor?.name}
+                    approverName={currentApproverName}
+                  />
                 )}
               </>
             )}

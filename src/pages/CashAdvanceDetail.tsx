@@ -99,7 +99,7 @@ export const CashAdvanceDetail: React.FC<CashAdvanceDetailProps> = ({ id: propId
         <DetailHeader
           eyebrow="Cash Advance Request"
           title={`CADV-${ca.id.substring(0, 6).toUpperCase()}`}
-          status={<><StatusBadge status={ca.status} /><WorkflowOwnerTag status={ca.status} className="ml-1.5" /></>}
+          status={<><StatusBadge status={ca.status} /><WorkflowOwnerTag status={ca.status} className="ml-1.5" requestorName={ca.requestor?.name} approverName={ca.approver?.name} /></>}
           actions={
              <Link to={`/support?new=true&entityType=CashAdvance&entityId=${ca.id}`} className="px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
                 <Lifebuoy className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />

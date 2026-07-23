@@ -9,12 +9,48 @@ import { DashboardHeader } from './DashboardHeader';
 import { QuickActionsCard } from './QuickActionsCard';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SimpleLineChart, DonutChart } from './AnalyticsCharts';
-import { Users, FileText, Envelope, ShieldCheck, Heartbeat, ChartBar, Briefcase, HardDrives, Gear, Archive, ArrowRight, Lifebuoy, Clock as ClockIcon } from '@phosphor-icons/react';
+import { Users, FileText, Envelope, ShieldCheck, ChartBar, Briefcase, HardDrives, Gear, Archive, ArrowRight, Lifebuoy, Warning, Clock as ClockIcon } from '@phosphor-icons/react';
 import { formatPHP, getClaimNumber } from '../../utils';
 import { metricsForRole, MetricContext } from '../../metrics/registry';
 import { useDashboardPeriod } from '../../contexts/DashboardPeriodContext';
 import { resolveScope } from '../../metrics/timeScope';
 import { StatusBadge } from '../StatusBadge';
+
+// Shared by both the Executive and System Admin views — the "who moved what"
+// feed used to live only in Executive, leaving Admin's own view with nothing
+// but static totals to answer "is anything stuck?".
+const RecentActivityFeed: React.FC<{ items: any[] }> = ({ items }) => (
+  <div className="corp-card divide-y divide-slate-100">
+    {items.length === 0 ? (
+      <div className="p-8 text-center text-sm text-slate-500">
+        No system activity recorded yet. Activity will appear here as claims move through the workflow.
+      </div>
+    ) : (
+      items.map((log: any, idx: number) => {
+        const actorName = log.user?.name || log.changedBy?.name || log.changed_by || 'System';
+        const reference = log.claim ? getClaimNumber(log.claim)
+          : log.claim_id ? `REIM-${log.claim_id.substring(0, 6)}`
+          : log.cash_advance_id ? `CADV-${log.cash_advance_id.substring(0, 6)}`
+          : log.liquidation_id ? `LIQ-${log.liquidation_id.substring(0, 6)}`
+          : log.delegation_id ? `DEL-${log.delegation_id.substring(0, 6)}`
+          : log.targetUser ? log.targetUser.name
+          : 'record';
+        return (
+          <div key={log.id || idx} className="px-5 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <ClockIcon className="w-4 h-4 text-slate-300 shrink-0" />
+              <p className="text-xs text-slate-700 truncate">
+                <span className="font-bold text-slate-900">{actorName}</span> moved <span className="font-mono font-semibold text-slate-800">{reference}</span> to
+              </p>
+              <StatusBadge status={log.new_status} size="sm" />
+            </div>
+            <span className="text-[10px] text-slate-400 font-semibold shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
+          </div>
+        );
+      })
+    )}
+  </div>
+);
 
 export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
   const [view, setView] = useState<'admin' | 'executive'>('executive');
@@ -172,6 +208,16 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
     .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 6);
 
+  // System-wide backlog/anomaly line for the Admin view — replaces the
+  // hardcoded "System Status: Operational" tile (which carried no real
+  // signal) with the same "is anything stuck?" question the Executive view's
+  // admin_pending_approvals_systemwide metric answers, plus how long the
+  // oldest one has been waiting.
+  const systemWidePending = claims.filter(c => c.status === ClaimStatus.PENDING_APPROVAL);
+  const oldestSystemWidePendingDays = systemWidePending.length > 0
+    ? Math.max(...systemWidePending.map(c => Math.floor((Date.now() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24))))
+    : 0;
+
   return (
     <div>
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 mb-8">
@@ -241,36 +287,7 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
               </Link>
             </div>
             <p className="text-sm text-slate-500 mb-4">Latest status changes across every claim, cash advance, and liquidation</p>
-            <div className="corp-card divide-y divide-slate-100">
-              {recentSystemActivity.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-500">
-                  No system activity recorded yet. Activity will appear here as claims move through the workflow.
-                </div>
-              ) : (
-                recentSystemActivity.map((log: any, idx: number) => {
-                  const actorName = log.user?.name || log.changedBy?.name || log.changed_by || 'System';
-                  const reference = log.claim ? getClaimNumber(log.claim)
-                    : log.claim_id ? `REIM-${log.claim_id.substring(0, 6)}`
-                    : log.cash_advance_id ? `CADV-${log.cash_advance_id.substring(0, 6)}`
-                    : log.liquidation_id ? `LIQ-${log.liquidation_id.substring(0, 6)}`
-                    : log.delegation_id ? `DEL-${log.delegation_id.substring(0, 6)}`
-                    : log.targetUser ? log.targetUser.name
-                    : 'record';
-                  return (
-                    <div key={log.id || idx} className="px-5 py-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <ClockIcon className="w-4 h-4 text-slate-300 shrink-0" />
-                        <p className="text-xs text-slate-700 truncate">
-                          <span className="font-bold text-slate-900">{actorName}</span> moved <span className="font-mono font-semibold text-slate-800">{reference}</span> to
-                        </p>
-                        <StatusBadge status={log.new_status} size="sm" />
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-semibold shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <RecentActivityFeed items={recentSystemActivity} />
           </div>
 
           {/* Only the headline trend chart lives here — category breakdowns
@@ -329,12 +346,26 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
             <KPICard title="Total Requests" value={claims.length + cadvs.length} icon={FileText} colorClass="text-slate-600 bg-white" />
             <KPICard title="System Audit (Today)" value={todayHistory.length} icon={ShieldCheck} colorClass="text-slate-600 bg-white" />
             <KPICard
-              title="System Status"
-              value="Operational"
-              icon={Heartbeat}
-              variant="info"
-              description="Reflects app availability, not a computed health score"
+              title="System-wide Backlog"
+              value={systemWidePending.length}
+              icon={Warning}
+              variant={systemWidePending.length === 0 ? 'success' : oldestSystemWidePendingDays >= 5 ? 'danger' : oldestSystemWidePendingDays >= 3 ? 'warning' : 'action'}
+              description="Claims awaiting an Approver decision, across every department"
+              additionalContext={systemWidePending.length > 0 ? `Oldest: ${oldestSystemWidePendingDays}d` : 'Nothing pending'}
+              actionLabel="View Audit Log"
+              actionPath="/audit"
             />
+          </div>
+
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-slate-800">Recent System Activity</h2>
+              <Link to="/audit" className="text-xs font-bold text-brand hover:text-brand-hover inline-flex items-center gap-1">
+                View Full Audit Log <ArrowRight size={12} weight="bold" />
+              </Link>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">Latest status changes across every claim, cash advance, and liquidation</p>
+            <RecentActivityFeed items={recentSystemActivity} />
           </div>
 
           <div className="mb-8">

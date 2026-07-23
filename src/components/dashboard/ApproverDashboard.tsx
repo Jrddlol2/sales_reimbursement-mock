@@ -122,17 +122,16 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
   const requestorAverage = requestorData.length > 0 ? requestorData.reduce((sum, r) => sum + r.value, 0) / requestorData.length : 0;
 
   const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users, currentUser: user };
-  // approver_pending_approvals is excluded here — it's the exact same
-  // claims-only "Pending Approvals" stat the embedded ApprovalQueue already
-  // shows in its own card row right above the action list, so showing it
-  // again here was a pure duplicate once the two dashboards merged.
-  const approverMetricDefs = metricsForRole(UserRole.APPROVER).filter(m => m.id !== 'approver_pending_approvals');
+  // "Your Approval Performance" — retrospective scorecard stats about the
+  // approver, not actionable counts. Deliberately kept out of the queue's own
+  // KPI row above (which is the "requests requiring your attention" surface)
+  // and rendered as its own block below the queue instead, so actionable and
+  // informational numbers don't carry equal visual weight under one heading.
+  const performanceMetricIds = ['approver_claims_submitted', 'approver_team_spending', 'approver_approval_rate', 'approver_avg_approval_time'];
+  const performanceMetricDefs = metricsForRole(UserRole.APPROVER).filter(m => performanceMetricIds.includes(m.id));
   const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
-    approver_pending_approvals: { actionLabel: 'Review Requests', actionPath: '/?tab=inbox' },
-    approver_oldest_pending: { actionLabel: 'Review Requests', actionPath: '/?tab=inbox' },
-    approver_claims_awaiting_action: { actionLabel: 'Jump to Pending', actionPath: '/?tab=inbox' },
-    approver_claims_submitted: { actionLabel: 'View Claims', actionPath: '/?tab=inbox' },
-    approver_team_spending: { actionLabel: 'View Team Activity', actionPath: '/?tab=history' },
+    approver_claims_submitted: { actionLabel: 'Decision History', actionPath: '/?tab=history' },
+    approver_team_spending: { actionLabel: 'Decision History', actionPath: '/?tab=history' },
     approver_approval_rate: { actionLabel: 'Decision History', actionPath: '/?tab=history' },
     approver_avg_approval_time: { actionLabel: 'Decision History', actionPath: '/?tab=history' },
   };
@@ -154,12 +153,32 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
-      {/* Approval Priority Section - registry-driven, every card labeled with its own time scope */}
-      <div className="mb-10">
-        <h2 className="text-lg font-bold text-slate-800 mb-1">Approval Center</h2>
-        <p className="text-sm text-slate-500 mb-4">Requests requiring your attention</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {approverMetricDefs.map(metric => {
+      {/* Level 1: the full unified action queue — Reimbursements, Cash
+          Advances, and Liquidations together (not separate tabs), plus
+          Review Meetings and Decision History. This used to be the standalone
+          "Approver Inbox" page at /approvals; it's embedded here now so the
+          Dashboard is the Approver's one home screen. Its own "Pending
+          Approvals / Returned to You / Advances & Liquidations" row (the 3
+          live queue counts) is the dashboard's only KPI row — a separate
+          registry-driven row used to stack above it, restating the same
+          pending set under a second heading. */}
+      <div className="mb-8">
+        <ApprovalQueue embedded />
+      </div>
+
+      {/* The Approver's own submitted requests live under the "MY REQUESTS"
+          sidebar group now (New Request / Transaction History), so this
+          dashboard stays scoped entirely to Approval Center duties. */}
+
+      {/* Your Approval Performance — the retrospective scorecard that used to
+          sit above the queue under a misleading "requires your attention"
+          heading. Lives here instead, right below the queue, so it never
+          competes with actionable counts for the same visual weight. */}
+      <div className="mb-8">
+        <h2 className="text-lg font-bold text-slate-800 mb-1">Your Approval Performance</h2>
+        <p className="text-sm text-slate-500 mb-4">How you've been trending as an approver, each scoped to its own relevant period</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {performanceMetricDefs.map(metric => {
             const scope = effectiveScope(metric);
             const range = resolveMetricRange(metric);
             const value = metric.compute(ctx, range);
@@ -178,19 +197,6 @@ export const ApproverDashboard: React.FC<{ user: User }> = ({ user }) => {
           })}
         </div>
       </div>
-
-      {/* Level 1: the full unified action queue — Reimbursements, Cash
-          Advances, and Liquidations together (not separate tabs), plus
-          Review Meetings and Decision History. This used to be the standalone
-          "Approver Inbox" page at /approvals; it's embedded here now so the
-          Dashboard is the Approver's one home screen. */}
-      <div className="mb-8">
-        <ApprovalQueue embedded />
-      </div>
-
-      {/* The Approver's own submitted requests live under the "MY REQUESTS"
-          sidebar group now (New Request / Transaction History), so this
-          dashboard stays scoped entirely to Approval Center duties. */}
 
       {/* Level 4: analytics — last, since it answers "how am I trending",
           not "what do I do next". Workload Breakdown comes first (what's

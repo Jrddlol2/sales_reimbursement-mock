@@ -34,6 +34,10 @@ export const ProcessingQueue: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<'queue' | 'history' | 'cadv'>((searchParams.get('tab') as any) || 'queue');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Deep-link support: dashboard cards/Action Required rows link straight to
+  // the specific claim/CADV/liquidation they describe (?focus=<id>) instead
+  // of just the generic queue — this is what actually finds and expands it.
+  const focusedId = searchParams.get('focus');
 
   // Cash Advance / Liquidation states
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
@@ -152,6 +156,26 @@ export const ProcessingQueue: React.FC = () => {
       body: JSON.stringify({ section: 'processing' })
     }).catch(console.error);
   }, []);
+
+  // Once data has loaded, expand (queue tab only — the cadv tab's rows are
+  // already inline, nothing to expand) and scroll the deep-linked item into
+  // view. Runs once per focus target, not on every re-render.
+  useEffect(() => {
+    if (!focusedId || loading) return;
+    if (tab === 'queue') {
+      setExpandedId(focusedId);
+    }
+    // Queue rows render twice (desktop table + mobile card, one hidden by
+    // breakpoint via CSS) — pick whichever copy actually has layout.
+    const desktopEl = document.getElementById(`processing-row-desktop-${focusedId}`);
+    const mobileEl = document.getElementById(`processing-row-mobile-${focusedId}`);
+    const cadvEl = document.getElementById(`processing-row-${focusedId}`);
+    const el = (desktopEl && desktopEl.offsetParent !== null) ? desktopEl
+      : (mobileEl && mobileEl.offsetParent !== null) ? mobileEl
+      : cadvEl;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedId, loading]);
 
   const getClaimAging = (claim: ClaimWithDetails) => getAgingInfo(claim.approved_at || claim.created_at);
 
@@ -378,7 +402,11 @@ export const ProcessingQueue: React.FC = () => {
                 approvedAdvances.map(ca => {
                   const reqUser = users.find(u => u.id === ca.requestorId);
                   return (
-                    <div key={ca.id} className="p-4 space-y-3">
+                    <div
+                      key={ca.id}
+                      id={`processing-row-${ca.id}`}
+                      className={`p-4 space-y-3 scroll-mt-6 ${focusedId === ca.id ? 'bg-brand/5 ring-2 ring-inset ring-brand' : ''}`}
+                    >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <Link 
@@ -432,7 +460,11 @@ export const ProcessingQueue: React.FC = () => {
                   const ca = cashAdvances.find(c => c.id === l.cashAdvanceId);
                   const reqUser = users.find(u => u.id === l.requestorId);
                   return (
-                    <div key={l.id} className="p-4 space-y-3">
+                    <div
+                      key={l.id}
+                      id={`processing-row-${l.id}`}
+                      className={`p-4 space-y-3 scroll-mt-6 ${focusedId === l.id ? 'bg-brand/5 ring-2 ring-inset ring-brand' : ''}`}
+                    >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
@@ -516,9 +548,10 @@ export const ProcessingQueue: React.FC = () => {
                       return (
                         <React.Fragment key={claim.id}>
                           {/* Table row */}
-                          <tr 
+                          <tr
+                            id={`processing-row-desktop-${claim.id}`}
                             onClick={() => toggleExpand(claim)}
-                            className={`transition-colors cursor-pointer ${isExpanded ? 'bg-brand/10' : 'hover:bg-brand/5'}`}
+                            className={`transition-colors cursor-pointer scroll-mt-6 ${isExpanded ? 'bg-brand/10' : focusedId === claim.id ? 'bg-brand/5 ring-2 ring-inset ring-brand' : 'hover:bg-brand/5'}`}
                           >
                             <td className="px-4 py-3 whitespace-nowrap">
                               <div className="flex items-center gap-2">
@@ -672,9 +705,10 @@ export const ProcessingQueue: React.FC = () => {
 
                   return (
                     <div key={claim.id} className="flex flex-col">
-                      <div 
+                      <div
+                        id={`processing-row-mobile-${claim.id}`}
                         onClick={() => toggleExpand(claim)}
-                        className={`p-4 hover:bg-slate-50 cursor-pointer flex flex-col gap-2 transition-colors ${isExpanded ? 'bg-brand/5 font-semibold' : ''}`}
+                        className={`p-4 hover:bg-slate-50 cursor-pointer flex flex-col gap-2 transition-colors scroll-mt-6 ${isExpanded ? 'bg-brand/5 font-semibold' : focusedId === claim.id ? 'bg-brand/5 ring-2 ring-inset ring-brand' : ''}`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono font-bold text-brand text-xs">{claimNumber}</span>

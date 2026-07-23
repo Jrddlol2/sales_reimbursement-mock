@@ -90,6 +90,9 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
     { label: 'Collect Refunds', icon: ArrowDownLeft, path: '/processing', colorClass: 'text-white', bgColorClass: 'bg-rose-500' }
   ];
 
+  // Each row deep-links straight to its own item in the queue (?tab=...&focus=<id>)
+  // instead of the generic /processing — this is the on-ramp into the specific
+  // work, not just a restatement of the same counts the queue page also shows.
   const recentItems = [
     ...pendingProcessing.map(c => ({
       id: c.id,
@@ -98,7 +101,7 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       status: c.status,
       amount: c.total_amount,
       date: c.created_at,
-      path: '/processing'
+      path: `/processing?tab=queue&focus=${c.id}`
     })),
     ...pendingCadvReleases.map(c => ({
       id: c.id,
@@ -107,7 +110,7 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       status: c.status,
       amount: c.amount,
       date: c.createdAt,
-      path: '/processing'
+      path: `/processing?tab=cadv&focus=${c.id}`
     })),
     ...pendingRefunds.map(l => ({
       id: l.id,
@@ -116,7 +119,7 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       status: l.status,
       amount: Math.abs(l.varianceAmount || 0),
       date: l.createdAt,
-      path: '/processing'
+      path: `/processing?tab=cadv&focus=${l.id}`
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6);
 
@@ -130,8 +133,6 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
   const ctx: MetricContext = { claims, cashAdvances: cadvs, liquidations: liqs, users: [], currentUser: user };
   const custodianMetricDefs = metricsForRole(UserRole.CUSTODIAN);
   const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
-    custodian_pending_payments: { actionLabel: 'Process Claims', actionPath: '/processing' },
-    custodian_outstanding_amount: { actionLabel: 'Process Claims', actionPath: '/processing' },
     custodian_payments_this_week: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
     custodian_payments_this_month: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
     custodian_monthly_reimbursement_total: { actionLabel: 'Disbursement History', actionPath: '/processing?tab=history' },
@@ -210,36 +211,14 @@ export const CustodianDashboard: React.FC<{ user: User }> = ({ user }) => {
       </div>
 
       {/* Level 3: workflow-health metrics scoped to a period, below the
-          live action queue. Split into two labeled sub-groups so "right now"
-          balances aren't visually mixed in with weekly/monthly rollups —
-          the two answer different questions ("what's outstanding" vs.
-          "how has processing been trending"). */}
+          live action queue. "Pending Payments" (count) and "Outstanding
+          Amount" used to have their own "Right Now" row here, restating the
+          exact same PROCESSING-claims set the Operations Overview "Pending
+          Reimbursements" card above already shows — dropped as duplicates. */}
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-800 mb-1">Payment Performance</h2>
         <p className="text-sm text-slate-500 mb-4">Each card scoped to its own relevant period</p>
 
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Right Now</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-          {custodianMetricDefs.filter(m => m.id === 'custodian_pending_payments' || m.id === 'custodian_outstanding_amount').map(metric => {
-            const scope = effectiveScope(metric);
-            const range = resolveMetricRange(metric);
-            const value = metric.compute(ctx, range);
-            const action = metricActionMap[metric.id];
-            return (
-              <MetricCard
-                key={metric.id}
-                metric={metric}
-                ctx={ctx}
-                scope={scope}
-                value={value}
-                actionLabel={action?.actionLabel}
-                actionPath={action?.actionPath}
-              />
-            );
-          })}
-        </div>
-
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">This Period</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {custodianMetricDefs.filter(m => m.id !== 'custodian_pending_payments' && m.id !== 'custodian_outstanding_amount').map(metric => {
             const scope = effectiveScope(metric);

@@ -17,14 +17,15 @@ export const navItems = [
   // Dashboard itself (no separate "Approver Inbox" page/nav item — see
   // ApproverDashboard.tsx) — only their own submitted requests get a
   // distinct sidebar group, so those never blur together with the queue.
+  // MyRequests.tsx now absorbs what used to be a separate "Transaction
+  // History" nav item for this role too — same self-scoped data, so it
+  // carries TransactionHistory's date-range filter and CSV export instead of
+  // making the Approver pick between two near-identical pages.
   { label: 'My Requests', path: '/my-requests', icon: UserCircle, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   // Approvers submit and report their own claims the same as any Requestor,
   // so they need the same "collect my processed claim" destination too —
   // scoped to /ready-to-claim's own requestor_id filter, not a duplicate route.
   { label: 'Ready to Claim', path: '/ready-to-claim', icon: Wallet, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
-  // Same page Requestors/Custodians get — TransactionHistory.tsx scopes it
-  // to the Approver's own submissions specifically (not their reports').
-  { label: 'Transaction History', path: '/history', icon: ClockCounterClockwise, group: 'MY REQUESTS', roles: [UserRole.APPROVER] },
   { label: 'Help & Support', path: '/support', icon: Lifebuoy, group: 'PRIMARY', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'System Emails', path: '/emails', icon: EnvelopeSimple, group: 'COMMUNICATION', roles: [UserRole.REQUESTOR, UserRole.APPROVER, UserRole.CUSTODIAN, UserRole.ADMIN] },
   { label: 'Calendar', path: '/calendar', icon: CalendarBlank, group: 'PLANNING', roles: [UserRole.REQUESTOR, UserRole.APPROVER] },
@@ -269,7 +270,6 @@ export const Layout: React.FC = () => {
     if (path.startsWith('/moms')) return 'Meeting Minutes';
     if (path.startsWith('/claims/new')) return 'New Request';
     if (path.startsWith('/scenarios')) return 'Scenario Guide';
-    if (path.startsWith('/notifications')) return 'Notifications';
     if (path.startsWith('/settings')) {
       if (user?.role === UserRole.APPROVER) return 'Approval Delegation';
       if (user?.role === UserRole.ADMIN) return 'Data Management';
@@ -663,7 +663,7 @@ export const Layout: React.FC = () => {
                           onClick={() => {
                             if (!n.read) markNotificationRead(n.id);
                             setIsNotifOpen(false);
-                            navigate('/notifications');
+                            navigate('/emails');
                           }}
                           className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 flex gap-2 items-start ${!n.read ? 'bg-brand/5' : ''}`}
                         >
@@ -677,7 +677,7 @@ export const Layout: React.FC = () => {
                     </div>
                   )}
                   <Link
-                    to="/notifications"
+                    to="/emails"
                     onClick={() => setIsNotifOpen(false)}
                     className="block px-3 py-2 text-center text-[11px] font-bold text-brand hover:bg-slate-50 border-t border-slate-100 sticky bottom-0 bg-white"
                   >

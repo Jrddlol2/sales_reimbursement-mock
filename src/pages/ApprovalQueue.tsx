@@ -5,6 +5,7 @@ import { Claim, ClaimStatus, ReviewMeetingStatus } from '../types';
 import { ClaimDetail } from './ClaimDetail';
 import { getStatusColor, formatPHP, getClaimNumber } from '../utils';
 import { StatusBadge } from '../components/StatusBadge';
+import { getAgingInfo } from '../statusConfig';
 import { SourceLiquidationTag } from '../components/SourceLiquidationTag';
 import { Tray, CheckSquare, Warning, Wallet, ArrowsClockwise } from '@phosphor-icons/react';
 import { useAuth } from '../components/AuthContext';
@@ -580,6 +581,12 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
                 <EmptyState icon={Tray} title="Inbox Zero!" description="You have no pending approvals or returned claims." />
               </div>
             ) : unifiedPendingItems.map(item => {
+              // The queue is sorted oldest-first and "Oldest Pending" is a
+              // headline KPI, but until now nothing on the card itself showed
+              // which one that was — the approver had to infer age from list
+              // order. Same getAgingInfo helper Custodian's ProcessingQueue
+              // already uses, applied to each item's own "waiting since" date.
+              const aging = getAgingInfo(item.date);
               if (item.kind === 'claim') {
                 const claim = item.claim;
                 const claimNumber = getClaimNumber(claim);
@@ -600,7 +607,12 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
                           {claimNumber}
                         </span>
                       </div>
-                      <StatusBadge status={claim.status} size="sm" />
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
+                          {aging.label}
+                        </span>
+                        <StatusBadge status={claim.status} size="sm" />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                       <div className="col-span-2">
@@ -648,7 +660,12 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
                       <Link to={`/cash-advances/${ca.id}`} className="font-mono font-bold text-brand text-xs hover:underline">
                         CADV-{ca.id.substring(0, 6).toUpperCase()}
                       </Link>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Cash Advance</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
+                          {aging.label}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Cash Advance</span>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                       <div className="col-span-2">
@@ -708,7 +725,12 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
                     <Link to={`/liquidations/${liq.id}`} className="font-mono font-bold text-brand text-xs hover:underline">
                       LIQ-{liq.id.substring(0, 6).toUpperCase()}
                     </Link>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Liquidation</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-2 py-0.5 inline-flex text-[10px] font-bold rounded-full border ${aging.badgeClass}`}>
+                        {aging.label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">Liquidation</span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-600">
                     <div className="col-span-2">

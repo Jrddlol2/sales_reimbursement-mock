@@ -15,7 +15,7 @@ import { CardVariant } from '../components/dashboard/KPICard';
 import {
   Icon, Tray, ListChecks, PaperPlaneTilt, CurrencyCircleDollar, ChartPieSlice, Clock,
   FileText, HourglassMedium, CheckCircle, XCircle, CalendarCheck, Receipt, Wallet,
-  Warning, ChartLineUp, UsersThree, UserCircle, Buildings, CalendarBlank, Archive,
+  Warning, ChartLineUp, UsersThree, UserCircle, Buildings, CalendarBlank, Archive, ArrowUUpLeft,
 } from '@phosphor-icons/react';
 
 export interface MetricContext {
@@ -207,17 +207,33 @@ const requestorMetrics: MetricDefinition[] = [
       claims.filter(c => c.requestor_id === currentUser.id && isWithinRange(c.created_at, range)).length,
   },
   {
-    id: 'requestor_pending_claims',
-    label: 'Pending Claims',
+    // Split from the old combined "Pending Claims" metric — PENDING_APPROVAL
+    // (wait, do nothing) and RETURNED (act now) are opposite states, and
+    // merging them made the actionable half invisible at KPI level.
+    id: 'requestor_awaiting_approval',
+    label: 'Awaiting Approval',
+    scope: 'today',
+    realtime: true,
+    roles: [UserRole.REQUESTOR],
+    format: 'number',
+    variant: 'info',
+    icon: Clock,
+    description: 'Out of your hands — waiting on your Approver',
+    compute: ({ claims, currentUser }) =>
+      claims.filter(c => c.requestor_id === currentUser.id && c.status === ClaimStatus.PENDING_APPROVAL).length,
+  },
+  {
+    id: 'requestor_needs_revision',
+    label: 'Needs Revision',
     scope: 'today',
     realtime: true,
     roles: [UserRole.REQUESTOR],
     format: 'number',
     variant: 'warning',
-    icon: HourglassMedium,
-    description: 'Awaiting approval or your revision',
+    icon: ArrowUUpLeft,
+    description: 'Returned to you — revise and resubmit',
     compute: ({ claims, currentUser }) =>
-      claims.filter(c => c.requestor_id === currentUser.id && [ClaimStatus.PENDING_APPROVAL, ClaimStatus.RETURNED].includes(c.status)).length,
+      claims.filter(c => c.requestor_id === currentUser.id && c.status === ClaimStatus.RETURNED).length,
   },
   {
     id: 'requestor_approved_this_month',

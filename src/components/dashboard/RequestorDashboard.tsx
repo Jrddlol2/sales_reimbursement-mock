@@ -128,7 +128,8 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
   const requestorMetricDefs = metricsForRole(UserRole.REQUESTOR);
   const metricActionMap: Record<string, { actionLabel: string; actionPath: string }> = {
     requestor_my_claims: { actionLabel: 'View All', actionPath: '/history' },
-    requestor_pending_claims: { actionLabel: 'View Pending', actionPath: '/history?status=Pending Approval' },
+    requestor_awaiting_approval: { actionLabel: 'View Pending', actionPath: '/history?status=Pending Approval' },
+    requestor_needs_revision: { actionLabel: 'View Returned', actionPath: '/history?status=Returned' },
     requestor_approved_this_month: { actionLabel: 'View Processing', actionPath: '/history?status=Processing' },
     requestor_rejected_this_month: { actionLabel: 'View Rejected', actionPath: '/history?status=Rejected' },
     requestor_amount_reimbursed_ytd: { actionLabel: 'View Completed', actionPath: '/history?status=Completed' },
@@ -152,34 +153,40 @@ export const RequestorDashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
-      {/* My Requests KPIs come first — the top-line status of what a
-          Requestor has already submitted, before anything else on the page. */}
+      {/* CashAdvanceLiquidationSection leads with its "Needs Your Action" panel —
+          the hero of the dashboard, since "is there money to collect, or
+          something to fix?" is the requestor's actual job on login. The
+          retrospective "My Requests" KPI row sits right beneath it (passed in
+          as afterActionPanel, rather than rendered as a separate block below,
+          so its own mini KPI row / recent requests table stay third). */}
       <div className="mb-8">
-        <h2 className="text-lg font-bold text-slate-800 mb-1">My Requests</h2>
-        <p className="text-sm text-slate-500 mb-4">Track the status of your submitted requests, each scoped to its own relevant period</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {requestorMetricDefs.map(metric => {
-            const scope = effectiveScope(metric);
-            const range = resolveMetricRange(metric);
-            const value = metric.compute(ctx, range);
-            const action = metricActionMap[metric.id];
-            return (
-              <MetricCard
-                key={metric.id}
-                metric={metric}
-                ctx={ctx}
-                scope={scope}
-                value={value}
-                actionLabel={action?.actionLabel}
-                actionPath={action?.actionPath}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <CashAdvanceLiquidationSection />
+        <CashAdvanceLiquidationSection
+          afterActionPanel={
+            <div className="mb-2">
+              <h2 className="text-lg font-bold text-slate-800 mb-1">My Requests</h2>
+              <p className="text-sm text-slate-500 mb-4">Track the status of your submitted requests, each scoped to its own relevant period</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {requestorMetricDefs.map(metric => {
+                  const scope = effectiveScope(metric);
+                  const range = resolveMetricRange(metric);
+                  const value = metric.compute(ctx, range);
+                  const action = metricActionMap[metric.id];
+                  return (
+                    <MetricCard
+                      key={metric.id}
+                      metric={metric}
+                      ctx={ctx}
+                      scope={scope}
+                      value={value}
+                      actionLabel={action?.actionLabel}
+                      actionPath={action?.actionPath}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

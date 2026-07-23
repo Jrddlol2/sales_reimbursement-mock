@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { UserRole, Email } from '../types';
@@ -50,6 +50,7 @@ export const Layout: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const mainRef = useRef<HTMLElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifPreview, setNotifPreview] = useState<Email[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -67,6 +68,13 @@ export const Layout: React.FC = () => {
       hash = (hash * 31 + location.pathname.charCodeAt(i)) % 56;
     }
     return hash - 28; // -28..27px, vertical
+  }, [location.pathname]);
+
+  // main never remounts on navigation (see comment above), so its scroll
+  // position otherwise carries over from whatever page you were just on —
+  // a new page can silently open mid-scroll instead of at its own top.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
   }, [location.pathname]);
 
   // Global search states
@@ -694,6 +702,7 @@ export const Layout: React.FC = () => {
 
         {/* Main scrollable content */}
         <main
+          ref={mainRef}
           className={`relative flex-1 p-4 sm:p-6 md:p-8 ${
             location.pathname === '/emails'
               ? 'flex flex-col overflow-hidden'

@@ -1174,7 +1174,7 @@ ${user.name}`;
     if (currentApproverId) {
       const approver = users.find(u => u.id === currentApproverId);
       const approverName = approver ? approver.name : 'Approver';
-      
+
       const emailSubject = `Reimbursement Submitted - ${claimNumber}`;
       const emailBody = `A new reimbursement request ${claimNumber} by ${user.name} has been submitted and is awaiting your review and approval.
 
@@ -1185,8 +1185,19 @@ Required Action:
 Please log in to the system and navigate to the Approval Queue to approve or reject this claim.`;
 
       sendEmail(currentApproverId, emailSubject, emailBody);
+
+      sendEmail(
+        user.id,
+        `Reimbursement Submitted - ${claimNumber}`,
+        `Your reimbursement request ${claimNumber} for PHP ${claimTotal} has been successfully submitted and routed to ${approverName} for review.
+
+Reference:
+${claimNumber}
+
+You'll receive another email as soon as ${approverName} makes a decision.`
+      );
     }
-    
+
     res.json(claim);
   });
 
@@ -1471,6 +1482,8 @@ Please log in to the system and confirm or decline this new time.`
     const claimNumber = claim.claim_number || `REIM-${claim.id.substring(0, 6)}`;
 
     if (claim.current_approver_id) {
+      const approverName = users.find(u => u.id === claim.current_approver_id)?.name || 'Approver';
+
       const emailSubject = `Reimbursement Resubmitted - ${claimNumber}`;
       const emailBody = `A previously returned reimbursement request ${claimNumber} by ${user.name} has been revised and resubmitted, and is awaiting your review and approval.
 
@@ -1480,6 +1493,17 @@ ${claimNumber}
 Required Action:
 Please log in to the system and navigate to the Approval Queue to approve or reject this claim.`;
       sendEmail(claim.current_approver_id, emailSubject, emailBody);
+
+      sendEmail(
+        user.id,
+        `Reimbursement Resubmitted - ${claimNumber}`,
+        `Your revised reimbursement claim ${claimNumber} has been successfully resubmitted and routed to ${approverName} for review.
+
+Reference:
+${claimNumber}
+
+You'll receive another email as soon as ${approverName} makes a decision.`
+      );
     }
 
     res.json(claim);
@@ -2103,6 +2127,16 @@ BSM Assistant | BSD - IT Security Business`;
         `A Cash Advance request for PHP ${ca.amount} has been submitted by ${user.name} for your approval.\n\nPurpose: ${ca.purpose}`
       );
     }
+
+    sendEmail(
+      user.id,
+      `Cash Advance Request Submitted - CADV-${ca.id.substring(0,6)}`,
+      `Your Cash Advance request for PHP ${ca.amount} has been successfully submitted${approver ? ` and routed to ${approver.name} for approval` : ''}.
+
+Purpose: ${ca.purpose}
+
+You'll receive another email as soon as a decision is made.`
+    );
 
     res.json(ca);
   });

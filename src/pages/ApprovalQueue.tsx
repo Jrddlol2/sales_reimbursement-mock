@@ -90,7 +90,15 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
     const requested = searchParams.get('tab');
     if (!requested) return;
     const normalized = requested === 'cadv' ? 'inbox' : (requested as 'inbox' | 'meetings' | 'history');
-    if (normalized !== tab) setTab(normalized);
+    if (normalized !== tab) {
+      setTab(normalized);
+      // This panel sits well below the Dashboard's KPI cards, so a Dashboard
+      // KPI's "?tab=..." link only changed the URL — nothing scrolled the
+      // switched tab into view, making the click look like it did nothing.
+      if (embedded) {
+        document.getElementById('approval-queue-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
   }, [searchParams]);
 
   const fetchClaims = () => {
@@ -433,7 +441,7 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ embedded = false }
       {/* Stats Cards - same KPICard component/sizing as the Dashboard, for visual consistency.
           Oldest Pending now lives in the Approval Center row above (registry-driven) —
           it was redundant here once the two dashboards merged. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div id="approval-queue-panel" className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 scroll-mt-6">
         <KPICard
           title="Pending Approvals"
           value={pendingApprovals.length}

@@ -49,8 +49,9 @@ Branches: `Rejected` (reason required, terminal, archived not deleted) / `Return
 ## Rules that must never be silently relaxed
 - A Requestor can never approve their own claim.
 - An Approver can only act on claims from people who report to them.
-- Every status change writes a StatusHistory row AND fires exactly one notification — never zero, never more than one recipient group:
-  `Submitted → Approver (heads-up)` | `Review Meeting Scheduled → Approver (calendar invite)` | `Pending Approval → Approver (now actionable)` | `Approved → Requestor` | `For Processing → Custodian` | `Rejected/Returned → Requestor`
+- Every status change writes a StatusHistory row AND fires exactly one notification per recipient group listed below — never zero, never an unlisted group:
+  `Submitted → Approver (heads-up) + Requestor (submission confirmation)` | `Review Meeting Scheduled → Approver (calendar invite)` | `Pending Approval → Approver (now actionable)` | `Approved → Requestor` | `For Processing → Custodian` | `Rejected/Returned → Requestor`
+  Submitted is the one transition with two recipient groups (Approver heads-up + Requestor confirmation) — both fire from the same submit action, covering both the initial submission and a post-Return resubmission.
 - The MOM's Contact Person is an external client contact — the Approver is CC'd/notified for visibility on the review meeting, not on the original client meeting; they were never at the client meeting.
 - Each ExpenseLineItem's receipt is its own upload — never one bulk multi-file box disconnected from the line items.
 - The Approver on a claim is always derived from the Requestor's `reports_to` (or an active ApproverDelegation covering that date) — a Requestor never selects or changes who approves their own claim. Only Admin can manually reassign, and only with a reason logged to the audit trail.

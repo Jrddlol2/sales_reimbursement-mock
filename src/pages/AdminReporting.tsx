@@ -1125,11 +1125,17 @@ export const AdminReporting: React.FC = () => {
             ? <>Slowest stage: <span className="font-bold text-slate-700">{slowestStage.name}</span> at {slowestStage.days.toFixed(1)} days on average.</>
             : 'Not enough claims have moved through the full pipeline yet to measure this.'}
         </p>
+        {/* Recharts renders its axis-label SVG with overflow:visible, so the
+            category labels ("Submitted → Approved" etc.) paint ~45px below
+            this div's own bottom edge, not inside it — padding on this div
+            doesn't shrink that (recharts sizes off a cached initial
+            measurement), so the only reliable fix is enough fixed margin on
+            the note below to clear past where the labels actually land. */}
         <div className="h-64">
           <SimpleBarChart data={stageDurationData} dataKey="days" colors={CHART_COLORS} name="Avg Days" />
         </div>
         {zeroDayStages.length > 0 && (
-          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+          <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-16 relative z-10">
             <span className="font-bold">Data caveat:</span> {zeroDayStages.map(s => s.name).join(', ')} shows 0.0 days because the underlying records timestamp that transition on the same day for every claim in scope — treat it as "not yet meaningfully measured," not as a genuinely instant step.
           </p>
         )}

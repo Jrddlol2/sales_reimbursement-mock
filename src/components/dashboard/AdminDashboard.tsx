@@ -253,6 +253,8 @@ export const AdminDashboard: React.FC<{ user: User }> = ({ user }) => {
                     : log.claim_id ? `REIM-${log.claim_id.substring(0, 6)}`
                     : log.cash_advance_id ? `CADV-${log.cash_advance_id.substring(0, 6)}`
                     : log.liquidation_id ? `LIQ-${log.liquidation_id.substring(0, 6)}`
+                    : log.delegation_id ? `DEL-${log.delegation_id.substring(0, 6)}`
+                    : log.targetUser ? log.targetUser.name
                     : 'record';
                   return (
                     <div key={log.id || idx} className="px-5 py-3 flex items-center justify-between gap-3">
